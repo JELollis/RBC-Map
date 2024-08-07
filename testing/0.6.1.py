@@ -48,12 +48,12 @@ try:
     from bs4 import BeautifulSoup
     from PyQt5.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit
+        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout,
     )
     from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
     from PyQt5.QtCore import QUrl, Qt
     from PyQt5.QtWebEngineWidgets import QWebEngineView
-    
+
 except ModuleNotFoundError as e:
     run = True
     while run == True:
@@ -84,7 +84,7 @@ except ModuleNotFoundError as e:
             from PyQt5.QtCore import QUrl, Qt
             from PyQt5.QtWebEngineWidgets import QWebEngineView
             break
-            
+
         elif installPip.lower() == "n":
             print(f"\nYou may use this line to install what is needed if you want.\n")
             print(f"pip install pymysql requests PyQt5 bs4 PyQtWebEngine")
@@ -92,7 +92,7 @@ except ModuleNotFoundError as e:
         else:
             print(f"\nThis was not yes or no.....\n")
             continue
-        
+
 except Exception as e:
     print(f"Something broke and idk why...")
 
@@ -161,21 +161,15 @@ def load_data():
 
     cursor.execute("SELECT * FROM taverns")
     taverns_data = cursor.fetchall()
-    taverns_coordinates = {name: (columns.get(col) + 1 if columns.get(col) is not None else None,
-                                  rows.get(row) + 1 if rows.get(row) is not None else None)
-                           for _, col, row, name in taverns_data}
+    taverns_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, col, row, name in taverns_data if columns.get(col) is not None and rows.get(row) is not None}
 
     cursor.execute("SELECT * FROM transits")
     transits_data = cursor.fetchall()
-    transits_coordinates = {name: (columns.get(col) + 1 if columns.get(col) is not None else None,
-                                   rows.get(row) + 1 if rows.get(row) is not None else None)
-                            for _, col, row, name in transits_data}
+    transits_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, col, row, name in transits_data if columns.get(col) is not None and rows.get(row) is not None}
 
     cursor.execute("SELECT * FROM userbuildings")
     user_buildings_data = cursor.fetchall()
-    user_buildings_coordinates = {name: (columns.get(col) + 1 if columns.get(col) is not None else None,
-                                         rows.get(row) + 1 if rows.get(row) is not None else None)
-                                  for _, name, col, row in user_buildings_data}
+    user_buildings_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row in user_buildings_data if columns.get(col) is not None and rows.get(row) is not None}
 
     cursor.execute("SELECT * FROM color_mappings")
     color_mappings_data = cursor.fetchall()
@@ -183,19 +177,19 @@ def load_data():
 
     cursor.execute("SELECT * FROM shops")
     shops_data = cursor.fetchall()
-    shops_coordinates = {name: (columns.get(col) + 1 if columns.get(col) is not None else None,
-                                rows.get(row) + 1 if rows.get(row) is not None else None)
-                         for _, name, col, row, next_update in shops_data}
+    shops_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row, next_update in shops_data if columns.get(col) is not None and rows.get(row) is not None}
 
     cursor.execute("SELECT * FROM guilds")
     guilds_data = cursor.fetchall()
-    guilds_coordinates = {name: (columns.get(col) + 1 if columns.get(col) is not None else None,
-                                 rows.get(row) + 1 if rows.get(row) is not None else None)
-                          for _, name, col, row, next_update in guilds_data}
+    guilds_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row, next_update in guilds_data if columns.get(col) is not None and rows.get(row) is not None}
+
+    cursor.execute("SELECT * FROM placesofinterest")
+    places_of_interest_data = cursor.fetchall()
+    places_of_interest_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row in places_of_interest_data if columns.get(col) is not None and rows.get(row) is not None}
 
     connection.close()
 
-    return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates
+    return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
 def get_next_update_times():
     """
@@ -224,7 +218,7 @@ def get_next_update_times():
 
     return guilds_next_update, shops_next_update
 
-columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates = load_data()
+columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 class CityMapApp(QMainWindow):
     def __init__(self):
@@ -383,13 +377,22 @@ class CityMapApp(QMainWindow):
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
-        character_list = QLabel()
-        character_layout.addWidget(character_list)
+        self.character_list = QComboBox()
+        self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.character_list.setFixedHeight(25)
+        self.load_characters()
+        character_layout.addWidget(self.character_list)
 
         character_buttons_layout = QHBoxLayout()
         new_button = QPushButton('New')
+        new_button.setFixedSize(75, 25)
+        new_button.clicked.connect(self.add_new_character)
         modify_button = QPushButton('Modify')
+        modify_button.setFixedSize(75, 25)
+        modify_button.clicked.connect(self.modify_character)
         delete_button = QPushButton('Delete')
+        delete_button.setFixedSize(75, 25)
+        delete_button.clicked.connect(self.delete_character)
         character_buttons_layout.addWidget(new_button)
         character_buttons_layout.addWidget(modify_button)
         character_buttons_layout.addWidget(delete_button)
@@ -561,6 +564,12 @@ class CityMapApp(QMainWindow):
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
                 print(f"Skipping guild '{name}' due to missing coordinates")
+
+        for name, (column_index, row_index) in places_of_interest_coordinates.items():
+            if column_index is not None and row_index is not None:
+                draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
+            else:
+                print(f"Skipping place of interest '{name}' due to missing coordinates")
 
         # Get current location
         current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
@@ -840,6 +849,123 @@ class CityMapApp(QMainWindow):
         Open the Discord link in the default web browser.
         """
         webbrowser.open("https://discord.gg/ktdG9FZ")
+
+    def load_characters(self):
+        """
+        Load characters from the pickle file and populate the combo box.
+        """
+        try:
+            with open('characters.pkl', 'rb') as f:
+                characters = pickle.load(f)
+                for character in characters:
+                    self.character_list.addItem(character['name'])
+        except FileNotFoundError:
+            pass
+
+    def save_characters(self, characters):
+        """
+        Save characters to the pickle file.
+
+        Args:
+            characters (list): List of character dictionaries.
+        """
+        with open('characters.pkl', 'wb') as f:
+            pickle.dump(characters, f)
+
+    def add_new_character(self):
+        """
+        Add a new character.
+        """
+        dialog = CharacterDialog(self)
+        if dialog.exec_():
+            name = dialog.name_edit.text()
+            password = dialog.password_edit.text()
+            characters = self.get_all_characters()
+            characters.append({'name': name, 'password': password})
+            self.save_characters(characters)
+            self.character_list.addItem(name)
+
+    def modify_character(self):
+        """
+        Modify the selected character.
+        """
+        current_index = self.character_list.currentIndex()
+        if current_index == -1:
+            return
+        name = self.character_list.currentText()
+        characters = self.get_all_characters()
+        character = next((char for char in characters if char['name'] == name), None)
+        if character:
+            dialog = CharacterDialog(self, character)
+            if dialog.exec_():
+                character['name'] = dialog.name_edit.text()
+                character['password'] = dialog.password_edit.text()
+                self.save_characters(characters)
+                self.character_list.setItemText(current_index, character['name'])
+
+    def delete_character(self):
+        """
+        Delete the selected character.
+        """
+        current_index = self.character_list.currentIndex()
+        if current_index == -1:
+            return
+        name = self.character_list.currentText()
+        characters = self.get_all_characters()
+        characters = [char for char in characters if char['name'] != name]
+        self.save_characters(characters)
+        self.character_list.removeItem(current_index)
+
+    def get_all_characters(self):
+        """
+        Get all characters from the pickle file.
+
+        Returns:
+            list: List of character dictionaries.
+        """
+        try:
+            with open('characters.pkl', 'rb') as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            return []
+
+class CharacterDialog(QDialog):
+    def __init__(self, parent=None, character=None):
+        """
+        Initialize the CharacterDialog.
+
+        Args:
+            parent (QWidget): Parent widget.
+            character (dict, optional): Character data to populate the fields. Defaults to None.
+        """
+        super().__init__(parent)
+        self.setWindowTitle('Character')
+        self.setFixedSize(300, 150)
+
+        layout = QFormLayout(self)
+
+        self.name_edit = QLineEdit(self)
+        self.password_edit = QLineEdit(self)
+        self.password_edit.setEchoMode(QLineEdit.Password)
+
+        layout.addRow('Name:', self.name_edit)
+        layout.addRow('Password:', self.password_edit)
+
+        if character:
+            self.name_edit.setText(character['name'])
+            self.password_edit.setText(character['password'])
+
+        buttons_layout = QHBoxLayout()
+
+        ok_button = QPushButton('OK', self)
+        ok_button.clicked.connect(self.accept)
+        buttons_layout.addWidget(ok_button)
+
+        cancel_button = QPushButton('Cancel', self)
+        cancel_button.clicked.connect(self.reject)
+        buttons_layout.addWidget(cancel_button)
+
+        layout.addRow(buttons_layout)
 
 def scrape_avitd_data():
     """
