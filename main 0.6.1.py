@@ -32,69 +32,25 @@ To install all required modules, run the following command:
  pip install pymysql requests bs4 PyQt5 PyQtWebEngine
 """
 #!/usr/bin/env python3
-# Filename: 0.6.1.py
+# Filename: main 0.6.1.py
 
-"""Test for imports install otherwise"""
-try:
-    import sys
-    import pickle
-    import pymysql
-    import requests
-    import re
-    import os
-    import time
-    import webbrowser
-    from datetime import datetime, timedelta
-    from bs4 import BeautifulSoup
-    from PyQt5.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout,
-    )
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
-    from PyQt5.QtCore import QUrl, Qt
-    from PyQt5.QtWebEngineWidgets import QWebEngineView
-
-except ModuleNotFoundError as e:
-    run = True
-    while run == True:
-        print(f"I believe you are missing some modules, copy and pastethe line below.\n")
-        installPip = input(f"Would you like me to install those for you? (Y/N): ")
-        if installPip.lower() == "y" :
-            os.system(f"pip install PyQtWebEngine pymysql requests PyQt5 bs4")
-            timer = 10
-            for times in range(0, timer):
-                print(f"The Program will run in {timer - times} seconds")
-                times += 1
-                time.sleep(1)
-            import sys
-            import pickle
-            import pymysql
-            import requests
-            import re
-            import os
-            import time
-            import webbrowser
-            from datetime import datetime, timedelta
-            from bs4 import BeautifulSoup
-            from PyQt5.QtWidgets import (
-                QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit
-            )
-            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
-            from PyQt5.QtCore import QUrl, Qt
-            from PyQt5.QtWebEngineWidgets import QWebEngineView
-            break
-
-        elif installPip.lower() == "n":
-            print(f"\nYou may use this line to install what is needed if you want.\n")
-            print(f"pip install pymysql requests PyQt5 bs4 PyQtWebEngine")
-            sys.exit()
-        else:
-            print(f"\nThis was not yes or no.....\n")
-            continue
-
-except Exception as e:
-    print(f"Something broke and idk why...")
+import sys
+import pickle
+import pymysql
+import requests
+import re
+import os
+import time
+import webbrowser
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QDialog, QFormLayout, QLineEdit
+)
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
+from PyQt5.QtCore import QUrl, Qt
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
 LOCAL_HOST = "127.0.0.1"
 REMOTE_HOST = "lollis-home.ddns.net"
@@ -855,7 +811,7 @@ class CityMapApp(QMainWindow):
         Load characters from the pickle file and populate the combo box.
         """
         try:
-            with open('characters.pkl', 'rb') as f:
+            with open('testing/characters.pkl', 'rb') as f:
                 characters = pickle.load(f)
                 for character in characters:
                     self.character_list.addItem(character['name'])
@@ -869,7 +825,7 @@ class CityMapApp(QMainWindow):
         Args:
             characters (list): List of character dictionaries.
         """
-        with open('characters.pkl', 'wb') as f:
+        with open('testing/characters.pkl', 'wb') as f:
             pickle.dump(characters, f)
 
     def add_new_character(self):
@@ -924,7 +880,7 @@ class CityMapApp(QMainWindow):
             list: List of character dictionaries.
         """
         try:
-            with open('characters.pkl', 'rb') as f:
+            with open('testing/characters.pkl', 'rb') as f:
                 return pickle.load(f)
         except FileNotFoundError:
             return []

@@ -1,3 +1,6 @@
+# Filename: Cookie_test.py
+#!/usr/bin/env python3
+
 import sys
 import pickle
 import logging
