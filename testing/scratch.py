@@ -1,56 +1,41 @@
-"""
-RBC City Map Application
-=========================
-This application provides a graphical interface to view a city map of RavenBlack City.
-It includes features such as viewing the map, zooming in and out, setting destinations,
-and refreshing the map with updated data from the 'A View in the Dark' website.
-
-Modules:
-- sys
-- pickle
-- pymysql
-- requests
-- datetime
-- bs4 (BeautifulSoup)
-- PyQt5
-
-Classes:
-- CityMapApp: Main application class for the RBC City Map.
-
-Functions:
-- connect_to_database: Establish a connection to the MySQL database.
-- load_data: Load data from the database and return it as various dictionaries and lists.
-- scrape_avitd_data: Scrape guilds and shops data from 'A View in the Dark' and update the database with next update timestamps.
-- extract_next_update_time: Extract the next update time from the text and calculate the next update timestamp.
-- update_guild: Update a single guild in the database.
-- update_shop: Update a single shop in the database.
-- update_guilds: Update the guilds data in the database.
-- update_shops: Update the shops data in the database.
-- get_next_update_times: Retrieve the next update times for guilds and shops from the database.
-
-To install all required modules, run the following command:
- pip install pymysql requests bs4 PyQt5 PyQtWebEngine
-"""
 #!/usr/bin/env python3
-# Filename: 0.6.1.py
+# Filename: scratch.py
 
 import sys
 import pickle
+import logging
+import os
 import pymysql
 import requests
 import re
-import os
 import time
+import sqlite3
 import webbrowser
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QDialog, QFormLayout, QLineEdit
+    QPushButton, QLineEdit, QDialog, QFormLayout, QDialogButtonBox, QListWidget, QListWidgetItem, QSplitter,
+    QComboBox, QLabel, QFrame, QSizePolicy
 )
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
+from PyQt5.QtCore import QUrl, Qt, QDateTime, QTimer
+from PyQt5.QtNetwork import QNetworkCookie
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
-from PyQt5.QtCore import QUrl, Qt
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+
+# Setup logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Define the parent directory path
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+SESSIONS_DIR = os.path.join(CURRENT_DIR, 'sessions')  # Directory to store session data
+
+def ensure_sessions_dir():
+    if not os.path.exists(SESSIONS_DIR):
+        os.makedirs(SESSIONS_DIR)
+        logging.debug(f"Created sessions directory at {SESSIONS_DIR}")
+    else:
+        logging.debug(f"Sessions directory already exists at {SESSIONS_DIR}")
 
 LOCAL_HOST = "127.0.0.1"
 REMOTE_HOST = "lollis-home.ddns.net"
@@ -176,15 +161,49 @@ def get_next_update_times():
 
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
+class NewUserDialog(QDialog):
+    def __init__(self, parent=None, user_info=None):
+        super().__init__(parent)
+        self.setWindowTitle("New User" if user_info is None else "Modify User")
+        self.setModal(True)
+
+        self.form_layout = QFormLayout(self)
+        self.display_name_input = QLineEdit(self)
+        self.username_input = QLineEdit(self)
+        self.password_input = QLineEdit(self)
+        self.password_input.setEchoMode(QLineEdit.Password)
+
+        if user_info:
+            self.display_name_input.setText(user_info['display_name'])
+            self.username_input.setText(user_info['username'])
+            self.password_input.setText(user_info['password'])
+
+        self.form_layout.addRow("Display Name:", self.display_name_input)
+        self.form_layout.addRow("Username:", self.username_input)
+        self.form_layout.addRow("Password:", self.password_input)
+
+        self.button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+        self.button_box.accepted.connect(self.accept)
+        self.button_box.rejected.connect(self.reject)
+
+        self.form_layout.addRow(self.button_box)
+
+    def get_user_info(self):
+        return {
+            'display_name': self.display_name_input.text(),
+            'username': self.username_input.text(),
+            'password': self.password_input.text()
+        }
+
 class CityMapApp(QMainWindow):
     def __init__(self):
-        """
-        Initialize the CityMapApp.
-        """
         super().__init__()
 
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
+
+        self.profile = QWebEngineProfile.defaultProfile()
+        self.cookie_store = self.profile.cookieStore()
 
         self.zoom_level = 3
         self.minimap_size = 280
@@ -196,19 +215,15 @@ class CityMapApp(QMainWindow):
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout()
-        central_widget.setLayout(main_layout)
+        main_layout = QVBoxLayout(central_widget)
 
-        # Main layout for map and controls
-        map_layout = QHBoxLayout()
-        main_layout.addLayout(map_layout)
+        # Create the splitter to divide the left and right columns
+        splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(splitter)
 
-        # Left layout containing the minimap and control buttons
-        left_layout = QVBoxLayout()
-        left_frame = QFrame()
-        left_frame.setFrameShape(QFrame.Box)
-        left_frame.setFixedWidth(300)
-        left_frame.setLayout(left_layout)
+        # Left column for minimap and controls
+        left_widget = QWidget()
+        left_layout = QVBoxLayout(left_widget)
 
         # Frame for the minimap
         minimap_frame = QFrame()
@@ -275,7 +290,7 @@ class CityMapApp(QMainWindow):
         self.combo_rows.addItems(rows.keys())
 
         go_button = QPushButton('Go')
-        go_button.setFixedSize(25,25)
+        go_button.setFixedSize(25, 25)
         go_button.clicked.connect(self.go_to_location)
 
         combo_go_layout.addWidget(self.combo_columns)
@@ -333,16 +348,16 @@ class CityMapApp(QMainWindow):
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
-        self.character_list = QComboBox()
+        self.character_list = QListWidget()
         self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.character_list.setFixedHeight(25)
-        self.load_characters()
+        self.character_list.setFixedHeight(150)
+        self.character_list.itemClicked.connect(self.login_character)
         character_layout.addWidget(self.character_list)
 
         character_buttons_layout = QHBoxLayout()
         new_button = QPushButton('New')
         new_button.setFixedSize(75, 25)
-        new_button.clicked.connect(self.add_new_character)
+        new_button.clicked.connect(self.new_character)
         modify_button = QPushButton('Modify')
         modify_button.setFixedSize(75, 25)
         modify_button.clicked.connect(self.modify_character)
@@ -356,13 +371,19 @@ class CityMapApp(QMainWindow):
 
         left_layout.addWidget(character_frame)
 
-        map_layout.addWidget(left_frame)
+        splitter.addWidget(left_widget)
+        left_widget.setFixedWidth(300)
 
-        # Frame for displaying the website
-        self.website_frame = QWebEngineView()
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.loadFinished.connect(self.on_webview_load_finished)
-        map_layout.addWidget(self.website_frame)
+        # Right column for web view
+        self.webview = QWebEngineView()
+        self.webview.load(QUrl('https://quiz.ravenblack.net/blood.pl?action=city'))
+        self.webview.loadFinished.connect(self.on_webview_load_finished)
+        splitter.addWidget(self.webview)
+
+        logging.debug("Webview added to layout and shown")
+
+        self.load_user_list()
+        self.load_active_user()
 
         self.show()
         self.update_minimap()
@@ -371,7 +392,7 @@ class CityMapApp(QMainWindow):
         """
         Handle the event when the webview finishes loading.
         """
-        self.website_frame.page().toHtml(self.process_html)
+        self.webview.page().toHtml(self.process_html)
 
     def process_html(self, html):
         """
@@ -417,7 +438,7 @@ class CityMapApp(QMainWindow):
         """
         Refresh the webview content.
         """
-        self.website_frame.reload()
+        self.webview.reload()
 
     def draw_minimap(self):
         """
@@ -806,122 +827,161 @@ class CityMapApp(QMainWindow):
         """
         webbrowser.open("https://discord.gg/ktdG9FZ")
 
-    def load_characters(self):
-        """
-        Load characters from the pickle file and populate the combo box.
-        """
-        try:
-            with open('characters.pkl', 'rb') as f:
-                characters = pickle.load(f)
-                for character in characters:
-                    self.character_list.addItem(character['name'])
-        except FileNotFoundError:
-            pass
+    def load_user_list(self):
+        self.character_list.clear()
+        users = load_user_info()
+        for user in users:
+            item = QListWidgetItem(user['display_name'])
+            item.setData(Qt.UserRole, user)
+            self.character_list.addItem(item)
+        logging.debug("User list loaded")
 
-    def save_characters(self, characters):
-        """
-        Save characters to the pickle file.
-
-        Args:
-            characters (list): List of character dictionaries.
-        """
-        with open('characters.pkl', 'wb') as f:
-            pickle.dump(characters, f)
-
-    def add_new_character(self):
-        """
-        Add a new character.
-        """
-        dialog = CharacterDialog(self)
-        if dialog.exec_():
-            name = dialog.name_edit.text()
-            password = dialog.password_edit.text()
-            characters = self.get_all_characters()
-            characters.append({'name': name, 'password': password})
-            self.save_characters(characters)
-            self.character_list.addItem(name)
+    def new_character(self):
+        dialog = NewUserDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            user_info = dialog.get_user_info()
+            users = load_user_info()
+            users.append(user_info)
+            save_user_info(users)
+            self.load_user_list()
 
     def modify_character(self):
-        """
-        Modify the selected character.
-        """
-        current_index = self.character_list.currentIndex()
-        if current_index == -1:
-            return
-        name = self.character_list.currentText()
-        characters = self.get_all_characters()
-        character = next((char for char in characters if char['name'] == name), None)
-        if character:
-            dialog = CharacterDialog(self, character)
-            if dialog.exec_():
-                character['name'] = dialog.name_edit.text()
-                character['password'] = dialog.password_edit.text()
-                self.save_characters(characters)
-                self.character_list.setItemText(current_index, character['name'])
+        current_item = self.character_list.currentItem()
+        if current_item:
+            user_info = current_item.data(Qt.UserRole)
+            dialog = NewUserDialog(self, user_info)
+            if dialog.exec_() == QDialog.Accepted:
+                new_user_info = dialog.get_user_info()
+                users = load_user_info()
+                for i, user in enumerate(users):
+                    if user == user_info:
+                        users[i] = new_user_info
+                        break
+                save_user_info(users)
+                self.load_user_list()
 
     def delete_character(self):
+        current_item = self.character_list.currentItem()
+        if current_item:
+            user_info = current_item.data(Qt.UserRole)
+            users = load_user_info()
+            users = [user for user in users if user != user_info]
+            save_user_info(users)
+            self.load_user_list()
+            save_active_user(None)
+
+    def login_character(self, item):
+        user_info = item.data(Qt.UserRole)
+        self.set_active_user(user_info)
+
+    def set_active_user(self, user_info):
         """
-        Delete the selected character.
+        Set the specified user as active, saving the current session data and loading the new user's session.
         """
-        current_index = self.character_list.currentIndex()
-        if current_index == -1:
-            return
-        name = self.character_list.currentText()
-        characters = self.get_all_characters()
-        characters = [char for char in characters if char['name'] != name]
-        self.save_characters(characters)
-        self.character_list.removeItem(current_index)
+        logging.debug(f"Setting active user: {user_info}")
+        # Save session for the currently active user
+        current_active_user = load_active_user()
+        if current_active_user:
+            self.save_session(current_active_user['username'])
 
-    def get_all_characters(self):
+        # Set the new active user
+        save_active_user(user_info)
+        self.load_session(user_info['username'])
+        self.webview.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=city'))
+
+    def load_active_user(self):
+        user_info = load_active_user()
+        if user_info:
+            self.set_active_user(user_info)
+
+    def load_session(self, username):
         """
-        Get all characters from the pickle file.
-
-        Returns:
-            list: List of character dictionaries.
+        Load session for the specified user and set it in the web engine profile.
         """
-        try:
-            with open('characters.pkl', 'rb') as f:
-                return pickle.load(f)
-        except FileNotFoundError:
-            return []
+        ensure_sessions_dir()
+        session_file = os.path.join(SESSIONS_DIR, f'session_{username}.pkl')
+        logging.debug(f"Attempting to load session file: {session_file}")
+        if os.path.exists(session_file):
+            try:
+                with open(session_file, 'rb') as file:
+                    session_data = pickle.load(file)
+                    logging.debug(f"Loaded session data for user {username}: {session_data}")
+                    self.apply_session_data(session_data)
+            except Exception as e:
+                logging.error(f"Failed to load session data for user {username}: {e}")
+                logging.debug(f"Session data may be corrupted or incomplete.")
+        else:
+            logging.debug(f"No session file found for user {username}. Logging in normally.")
 
-class CharacterDialog(QDialog):
-    def __init__(self, parent=None, character=None):
+    def save_session(self, username):
         """
-        Initialize the CharacterDialog.
-
-        Args:
-            parent (QWidget): Parent widget.
-            character (dict, optional): Character data to populate the fields. Defaults to None.
+        Save session for the specified user from the web engine profile.
         """
-        super().__init__(parent)
-        self.setWindowTitle('Character')
-        self.setFixedSize(300, 150)
+        profile = self.webview.page().profile()  # Get QWebEngineProfile
+        cookie_store = profile.cookieStore()  # Get QWebEngineCookieStore
 
-        layout = QFormLayout(self)
+        def handle_cookies(cookies):
+            logging.debug(f"Cookies: {cookies}")  # Print cookies for debugging
+            self._extract_and_save_session(cookies, username)  # Process cookies
 
-        self.name_edit = QLineEdit(self)
-        self.password_edit = QLineEdit(self)
-        self.password_edit.setEchoMode(QLineEdit.Password)
+        # Connect the signal to the slot
+        cookie_store.cookieAdded.connect(handle_cookies)
 
-        layout.addRow('Name:', self.name_edit)
-        layout.addRow('Password:', self.password_edit)
+        # Load all cookies
+        cookie_store.loadAllCookies()
 
-        if character:
-            self.name_edit.setText(character['name'])
-            self.password_edit.setText(character['password'])
+        # Ensure to disconnect the signal after processing to prevent memory leaks or unintended behavior
+        cookie_store.cookieAdded.disconnect(handle_cookies)
 
-        buttons_layout = QHBoxLayout()
+    def _extract_and_save_session(self, cookies, username):
+        """
+        Extract session data and save it for the specified user.
+        """
+        session_data = {
+            'cookies': []
+        }
+        for cookie in cookies:
+            session_data['cookies'].append({
+                'name': cookie.name().data().decode(),
+                'value': cookie.value().data().decode(),
+                'domain': cookie.domain(),
+                'path': cookie.path(),
+                'expires': cookie.expirationDate().toMSecsSinceEpoch(),
+                'is_secure': cookie.isSecure(),
+                'is_httponly': cookie.isHttpOnly()
+            })
+        ensure_sessions_dir()
+        session_file = os.path.join(SESSIONS_DIR, f'session_{username}.pkl')
+        logging.debug(f"Saving session data to file: {session_file}")
+        with open(session_file, 'wb') as file:
+            pickle.dump(session_data, file)
+        logging.debug(f"Session data saved for user {username}: {session_data}")
 
-        ok_button = QPushButton('OK', self)
-        ok_button.clicked.connect(self.accept)
-        buttons_layout.addWidget(ok_button)
+    def apply_session_data(self, session_data):
+        """
+        Apply session data to the web engine profile.
+        """
+        self.clear_cookies()
+        profile = self.webview.page().profile()  # Get QWebEngineProfile
+        cookie_jar = profile.cookieStore()  # Get QNetworkCookieStore
 
-        cancel_button = QPushButton('Cancel', self)
-        cancel_button.clicked.connect(self.reject)
-        buttons_layout.addWidget(cancel_button)
+        for cookie_data in session_data.get('cookies', []):
+            q_cookie = QNetworkCookie(cookie_data['name'].encode(), cookie_data['value'].encode())
+            q_cookie.setDomain(cookie_data['domain'])
+            q_cookie.setPath(cookie_data['path'])
+            q_cookie.setExpirationDate(QDateTime.fromMSecsSinceEpoch(cookie_data['expires']))
+            q_cookie.setSecure(cookie_data['is_secure'])
+            q_cookie.setHttpOnly(cookie_data['is_httponly'])
+            cookie_jar.setCookie(q_cookie)
+        logging.debug("Session data applied")
 
-        layout.addRow(buttons_layout)
+    def clear_cookies(self):
+        """
+        Clear all cookies in the cookie store.
+        """
+        logging.debug("Clearing cookies")
+        self.cookie_store.deleteAllCookies()
+
 
 def scrape_avitd_data():
     """
@@ -1064,10 +1124,51 @@ def update_shops(cursor, soup, next_update_time):
         else:
             print(f"Shop '{name}' not found in the table.")
 
+def save_user_info(user_info):
+    ensure_sessions_dir()
+    users_file = os.path.join(SESSIONS_DIR, 'users.pkl')
+    with open(users_file, 'wb') as file:
+        pickle.dump(user_info, file)
+    logging.debug(f"User info saved: {user_info}")
+
+def load_user_info():
+    ensure_sessions_dir()
+    users_file = os.path.join(SESSIONS_DIR, 'users.pkl')
+    logging.debug(f"Attempting to load user info from: {users_file}")
+    try:
+        with open(users_file, 'rb') as file:
+            user_info = pickle.load(file)
+            logging.debug(f"Loaded user info: {user_info}")
+            return user_info
+    except FileNotFoundError:
+        logging.debug("User info file not found.")
+        return []
+
+def save_active_user(user):
+    ensure_sessions_dir()
+    active_user_file = os.path.join(SESSIONS_DIR, 'active_user.pkl')
+    with open(active_user_file, 'wb') as file:
+        pickle.dump(user, file)
+    logging.debug(f"Active user saved: {user}")
+
+def load_active_user():
+    ensure_sessions_dir()
+    active_user_file = os.path.join(SESSIONS_DIR, 'active_user.pkl')
+    logging.debug(f"Attempting to load active user from: {active_user_file}")
+    try:
+        with open(active_user_file, 'rb') as file:
+            active_user = pickle.load(file)
+            logging.debug(f"Loaded active user: {active_user}")
+            return active_user
+    except FileNotFoundError:
+        logging.debug("Active user file not found.")
+        return None
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     guilds_next_update, shops_next_update = get_next_update_times()
     if datetime.now() >= guilds_next_update or datetime.now() >= shops_next_update:
         scrape_avitd_data()
     window = CityMapApp()
+    window.show()
     sys.exit(app.exec_())
