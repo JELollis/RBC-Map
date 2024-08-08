@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineProfile
 from PyQt5.QtCore import QUrl, Qt, QDateTime, QTimer
+
 from PyQt5.QtNetwork import QNetworkCookie
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
 
@@ -57,10 +58,10 @@ def connect_to_database():
             password=PASSWORD,
             database=DATABASE
         )
-        print("Connected to local MySQL instance")
+        logging.debug("Connected to local MySQL instance")
         return connection
     except pymysql.MySQLError as err:
-        print("Connection to local MySQL instance failed:", err)
+        logging.error(f"Connection to local MySQL instance failed: {err}")
         try:
             connection = pymysql.connect(
                 host=REMOTE_HOST,
@@ -68,11 +69,15 @@ def connect_to_database():
                 password=PASSWORD,
                 database=DATABASE
             )
-            print("Connected to remote MySQL instance")
+            logging.debug("Connected to remote MySQL instance")
             return connection
         except pymysql.MySQLError as err:
-            print("Connection to remote MySQL instance failed:", err)
+            logging.error(f"Connection to remote MySQL instance failed: {err}")
             return None
+
+connection = connect_to_database()
+if not connection:
+    sys.exit("Failed to connect to the database.")
 
 def load_data():
     """
@@ -82,10 +87,6 @@ def load_data():
         tuple: Contains columns, rows, banks_coordinates, taverns_coordinates,
                transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates
     """
-    connection = connect_to_database()
-    if not connection:
-        sys.exit("Failed to connect to the database.")
-
     cursor = connection.cursor()
 
     cursor.execute("SELECT * FROM `columns`")
@@ -128,8 +129,6 @@ def load_data():
     places_of_interest_data = cursor.fetchall()
     places_of_interest_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row in places_of_interest_data if columns.get(col) is not None and rows.get(row) is not None}
 
-    connection.close()
-
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
 def get_next_update_times():
@@ -139,10 +138,6 @@ def get_next_update_times():
     Returns:
         tuple: The next update times for guilds and shops.
     """
-    connection = connect_to_database()
-    if not connection:
-        sys.exit("Failed to connect to the database.")
-
     cursor = connection.cursor()
 
     cursor.execute("SELECT next_update FROM guilds ORDER BY next_update DESC LIMIT 1")
@@ -154,8 +149,6 @@ def get_next_update_times():
     shops_next_update = cursor.fetchone()
     if shops_next_update:
         shops_next_update = shops_next_update[0]
-
-    connection.close()
 
     return guilds_next_update, shops_next_update
 
@@ -377,7 +370,6 @@ class CityMapApp(QMainWindow):
         # Right column for web view
         self.webview = QWebEngineView()
         self.webview.load(QUrl('https://quiz.ravenblack.net/blood.pl?action=city'))
-        self.webview.loadFinished.connect(self.on_webview_load_finished)
         splitter.addWidget(self.webview)
 
         logging.debug("Webview added to layout and shown")
@@ -534,19 +526,19 @@ class CityMapApp(QMainWindow):
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
-                print(f"Skipping shop '{name}' due to missing coordinates")
+                logging.debug(f"Skipping shop '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in guilds_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
-                print(f"Skipping guild '{name}' due to missing coordinates")
+                logging.debug(f"Skipping guild '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
-                print(f"Skipping place of interest '{name}' due to missing coordinates")
+                logging.debug(f"Skipping place of interest '{name}' due to missing coordinates")
 
         # Get current location
         current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
@@ -920,18 +912,18 @@ class CityMapApp(QMainWindow):
         profile = self.webview.page().profile()  # Get QWebEngineProfile
         cookie_store = profile.cookieStore()  # Get QWebEngineCookieStore
 
-        def handle_cookies(cookies):
-            logging.debug(f"Cookies: {cookies}")  # Print cookies for debugging
-            self._extract_and_save_session(cookies, username)  # Process cookies
+        def handle_cookie(cookie):
+            logging.debug(f"Cookie: {cookie}")  # Print cookie for debugging
+            self._extract_and_save_session([cookie], username)  # Process cookie
 
         # Connect the signal to the slot
-        cookie_store.cookieAdded.connect(handle_cookies)
+        cookie_store.cookieAdded.connect(handle_cookie)
 
-        # Load all cookies
-        cookie_store.loadAllCookies()
+        # Reload the page to trigger the cookieAdded signal
+        self.webview.reload()
 
-        # Ensure to disconnect the signal after processing to prevent memory leaks or unintended behavior
-        cookie_store.cookieAdded.disconnect(handle_cookies)
+        # Disconnect the signal after processing to prevent memory leaks or unintended behavior
+        QTimer.singleShot(5000, lambda: cookie_store.cookieAdded.disconnect(handle_cookie))
 
     def _extract_and_save_session(self, cookies, username):
         """
@@ -991,10 +983,6 @@ def scrape_avitd_data():
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    connection = connect_to_database()
-    if not connection:
-        sys.exit("Failed to connect to the database.")
-
     cursor = connection.cursor()
 
     # Extract the time for next update
@@ -1011,8 +999,8 @@ def scrape_avitd_data():
     if not guilds_next_update_text or not shops_next_update_text:
         sys.exit("Failed to find the next update times for guilds and shops.")
 
-    print("Guilds next update text:", guilds_next_update_text)
-    print("Shops next update text:", shops_next_update_text)
+    logging.debug("Guilds next update text: %s", guilds_next_update_text)
+    logging.debug("Shops next update text: %s", shops_next_update_text)
 
     guilds_next_update_time = extract_next_update_time(guilds_next_update_text)
     shops_next_update_time = extract_next_update_time(shops_next_update_text)
@@ -1021,7 +1009,6 @@ def scrape_avitd_data():
     update_shops(cursor, soup, shops_next_update_time)
 
     connection.commit()
-    connection.close()
 
 def extract_next_update_time(text):
     """
@@ -1105,7 +1092,7 @@ def update_guilds(cursor, soup, next_update_time):
             location = location_tag.find_next_sibling('td').text.replace('SE of ', '').strip()
             update_guild(cursor, name, location, next_update_time)
         else:
-            print(f"Guild '{name}' not found in the table.")
+            logging.debug(f"Guild '{name}' not found in the table.")
 
 def update_shops(cursor, soup, next_update_time):
     """
@@ -1122,7 +1109,7 @@ def update_shops(cursor, soup, next_update_time):
             location = location_tag.find_next_sibling('td').text.replace('SE of ', '').strip()
             update_shop(cursor, name, location, next_update_time)
         else:
-            print(f"Shop '{name}' not found in the table.")
+            logging.debug(f"Shop '{name}' not found in the table.")
 
 def save_user_info(user_info):
     ensure_sessions_dir()
