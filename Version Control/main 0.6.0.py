@@ -101,41 +101,41 @@ def load_data():
 
     cursor = connection.cursor()
 
-    cursor.execute("SELECT * FROM `columns`")
+    cursor.execute("SELECT name, coordinate FROM `columns`")
     columns_data = cursor.fetchall()
-    columns = {name: coordinate for _, name, coordinate in columns_data}
+    columns = {name: coordinate for name, coordinate in columns_data}
 
-    cursor.execute("SELECT * FROM `rows`")
+    cursor.execute("SELECT name, coordinate FROM `rows`")
     rows_data = cursor.fetchall()
-    rows = {name: coordinate for _, name, coordinate in rows_data}
+    rows = {name: coordinate for name, coordinate in rows_data}
 
-    cursor.execute("SELECT * FROM banks")
+    cursor.execute("SELECT `column`, `row` FROM banks")
     banks_data = cursor.fetchall()
-    banks_coordinates = [(columns[col], rows[row]) for _, col, row in banks_data]
+    banks_coordinates = [(columns[col], rows[row]) for col, row in banks_data]
 
-    cursor.execute("SELECT * FROM taverns")
+    cursor.execute("SELECT name, `column`, `row` FROM taverns")
     taverns_data = cursor.fetchall()
-    taverns_coordinates = {name: (columns.get(col), rows.get(row)) for _, col, row, name in taverns_data}
+    taverns_coordinates = {name: (columns.get(col), rows.get(row)) for col, row, name in taverns_data}
 
-    cursor.execute("SELECT * FROM transits")
+    cursor.execute("SELECT name, `column`, `row` FROM transits")
     transits_data = cursor.fetchall()
-    transits_coordinates = {name: (columns.get(col), rows.get(row)) for _, col, row, name in transits_data}
+    transits_coordinates = {name: (columns.get(col), rows.get(row)) for col, row, name in transits_data}
 
-    cursor.execute("SELECT * FROM userbuildings")
+    cursor.execute("SELECT name, `column`, `row` FROM userbuildings")
     user_buildings_data = cursor.fetchall()
-    user_buildings_coordinates = {name: (columns.get(col), rows.get(row)) for _, name, col, row in user_buildings_data}
+    user_buildings_coordinates = {name: (columns.get(col), rows.get(row)) for name, col, row in user_buildings_data}
 
-    cursor.execute("SELECT * FROM color_mappings")
+    cursor.execute("SELECT type, color FROM color_mappings")
     color_mappings_data = cursor.fetchall()
-    color_mappings = {type_: QColor(color) for _, type_, color in color_mappings_data}
+    color_mappings = {type: QColor(color) for type, color in color_mappings_data}
 
-    cursor.execute("SELECT * FROM shops")
+    cursor.execute("SELECT name, `column`, `row`, next_update FROM shops")
     shops_data = cursor.fetchall()
-    shops_coordinates = {name: (columns.get(col), rows.get(row)) for _, name, col, row, next_update in shops_data}
+    shops_coordinates = {name: (columns.get(col), rows.get(row)) for name, col, row, next_update in shops_data}
 
-    cursor.execute("SELECT * FROM guilds")
+    cursor.execute("SELECT name, `column`, `row`, next_update FROM guilds")
     guilds_data = cursor.fetchall()
-    guilds_coordinates = {name: (columns.get(col), rows.get(row)) for _, name, col, row, next_update in guilds_data}
+    guilds_coordinates = {name: (columns.get(col), rows.get(row)) for name, col, row, next_update in guilds_data}
 
     connection.close()
 

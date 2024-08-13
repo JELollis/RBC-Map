@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Filename: main_0.7.0
+# Filename: main 0.6.3
+
 """
 =========================
 RBC City Map Application
@@ -29,7 +30,6 @@ Functions:
 - update_shop: Update a single shop in the database.
 - update_guilds: Update the guilds data in the database.
 - update_shops: Update the shops data in the database.
-- get_next_update_times: Retrieve the next update times for guilds and shops from the database.
 
 To install all required modules, run the following command:
  pip install pymysql requests bs4 PyQt5 PyQtWebEngine
@@ -49,8 +49,8 @@ try:
     from bs4 import BeautifulSoup
     from PyQt5.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-        QMessageBox
+        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog,
+        QFormLayout, QListWidget, QListWidgetItem, QMessageBox
     )
     from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
     from PyQt5.QtCore import QUrl, Qt
@@ -236,7 +236,6 @@ class CityMapApp(QMainWindow):
     """
     Main application class for the RBC City Map.
     """
-
     def __init__(self):
         """
         Initialize the CityMapApp.
@@ -252,20 +251,8 @@ class CityMapApp(QMainWindow):
         self.row_start = 0
         self.destination = None
         self.color_mappings = color_mappings
+        self.load_destination()
 
-        # Initialize characters list and character_list widget early to avoid attribute errors
-        self.characters = []
-        self.character_list = QListWidget()
-
-        self.load_characters()
-
-        if not self.characters:
-            self.add_new_character()
-            if not self.characters:
-                # Exit if no characters are added
-                sys.exit("No characters added. Exiting the application.")
-
-        # Now continue initializing the rest of the UI components
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout()
@@ -406,9 +393,11 @@ class CityMapApp(QMainWindow):
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
+        self.character_list = QListWidget()
         self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.character_list.setFixedHeight(100)
         self.character_list.itemClicked.connect(self.on_character_selected)
+        self.load_characters()
         character_layout.addWidget(self.character_list)
 
         character_buttons_layout = QHBoxLayout()
@@ -438,6 +427,14 @@ class CityMapApp(QMainWindow):
 
         self.show()
         self.update_minimap()
+
+    def show_coming_soon_popup(self):
+        """
+        Show a popup message when the 'Website' button is clicked.
+        """
+        QMessageBox.information(self, "Website Coming Soon",
+                                "We have not yet deployed the website for this program, but it is coming soon! "
+                                "Please check back in the next version!")
 
     def on_character_selected(self, item):
         """
@@ -774,7 +771,7 @@ class CityMapApp(QMainWindow):
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
                 (self.destination[0] - self.column_start) * block_size + block_size // 2,
-                (self.destination[1] - self.row_start) * block_size + block_size // 2
+                (self.destination[1] - self.row_start) * block_size // 2
             )
 
         painter.end()
@@ -1025,16 +1022,6 @@ class CityMapApp(QMainWindow):
         """
         webbrowser.open("https://discord.gg/ktdG9FZ")
 
-    def show_coming_soon_popup(self):
-        """
-        Show a popup indicating that the website feature is coming soon.
-        """
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("We have not yet deployed the website for this program, but it is coming soon! Please check back in the next version!")
-        msg.setWindowTitle("Coming Soon")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
 
 class CharacterDialog(QDialog):
     """

@@ -1,7 +1,4 @@
-#!/usr/bin/env python3
-# Filename: main_0.7.0
 """
-=========================
 RBC City Map Application
 =========================
 This application provides a graphical interface to view a city map of RavenBlack City.
@@ -34,106 +31,27 @@ Functions:
 To install all required modules, run the following command:
  pip install pymysql requests bs4 PyQt5 PyQtWebEngine
 """
+#!/usr/bin/env python3
+# Filename: main 0.6.1.py
 
-try:
-    import sys
-    import pickle
-    import pymysql
-    import requests
-    import re
-    import os
-    import time
-    import sqlite3
-    import webbrowser
-    from datetime import datetime, timedelta
-    from bs4 import BeautifulSoup
-    from PyQt5.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-        QMessageBox
-    )
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
-    from PyQt5.QtCore import QUrl, Qt
-    from PyQt5.QtWebEngineWidgets import QWebEngineView
-    import logging
+import sys
+import pickle
+import pymysql
+import requests
+import re
+import os
+import time
+import webbrowser
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QDialog, QFormLayout, QLineEdit
+)
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
+from PyQt5.QtCore import QUrl, Qt
+from PyQt5.QtWebEngineWidgets import QWebEngineView
 
-except ModuleNotFoundError as e:
-    run = True
-    while run:
-        print(f"I believe you are missing some modules, copy and paste the line below.\n")
-        installPip = input(f"Would you like me to install those for you? (Y/N): ")
-        if installPip.lower() == "y":
-            os.system(f"pip install PyQtWebEngine pymysql requests PyQt5 bs4 sqlite3")
-            timer = 10
-            for times in range(0, timer):
-                print(f"The Program will run in {timer - times} seconds")
-                times += 1
-                time.sleep(1)
-            import sys
-            import pickle
-            import pymysql
-            import requests
-            import re
-            import os
-            import time
-            import sqlite3
-            import webbrowser
-            from datetime import datetime, timedelta
-            from bs4 import BeautifulSoup
-            from PyQt5.QtWidgets import (
-                QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget,
-                QListWidgetItem, QMessageBox
-            )
-            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
-            from PyQt5.QtCore import QUrl, Qt
-            from PyQt5.QtWebEngineWidgets import QWebEngineView
-            import logging
-            break
-
-        elif installPip.lower() == "n":
-            print(f"\nYou may use this line to install what is needed if you want.\n")
-            print(f"pip install pymysql requests PyQt5 bs4 PyQtWebEngine")
-            sys.exit()
-        else:
-            print(f"\nThis was not yes or no.....\n")
-            continue
-
-except Exception as e:
-    print(f"Something broke and idk why...")
-
-# Directory setup
-def ensure_directories_exist():
-    """
-    Ensure that the required directories exist. If they don't, create them.
-    """
-    required_dirs = ['logs', 'sessions']
-    for directory in required_dirs:
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-            print(f"Created directory: {directory}")
-
-# Call the function to ensure directories are present
-ensure_directories_exist()
-
-# Logging setup
-def setup_logging():
-    """
-    Setup logging configuration to save logs in the 'logs' directory with the filename 'rbc_{date}.log'.
-    """
-    log_filename = datetime.now().strftime('logs/rbc_%Y-%m-%d.log')
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        filename=log_filename,
-        filemode='a'  # Append to the log file if it exists
-    )
-    print(f"Logging to: {log_filename}")
-
-# Call the logging setup
-setup_logging()
-
-# Database connection constants
 LOCAL_HOST = "127.0.0.1"
 REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
@@ -154,10 +72,10 @@ def connect_to_database():
             password=PASSWORD,
             database=DATABASE
         )
-        logging.info("Connected to local MySQL instance")
+        print("Connected to local MySQL instance")
         return connection
     except pymysql.MySQLError as err:
-        logging.error("Connection to local MySQL instance failed: %s", err)
+        print("Connection to local MySQL instance failed:", err)
         try:
             connection = pymysql.connect(
                 host=REMOTE_HOST,
@@ -165,10 +83,10 @@ def connect_to_database():
                 password=PASSWORD,
                 database=DATABASE
             )
-            logging.info("Connected to remote MySQL instance")
+            print("Connected to remote MySQL instance")
             return connection
         except pymysql.MySQLError as err:
-            logging.error("Connection to remote MySQL instance failed: %s", err)
+            print("Connection to remote MySQL instance failed:", err)
             return None
 
 def load_data():
@@ -229,14 +147,39 @@ def load_data():
 
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
-# Ensure load_data() is called before initializing the CityMapApp
+def get_next_update_times():
+    """
+    Retrieve the next update times for guilds and shops from the database.
+
+    Returns:
+        tuple: The next update times for guilds and shops.
+    """
+    connection = connect_to_database()
+    if not connection:
+        sys.exit("Failed to connect to the database.")
+
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT next_update FROM guilds ORDER BY next_update DESC LIMIT 1")
+    guilds_next_update = cursor.fetchone()
+    if guilds_next_update:
+        guilds_next_update = guilds_next_update[0]
+
+    cursor.execute("SELECT next_update FROM shops ORDER BY next_update DESC LIMIT 1")
+    shops_next_update = cursor.fetchone()
+    if shops_next_update:
+        shops_next_update = shops_next_update[0]
+
+    connection.close()
+
+    return guilds_next_update, shops_next_update
+
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 class CityMapApp(QMainWindow):
     """
     Main application class for the RBC City Map.
     """
-
     def __init__(self):
         """
         Initialize the CityMapApp.
@@ -252,20 +195,8 @@ class CityMapApp(QMainWindow):
         self.row_start = 0
         self.destination = None
         self.color_mappings = color_mappings
+        self.load_destination()
 
-        # Initialize characters list and character_list widget early to avoid attribute errors
-        self.characters = []
-        self.character_list = QListWidget()
-
-        self.load_characters()
-
-        if not self.characters:
-            self.add_new_character()
-            if not self.characters:
-                # Exit if no characters are added
-                sys.exit("No characters added. Exiting the application.")
-
-        # Now continue initializing the rest of the UI components
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout()
@@ -392,7 +323,6 @@ class CityMapApp(QMainWindow):
 
         website_button = QPushButton('Website')
         website_button.setFixedSize(button_size, 25)
-        website_button.clicked.connect(self.show_coming_soon_popup)
         action_layout.addWidget(website_button)
 
         left_layout.addLayout(action_layout)
@@ -406,9 +336,10 @@ class CityMapApp(QMainWindow):
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
+        self.character_list = QComboBox()
         self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.character_list.setFixedHeight(100)
-        self.character_list.itemClicked.connect(self.on_character_selected)
+        self.character_list.setFixedHeight(25)
+        self.load_characters()
         character_layout.addWidget(self.character_list)
 
         character_buttons_layout = QHBoxLayout()
@@ -439,54 +370,6 @@ class CityMapApp(QMainWindow):
         self.show()
         self.update_minimap()
 
-    def on_character_selected(self, item):
-        """
-        Handle character selection from the list.
-
-        Args:
-            item (QListWidgetItem): The selected item in the list.
-        """
-        character_name = item.text()
-        selected_character = next((char for char in self.characters if char['name'] == character_name), None)
-        if selected_character:
-            logging.debug(f"Selected character: {character_name}")
-            self.selected_character = selected_character
-            self.logout_current_character()
-
-    def logout_current_character(self):
-        """
-        Logout the current character.
-        """
-        logging.debug("Logging out current character.")
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
-
-        # Delay login to allow logout to complete
-        self.website_frame.loadFinished.connect(self.login_selected_character)
-
-    def login_selected_character(self):
-        """
-        Log in the selected character after logging out the current one.
-        """
-        if not self.selected_character:
-            logging.warning("No character selected for login.")
-            return
-
-        logging.debug(f"Logging in character: {self.selected_character['name']}")
-        name = self.selected_character['name']
-        password = self.selected_character['password']
-
-        login_script = f"""
-            var loginForm = document.querySelector('form');
-            if (loginForm) {{
-                loginForm.iam.value = '{name}';
-                loginForm.passwd.value = '{password}';
-                loginForm.submit();
-            }} else {{
-                console.error('Login form not found.');
-            }}
-        """
-        self.website_frame.page().runJavaScript(login_script)
-
     def on_webview_load_finished(self):
         """
         Handle the event when the webview finishes loading.
@@ -495,7 +378,7 @@ class CityMapApp(QMainWindow):
 
     def process_html(self, html):
         """
-        Process the HTML content of the webview to extract coordinates and update the minimap.
+        Process the HTML content of the webview.
 
         Args:
             html (str): HTML content as a string.
@@ -538,88 +421,6 @@ class CityMapApp(QMainWindow):
         Refresh the webview content.
         """
         self.website_frame.reload()
-
-    def save_characters(self):
-        """
-        Save characters to a pickle file in the 'sessions' directory.
-        """
-        try:
-            # Ensure the 'sessions' directory exists
-            os.makedirs('sessions', exist_ok=True)
-
-            with open('sessions/characters.pkl', 'wb') as f:
-                pickle.dump(self.characters, f)
-                logging.debug("Characters saved successfully to file.")
-        except Exception as e:
-            logging.error(f"Failed to save characters: {e}")
-
-    def load_characters(self):
-        """
-        Load characters from a pickle file in the 'sessions' directory.
-        """
-        try:
-            with open('sessions/characters.pkl', 'rb') as f:
-                self.characters = pickle.load(f)
-                self.character_list.clear()
-                for character in self.characters:
-                    self.character_list.addItem(QListWidgetItem(character['name']))
-                logging.debug("Characters loaded successfully from file.")
-        except FileNotFoundError:
-            logging.warning("Characters file not found. No characters loaded.")
-            self.characters = []
-        except Exception as e:
-            logging.error(f"Failed to load characters: {e}")
-            self.characters = []
-
-    def add_new_character(self):
-        """
-        Add a new character.
-        """
-        logging.debug("Adding a new character.")
-        dialog = CharacterDialog(self)
-        if dialog.exec_():
-            name = dialog.name_edit.text()
-            password = dialog.password_edit.text()
-            self.characters.append({'name': name, 'password': password})
-            self.save_characters()
-            self.character_list.addItem(QListWidgetItem(name))
-            logging.debug(f"Character {name} added.")
-
-    def modify_character(self):
-        """
-        Modify the selected character.
-        """
-        current_item = self.character_list.currentItem()
-        if current_item is None:
-            logging.warning("No character selected for modification.")
-            return
-
-        name = current_item.text()
-        character = next((char for char in self.characters if char['name'] == name), None)
-        if character:
-            logging.debug(f"Modifying character: {name}")
-            dialog = CharacterDialog(self, character)
-            if dialog.exec_():
-                character['name'] = dialog.name_edit.text()
-                character['password'] = dialog.password_edit.text()
-                self.save_characters()
-                current_item.setText(character['name'])
-                logging.debug(f"Character {name} modified.")
-
-    def delete_character(self):
-        """
-        Delete the selected character.
-        """
-        current_item = self.character_list.currentItem()
-        if current_item is None:
-            logging.warning("No character selected for deletion.")
-            return
-
-        name = current_item.text()
-        self.characters = [char for char in self.characters if char['name'] != name]
-        self.save_characters()
-        self.character_list.takeItem(self.character_list.row(current_item))
-        logging.debug(f"Character {name} deleted.")
 
     def draw_minimap(self):
         """
@@ -715,19 +516,19 @@ class CityMapApp(QMainWindow):
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
-                logging.warning(f"Skipping shop '{name}' due to missing coordinates")
+                print(f"Skipping shop '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in guilds_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
-                logging.warning(f"Skipping guild '{name}' due to missing coordinates")
+                print(f"Skipping guild '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
-                logging.warning(f"Skipping place of interest '{name}' due to missing coordinates")
+                print(f"Skipping place of interest '{name}' due to missing coordinates")
 
         # Get current location
         current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
@@ -857,7 +658,6 @@ class CityMapApp(QMainWindow):
             self.destination = (current_x, current_y)
         self.save_destination()
         self.update_minimap()
-        self.refresh_webview()
 
     def save_destination(self):
         """
@@ -961,14 +761,14 @@ class CityMapApp(QMainWindow):
             tavern_coords = nearest_tavern[0][1]
             tavern_name = next(name for name, coords in taverns_coordinates.items() if coords == tavern_coords)
             tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
-            tavern_intersection = self.get_intersection_name(tavern_coords)
+            tavern_intersection = self.get_intersection_name((tavern_coords[0] - 1, tavern_coords[1] - 1))
             self.tavern_label.setText(f"{tavern_name}\n{tavern_intersection}\nAP: {tavern_ap_cost}")
 
         # Get details for nearest bank
         if nearest_bank:
             bank_coords = nearest_bank[0][1]
             bank_ap_cost = self.calculate_ap_cost((current_x, current_y), bank_coords)
-            bank_intersection = self.get_intersection_name(bank_coords)
+            bank_intersection = self.get_intersection_name((bank_coords[0] - 1, bank_coords[1] - 1))
             self.bank_label.setText(f"OmniBank\n{bank_intersection}\nAP: {bank_ap_cost}")
 
         # Get details for nearest transit
@@ -976,21 +776,21 @@ class CityMapApp(QMainWindow):
             transit_coords = nearest_transit[0][1]
             transit_name = next(name for name, coords in transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
-            transit_intersection = self.get_intersection_name(transit_coords)
+            transit_intersection = self.get_intersection_name((transit_coords[0] - 1, transit_coords[1] - 1))
             self.transit_label.setText(f"{transit_name}\n{transit_intersection}\nAP: {transit_ap_cost}")
 
         # Get details for set destination
         if self.destination:
             destination_coords = self.destination
             destination_ap_cost = self.calculate_ap_cost((current_x, current_y), destination_coords)
-            destination_intersection = self.get_intersection_name(destination_coords)
+            destination_intersection = self.get_intersection_name((destination_coords[0] - 1, destination_coords[1] - 1))
             self.destination_label.setText(f"Destination\n{destination_intersection}\nAP: {destination_ap_cost}")
         else:
             self.destination_label.setText("No Destination Set")
 
     def get_intersection_name(self, coords):
         """
-        Get the intersection name for the given coordinates, including special cases for map edges.
+        Get the intersection name for the given coordinates.
 
         Args:
             coords (tuple): Coordinates (x, y).
@@ -999,24 +799,8 @@ class CityMapApp(QMainWindow):
             str: Intersection name.
         """
         x, y = coords
-
-        # Special cases for edges of the map
-        if x == 0:
-            column_name = "WCL"
-        elif x == 200:
-            column_name = "ECL"
-        else:
-            x = x if x % 2 != 0 else x - 1
-            column_name = next((name for name, coord in columns.items() if coord == x), "")
-
-        if y == 0:
-            row_name = "NCL"
-        elif y == 200:
-            row_name = "SCL"
-        else:
-            y = y if y % 2 != 0 else y - 1
-            row_name = next((name for name, coord in rows.items() if coord == y), "")
-
+        column_name = next((name for name, coord in columns.items() if coord == x), "")
+        row_name = next((name for name, coord in rows.items() if coord == y), "")
         return f"{column_name} & {row_name}"
 
     def open_discord(self):
@@ -1025,21 +809,86 @@ class CityMapApp(QMainWindow):
         """
         webbrowser.open("https://discord.gg/ktdG9FZ")
 
-    def show_coming_soon_popup(self):
+    def load_characters(self):
         """
-        Show a popup indicating that the website feature is coming soon.
+        Load characters from the pickle file and populate the combo box.
         """
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
-        msg.setText("We have not yet deployed the website for this program, but it is coming soon! Please check back in the next version!")
-        msg.setWindowTitle("Coming Soon")
-        msg.setStandardButtons(QMessageBox.Ok)
-        msg.exec_()
+        try:
+            with open('testing/characters.pkl', 'rb') as f:
+                characters = pickle.load(f)
+                for character in characters:
+                    self.character_list.addItem(character['name'])
+        except FileNotFoundError:
+            pass
+
+    def save_characters(self, characters):
+        """
+        Save characters to the pickle file.
+
+        Args:
+            characters (list): List of character dictionaries.
+        """
+        with open('testing/characters.pkl', 'wb') as f:
+            pickle.dump(characters, f)
+
+    def add_new_character(self):
+        """
+        Add a new character.
+        """
+        dialog = CharacterDialog(self)
+        if dialog.exec_():
+            name = dialog.name_edit.text()
+            password = dialog.password_edit.text()
+            characters = self.get_all_characters()
+            characters.append({'name': name, 'password': password})
+            self.save_characters(characters)
+            self.character_list.addItem(name)
+
+    def modify_character(self):
+        """
+        Modify the selected character.
+        """
+        current_index = self.character_list.currentIndex()
+        if current_index == -1:
+            return
+        name = self.character_list.currentText()
+        characters = self.get_all_characters()
+        character = next((char for char in characters if char['name'] == name), None)
+        if character:
+            dialog = CharacterDialog(self, character)
+            if dialog.exec_():
+                character['name'] = dialog.name_edit.text()
+                character['password'] = dialog.password_edit.text()
+                self.save_characters(characters)
+                self.character_list.setItemText(current_index, character['name'])
+
+    def delete_character(self):
+        """
+        Delete the selected character.
+        """
+        current_index = self.character_list.currentIndex()
+        if current_index == -1:
+            return
+        name = self.character_list.currentText()
+        characters = self.get_all_characters()
+        characters = [char for char in characters if char['name'] != name]
+        self.save_characters(characters)
+        self.character_list.removeItem(current_index)
+
+    def get_all_characters(self):
+        """
+        Get all characters from the pickle file.
+
+        Returns:
+            list: List of character dictionaries.
+        """
+        try:
+            with open('testing/characters.pkl', 'rb') as f:
+                return pickle.load(f)
+        except FileNotFoundError:
+            return []
 
 class CharacterDialog(QDialog):
-    """
-    Dialog for adding or modifying a character.
-    """
     def __init__(self, parent=None, character=None):
         """
         Initialize the CharacterDialog.
@@ -1219,8 +1068,9 @@ def update_shops(cursor, soup, next_update_time):
             print(f"Shop '{name}' not found in the table.")
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
     app = QApplication(sys.argv)
+    guilds_next_update, shops_next_update = get_next_update_times()
+    if datetime.now() >= guilds_next_update or datetime.now() >= shops_next_update:
+        scrape_avitd_data()
     window = CityMapApp()
     sys.exit(app.exec_())
