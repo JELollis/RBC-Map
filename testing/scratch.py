@@ -63,7 +63,7 @@ except ModuleNotFoundError as e:
         print(f"I believe you are missing some modules, copy and paste the line below.\n")
         installPip = input(f"Would you like me to install those for you? (Y/N): ")
         if installPip.lower() == "y":
-            os.system(f"pip install PyQtWebEngine pymysql requests PyQt5 bs4 sqlite3")
+            os.system(f"pip install PyQtWebEngine pymysql requests PyQt5 bs4 PyQt5")
             timer = 10
             for times in range(0, timer):
                 print(f"The Program will run in {timer - times} seconds")
@@ -279,20 +279,22 @@ class CityMapApp(QMainWindow):
         left_layout = QVBoxLayout()
         left_frame = QFrame()
         left_frame.setFrameShape(QFrame.Box)
-        left_frame.setFixedWidth(300)
+        left_frame.setMinimumWidth(280)
+        left_frame.setMaximumWidth(300)
+        left_frame.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Expanding)
         left_frame.setLayout(left_layout)
 
         # Frame for the minimap
         minimap_frame = QFrame()
         minimap_frame.setFrameShape(QFrame.Box)
-        minimap_frame.setFixedSize(self.minimap_size, self.minimap_size)
+        minimap_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         minimap_layout = QVBoxLayout()
         minimap_layout.setContentsMargins(0, 0, 0, 0)
         minimap_frame.setLayout(minimap_layout)
 
         # Label to display the minimap
         self.minimap_label = QLabel()
-        self.minimap_label.setFixedSize(self.minimap_size, self.minimap_size)
+        self.minimap_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.minimap_label.setStyleSheet("background-color: lightgrey;")
         minimap_layout.addWidget(self.minimap_label)
         left_layout.addWidget(minimap_frame)
@@ -300,7 +302,7 @@ class CityMapApp(QMainWindow):
         # Information frame to display closest locations and AP costs
         info_frame = QFrame()
         info_frame.setFrameShape(QFrame.Box)
-        info_frame.setFixedHeight(195)
+        info_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_layout = QVBoxLayout()
         info_frame.setLayout(info_layout)
         left_layout.addWidget(info_frame)
@@ -308,30 +310,30 @@ class CityMapApp(QMainWindow):
         # Labels to display closest locations and destination
         self.bank_label = QLabel()
         self.bank_label.setAlignment(Qt.AlignLeft)
-        self.bank_label.setStyleSheet("background-color: blue; color: white;font-weight: bold;")
+        self.bank_label.setStyleSheet("background-color: blue; color: white; font-weight: bold;")
         self.bank_label.setWordWrap(True)
-        self.bank_label.setFixedHeight(40)
+        self.bank_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_layout.addWidget(self.bank_label)
 
         self.transit_label = QLabel()
         self.transit_label.setAlignment(Qt.AlignLeft)
-        self.transit_label.setStyleSheet("background-color: red; color: white;font-weight: bold;")
+        self.transit_label.setStyleSheet("background-color: red; color: white; font-weight: bold;")
         self.transit_label.setWordWrap(True)
-        self.transit_label.setFixedHeight(40)
+        self.transit_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_layout.addWidget(self.transit_label)
 
         self.tavern_label = QLabel()
         self.tavern_label.setAlignment(Qt.AlignLeft)
-        self.tavern_label.setStyleSheet("background-color: orange; color: white;font-weight: bold;")
+        self.tavern_label.setStyleSheet("background-color: orange; color: white; font-weight: bold;")
         self.tavern_label.setWordWrap(True)
-        self.tavern_label.setFixedHeight(40)
+        self.tavern_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_layout.addWidget(self.tavern_label)
 
         self.destination_label = QLabel()
         self.destination_label.setAlignment(Qt.AlignLeft)
-        self.destination_label.setStyleSheet("background-color: green; color: white;font-weight: bold;")
+        self.destination_label.setStyleSheet("background-color: green; color: white; font-weight: bold;")
         self.destination_label.setWordWrap(True)
-        self.destination_label.setFixedHeight(40)
+        self.destination_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_layout.addWidget(self.destination_label)
 
         # Layout for column and row selection with Go button
@@ -347,7 +349,7 @@ class CityMapApp(QMainWindow):
         self.combo_rows.addItems(rows.keys())
 
         go_button = QPushButton('Go')
-        go_button.setFixedSize(25, 25)
+        go_button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         go_button.clicked.connect(self.go_to_location)
 
         combo_go_layout.addWidget(self.combo_columns)
@@ -358,20 +360,19 @@ class CityMapApp(QMainWindow):
 
         # Layout for zoom and set destination buttons
         zoom_layout = QHBoxLayout()
-        button_size = (self.minimap_size - 10) // 3
 
         zoom_in_button = QPushButton('Zoom in')
-        zoom_in_button.setFixedSize(button_size, 25)
+        zoom_in_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         zoom_in_button.clicked.connect(self.zoom_in)
         zoom_layout.addWidget(zoom_in_button)
 
         zoom_out_button = QPushButton('Zoom out')
-        zoom_out_button.setFixedSize(button_size, 25)
+        zoom_out_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         zoom_out_button.clicked.connect(self.zoom_out)
         zoom_layout.addWidget(zoom_out_button)
 
         set_destination_button = QPushButton('Set Destination')
-        set_destination_button.setFixedSize(button_size, 25)
+        set_destination_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         set_destination_button.clicked.connect(self.set_destination)
         zoom_layout.addWidget(set_destination_button)
 
@@ -381,18 +382,17 @@ class CityMapApp(QMainWindow):
         action_layout = QHBoxLayout()
 
         refresh_button = QPushButton('Refresh')
-        refresh_button.setFixedSize(button_size, 25)
+        refresh_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         refresh_button.clicked.connect(self.refresh_webview)
         action_layout.addWidget(refresh_button)
 
         discord_button = QPushButton('Discord')
-        discord_button.setFixedSize(button_size, 25)
+        discord_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         discord_button.clicked.connect(self.open_discord)
         action_layout.addWidget(discord_button)
 
         website_button = QPushButton('Website')
-        website_button.setFixedSize(button_size, 25)
-        website_button.clicked.connect(self.show_coming_soon_popup)
+        website_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         action_layout.addWidget(website_button)
 
         left_layout.addLayout(action_layout)
@@ -400,26 +400,27 @@ class CityMapApp(QMainWindow):
         # Frame for character list and management buttons
         character_frame = QFrame()
         character_frame.setFrameShape(QFrame.Box)
+        character_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         character_layout = QVBoxLayout()
         character_frame.setLayout(character_layout)
 
         character_list_label = QLabel('Character List')
+        character_list_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         character_layout.addWidget(character_list_label)
 
-        self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.character_list.setFixedHeight(100)
-        self.character_list.itemClicked.connect(self.on_character_selected)
+        self.character_list = QListWidget()
+        self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         character_layout.addWidget(self.character_list)
 
         character_buttons_layout = QHBoxLayout()
         new_button = QPushButton('New')
-        new_button.setFixedSize(75, 25)
+        new_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         new_button.clicked.connect(self.add_new_character)
         modify_button = QPushButton('Modify')
-        modify_button.setFixedSize(75, 25)
+        modify_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         modify_button.clicked.connect(self.modify_character)
         delete_button = QPushButton('Delete')
-        delete_button.setFixedSize(75, 25)
+        delete_button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         delete_button.clicked.connect(self.delete_character)
         character_buttons_layout.addWidget(new_button)
         character_buttons_layout.addWidget(modify_button)
@@ -962,14 +963,14 @@ class CityMapApp(QMainWindow):
             tavern_name = next(name for name, coords in taverns_coordinates.items() if coords == tavern_coords)
             tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
             tavern_intersection = self.get_intersection_name(tavern_coords)
-            self.tavern_label.setText(f"{tavern_name}\n{tavern_intersection}\nAP: {tavern_ap_cost}")
+            self.tavern_label.setText(f"{tavern_name} - {tavern_intersection} - AP: {tavern_ap_cost}")
 
         # Get details for nearest bank
         if nearest_bank:
             bank_coords = nearest_bank[0][1]
             bank_ap_cost = self.calculate_ap_cost((current_x, current_y), bank_coords)
             bank_intersection = self.get_intersection_name(bank_coords)
-            self.bank_label.setText(f"OmniBank\n{bank_intersection}\nAP: {bank_ap_cost}")
+            self.bank_label.setText(f"OmniBank - {bank_intersection} - AP: {bank_ap_cost}")
 
         # Get details for nearest transit
         if nearest_transit:
@@ -977,14 +978,14 @@ class CityMapApp(QMainWindow):
             transit_name = next(name for name, coords in transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
             transit_intersection = self.get_intersection_name(transit_coords)
-            self.transit_label.setText(f"{transit_name}\n{transit_intersection}\nAP: {transit_ap_cost}")
+            self.transit_label.setText(f"{transit_name} - {transit_intersection} - AP: {transit_ap_cost}")
 
         # Get details for set destination
         if self.destination:
             destination_coords = self.destination
             destination_ap_cost = self.calculate_ap_cost((current_x, current_y), destination_coords)
             destination_intersection = self.get_intersection_name(destination_coords)
-            self.destination_label.setText(f"Destination\n{destination_intersection}\nAP: {destination_ap_cost}")
+            self.destination_label.setText(f"Destination - {destination_intersection} - AP: {destination_ap_cost}")
         else:
             self.destination_label.setText("No Destination Set")
 

@@ -63,7 +63,7 @@ except ModuleNotFoundError as e:
         print(f"I believe you are missing some modules, copy and paste the line below.\n")
         installPip = input(f"Would you like me to install those for you? (Y/N): ")
         if installPip.lower() == "y":
-            os.system(f"pip install PyQtWebEngine pymysql requests PyQt5 bs4 sqlite3")
+            os.system(f"pip install PyQtWebEngine pymysql requests PyQt5 bs4 PyQt5")
             timer = 10
             for times in range(0, timer):
                 print(f"The Program will run in {timer - times} seconds")
@@ -962,14 +962,14 @@ class CityMapApp(QMainWindow):
             tavern_name = next(name for name, coords in taverns_coordinates.items() if coords == tavern_coords)
             tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
             tavern_intersection = self.get_intersection_name(tavern_coords)
-            self.tavern_label.setText(f"{tavern_name}\n{tavern_intersection}\nAP: {tavern_ap_cost}")
+            self.tavern_label.setText(f"{tavern_name} - {tavern_intersection} - AP: {tavern_ap_cost}")
 
         # Get details for nearest bank
         if nearest_bank:
             bank_coords = nearest_bank[0][1]
             bank_ap_cost = self.calculate_ap_cost((current_x, current_y), bank_coords)
             bank_intersection = self.get_intersection_name(bank_coords)
-            self.bank_label.setText(f"OmniBank\n{bank_intersection}\nAP: {bank_ap_cost}")
+            self.bank_label.setText(f"OmniBank - {bank_intersection} - AP: {bank_ap_cost}")
 
         # Get details for nearest transit
         if nearest_transit:
@@ -977,14 +977,14 @@ class CityMapApp(QMainWindow):
             transit_name = next(name for name, coords in transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
             transit_intersection = self.get_intersection_name(transit_coords)
-            self.transit_label.setText(f"{transit_name}\n{transit_intersection}\nAP: {transit_ap_cost}")
+            self.transit_label.setText(f"{transit_name} - {transit_intersection} - AP: {transit_ap_cost}")
 
         # Get details for set destination
         if self.destination:
             destination_coords = self.destination
             destination_ap_cost = self.calculate_ap_cost((current_x, current_y), destination_coords)
             destination_intersection = self.get_intersection_name(destination_coords)
-            self.destination_label.setText(f"Destination\n{destination_intersection}\nAP: {destination_ap_cost}")
+            self.destination_label.setText(f"Destination - {destination_intersection} - AP: {destination_ap_cost}")
         else:
             self.destination_label.setText("No Destination Set")
 
