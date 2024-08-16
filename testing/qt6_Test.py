@@ -16,9 +16,9 @@ Modules:
 - requests
 - datetime
 - bs4 (BeautifulSoup)
-- PyQt5
-- PyQtWebEngine
-- PyQtWebChannel
+- PyQt6
+- PyQt6.QtWebEngineWidgets
+- PyQt6.QtWebChannel
 
 Classes:
 - CityMapApp: Main application class for the RBC City Map.
@@ -39,81 +39,35 @@ Functions:
 - on_webview_load_finished: Triggered when the web view finishes loading, used to inject JavaScript for logging.
 
 To install all required modules, run the following command:
- pip install pymysql requests beautifulsoup4 PyQt5 PyQtWebEngine PyQtWebChannel
+ pip install pymysql requests beautifulsoup4 PyQt6 PyQt6-WebEngine PyQt6-WebChannel
 """
 
 # -----------------------
 # Importing required modules
 # -----------------------
 
-try:
-    import sys
-    import pickle
-    import pymysql
-    import requests
-    import re
-    import os
-    import time
-    import sqlite3
-    import webbrowser
-    from datetime import datetime, timedelta
-    from bs4 import BeautifulSoup
-    from PyQt5.QtWidgets import (
-        QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-        QMessageBox, QMenuBar, QAction, QColorDialog, QScrollArea, QFileDialog, QTabWidget
-    )
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
-    from PyQt5.QtCore import QUrl, Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSlot
-    from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
-    from PyQt5.QtWebChannel import QWebChannel
-    import logging
+import sys
+import pickle
+import pymysql
+import requests
+import re
+import os
+import time
+import sqlite3
+import webbrowser
+from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
+    QMessageBox, QMenuBar, QAction, QColorDialog, QScrollArea, QFileDialog, QTabWidget
+)
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
+from PyQt6.QtCore import QUrl, Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSlot
+from PyQt6.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
+from PyQt6.QtWebEngineCore import QWebChannel
+import logging
 
-except ModuleNotFoundError as e:
-    run = True
-    while run:
-        print(f"It seems some required modules are missing.")
-        installPip = input(f"Would you like to install the missing modules automatically? (Y/N): ")
-        if installPip.lower() == "y":
-            os.system("pip install pymysql requests beautifulsoup4 PyQt5 PyQtWebEngine PyQtWebChannel")
-            print("Modules installed. Restarting the application...")
-            time.sleep(3)
-            # Re-import the modules after installation
-            import sys
-            import pickle
-            import pymysql
-            import requests
-            import re
-            import os
-            import time
-            import sqlite3
-            import webbrowser
-            from datetime import datetime, timedelta
-            from bs4 import BeautifulSoup
-            from PyQt5.QtWidgets import (
-                QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget,
-                QListWidgetItem, QMessageBox, QMenuBar, QAction, QColorDialog, QScrollArea, QFileDialog, QTabWidget
-            )
-            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
-            from PyQt5.QtCore import QUrl, Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSlot
-            from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEngineSettings
-            from PyQt5.QtWebChannel import QWebChannel
-            import logging
-            break
-        elif installPip.lower() == "n":
-            print("You can manually install the required packages with the following command:")
-            print("pip install pymysql requests beautifulsoup4 PyQt5 PyQtWebEngine PyQtWebChannel")
-            sys.exit()
-        else:
-            print("Please answer with 'Y' or 'N'.")
-
-# -----------------------
-# Exception Error Message
-# -----------------------
-
-except Exception as e:
-    print(f"Something broke and idk why...")
 
 # -----------------------
 # Directory setup
@@ -123,7 +77,7 @@ def ensure_directories_exist():
     """
     Ensure that the required directories exist. If they don't, create them.
     """
-    required_dirs = ['logs', 'sessions', 'settings']
+    required_dirs = ['logs', 'sessions']
     for directory in required_dirs:
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -137,9 +91,6 @@ ensure_directories_exist()
 # -----------------------
 
 def setup_logging():
-    """
-    Setup logging configuration to save logs in the 'logs' directory with the filename 'rbc_{date}.log'.
-    """
     log_filename = datetime.now().strftime('logs/rbc_%Y-%m-%d.log')
     logging.basicConfig(
         level=logging.DEBUG,
@@ -156,7 +107,6 @@ setup_logging()
 # Database connection
 # -----------------------
 
-# Server information
 LOCAL_HOST = "127.0.0.1"
 REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
@@ -164,34 +114,29 @@ PASSWORD = "RBC_Community_Map"
 DATABASE = "city_map"
 
 def connect_to_database():
-    """
-    Connect to the MySQL database.
-
-    Returns:
-        pymysql.Connection: Database connection object.
-    """
     try:
         connection = pymysql.connect(
-            host=REMOTE_HOST,
+            host=LOCAL_HOST,
             user=USER,
             password=PASSWORD,
             database=DATABASE
         )
-        logging.info("Connected to Remote MySQL instance")
+        logging.info("Connected to local MySQL instance")
         return connection
     except pymysql.MySQLError as err:
-        logging.error("Connection to Remote MySQL instance failed: %s", err)
+        logging.error("Connection to local MySQL instance failed: %s", err)
+        # Attempt to connect to the remote server
         try:
             connection = pymysql.connect(
-                host=LOCAL_HOST,
+                host=REMOTE_HOST,
                 user=USER,
                 password=PASSWORD,
                 database=DATABASE
             )
-            logging.info("Connected to Local MySQL instance")
+            logging.info("Connected to remote MySQL instance")
             return connection
         except pymysql.MySQLError as err:
-            logging.error("Connection to Local MySQL instance failed: %s", err)
+            logging.error("Connection to remote MySQL instance failed: %s", err)
             return None
 
 # -----------------------
@@ -324,13 +269,13 @@ class CityMapApp(QMainWindow):
         # Left layout containing the minimap and control buttons
         left_layout = QVBoxLayout()
         left_frame = QFrame()
-        left_frame.setFrameShape(QFrame.Box)
+        left_frame.setFrameShape(QFrame.Shape.Box)
         left_frame.setFixedWidth(300)
         left_frame.setLayout(left_layout)
 
         # Frame for the minimap
         minimap_frame = QFrame()
-        minimap_frame.setFrameShape(QFrame.Box)
+        minimap_frame.setFrameShape(QFrame.Shape.Box)
         minimap_frame.setFixedSize(self.minimap_size, self.minimap_size)
         minimap_layout = QVBoxLayout()
         minimap_layout.setContentsMargins(0, 0, 0, 0)
@@ -345,7 +290,7 @@ class CityMapApp(QMainWindow):
 
         # Information frame to display closest locations and AP costs
         info_frame = QFrame()
-        info_frame.setFrameShape(QFrame.Box)
+        info_frame.setFrameShape(QFrame.Shape.Box)
         info_frame.setFixedHeight(80)
         info_layout = QVBoxLayout()
         info_frame.setLayout(info_layout)
@@ -353,28 +298,28 @@ class CityMapApp(QMainWindow):
 
         # Labels to display closest locations and destination
         self.bank_label = QLabel()
-        self.bank_label.setAlignment(Qt.AlignLeft)
+        self.bank_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.bank_label.setStyleSheet("background-color: blue; color: white;font-weight: bold;")
         self.bank_label.setWordWrap(True)
         self.bank_label.setFixedHeight(15)
         info_layout.addWidget(self.bank_label)
 
         self.transit_label = QLabel()
-        self.transit_label.setAlignment(Qt.AlignLeft)
+        self.transit_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.transit_label.setStyleSheet("background-color: red; color: white;font-weight: bold;")
         self.transit_label.setWordWrap(True)
         self.transit_label.setFixedHeight(15)
         info_layout.addWidget(self.transit_label)
 
         self.tavern_label = QLabel()
-        self.tavern_label.setAlignment(Qt.AlignLeft)
+        self.tavern_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.tavern_label.setStyleSheet("background-color: orange; color: white;font-weight: bold;")
         self.tavern_label.setWordWrap(True)
         self.tavern_label.setFixedHeight(15)
         info_layout.addWidget(self.tavern_label)
 
         self.destination_label = QLabel()
-        self.destination_label.setAlignment(Qt.AlignLeft)
+        self.destination_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.destination_label.setStyleSheet("background-color: green; color: white;font-weight: bold;")
         self.destination_label.setWordWrap(True)
         self.destination_label.setFixedHeight(15)
@@ -385,11 +330,11 @@ class CityMapApp(QMainWindow):
         combo_go_layout.setSpacing(5)
 
         self.combo_columns = QComboBox()
-        self.combo_columns.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_columns.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.combo_columns.addItems(columns.keys())
 
         self.combo_rows = QComboBox()
-        self.combo_rows.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_rows.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.combo_rows.addItems(rows.keys())
 
         go_button = QPushButton('Go')
@@ -445,14 +390,14 @@ class CityMapApp(QMainWindow):
 
         # Frame for character list and management buttons
         character_frame = QFrame()
-        character_frame.setFrameShape(QFrame.Box)
+        character_frame.setFrameShape(QFrame.Shape.Box)
         character_layout = QVBoxLayout()
         character_frame.setLayout(character_layout)
 
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
-        self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.character_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.character_list.setFixedHeight(100)
         self.character_list.itemClicked.connect(self.on_character_selected)
         character_layout.addWidget(self.character_list)
@@ -479,7 +424,7 @@ class CityMapApp(QMainWindow):
         # Frame for displaying the website
         self.website_frame = QWebEngineView()
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)  # Enable JavaScript
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)  # Enable JavaScript
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
         map_layout.addWidget(self.website_frame)
 
@@ -618,16 +563,6 @@ class CityMapApp(QMainWindow):
     def refresh_webview(self):
         self.website_frame.reload()
 
-    def save_webpage_screenshot(self):
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "", "PNG Files (*.png);;All Files (*)")
-        if file_name:
-            self.website_frame.grab().save(file_name)
-
-    def save_app_screenshot(self):
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save App Screenshot", "", "PNG Files (*.png);;All Files (*)")
-        if file_name:
-            self.grab().save(file_name)
-
     # -----------------------
     # Character Management
     # -----------------------
@@ -656,7 +591,6 @@ class CityMapApp(QMainWindow):
                 logging.debug("Characters saved successfully to file.")
         except Exception as e:
             logging.error(f"Failed to save characters: {e}")
-
 
     def on_character_selected(self, item):
         """
@@ -788,7 +722,6 @@ class CityMapApp(QMainWindow):
             self.characters = []
         except Exception as e:
             logging.error(f"Failed to load characters: {e}")
-            self.characters = []
 
     def add_new_character(self):
         """
@@ -868,13 +801,13 @@ class CityMapApp(QMainWindow):
 
         scroll_area = QScrollArea()
         scroll_area.setStyleSheet("background-color: black; border: none;")
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         layout.addWidget(scroll_area)
 
         credits_label = QLabel(credits_text)
         credits_label.setStyleSheet("font-size: 18px; color: white; background-color: black;")
-        credits_label.setAlignment(Qt.AlignCenter)
+        credits_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         credits_label.setWordWrap(True)
 
         scroll_area.setWidget(credits_label)
@@ -886,7 +819,7 @@ class CityMapApp(QMainWindow):
         animation.setStartValue(QRect(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height()))
         animation.setEndValue(
             QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
-        animation.setEasingCurve(QEasingCurve.Linear)
+        animation.setEasingCurve(QEasingCurve.Type.Linear)
 
         animation.start()
 
@@ -1354,10 +1287,10 @@ class CityMapApp(QMainWindow):
         Show a popup indicating that the website feature is coming soon.
         """
         msg = QMessageBox()
-        msg.setIcon(QMessageBox.Information)
+        msg.setIcon(QMessageBox.Icon.Information)
         msg.setText("We have not yet deployed the website for this program, but it is coming soon! Please check back in the next version!")
         msg.setWindowTitle("Coming Soon")
-        msg.setStandardButtons(QMessageBox.Ok)
+        msg.setStandardButtons(QMessageBox.StandardButton.Ok)
         msg.exec_()
 
     def open_shops_guilds(self):
@@ -1530,7 +1463,7 @@ class CharacterDialog(QDialog):
 
         self.name_edit = QLineEdit(self)
         self.password_edit = QLineEdit(self)
-        self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
 
         layout.addRow('Name:', self.name_edit)
         layout.addRow('Password:', self.password_edit)
@@ -1701,7 +1634,7 @@ def update_shops(cursor, soup, next_update_time):
 # -----------------------
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+    setup_logging()
 
     app = QApplication(sys.argv)
     window = CityMapApp()
