@@ -172,26 +172,27 @@ def connect_to_database():
     """
     try:
         connection = pymysql.connect(
-            host=REMOTE_HOST,
+            host=LOCAL_HOST,
             user=USER,
             password=PASSWORD,
             database=DATABASE
         )
-        logging.info("Connected to Remote MySQL instance")
+        logging.info("Connected to local MySQL instance")
         return connection
     except pymysql.MySQLError as err:
-        logging.error("Connection to Remote MySQL instance failed: %s", err)
+        logging.error("Connection to local MySQL instance failed: %s", err)
+        # Attempt to connect to the remote server
         try:
             connection = pymysql.connect(
-                host=LOCAL_HOST,
+                host=REMOTE_HOST,
                 user=USER,
                 password=PASSWORD,
                 database=DATABASE
             )
-            logging.info("Connected to Local MySQL instance")
+            logging.info("Connected to remote MySQL instance")
             return connection
         except pymysql.MySQLError as err:
-            logging.error("Connection to Local MySQL instance failed: %s", err)
+            logging.error("Connection to remote MySQL instance failed: %s", err)
             return None
 
 # -----------------------
@@ -656,7 +657,6 @@ class CityMapApp(QMainWindow):
                 logging.debug("Characters saved successfully to file.")
         except Exception as e:
             logging.error(f"Failed to save characters: {e}")
-
 
     def on_character_selected(self, item):
         """
