@@ -52,7 +52,7 @@ try:
         QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
         QMessageBox
     )
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
+    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
     from PyQt5.QtCore import QUrl, Qt
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     import logging
@@ -85,7 +85,7 @@ except ModuleNotFoundError as e:
                 QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget,
                 QListWidgetItem, QMessageBox
             )
-            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
+            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
             from PyQt5.QtCore import QUrl, Qt
             from PyQt5.QtWebEngineWidgets import QWebEngineView
             import logging
@@ -102,7 +102,10 @@ except ModuleNotFoundError as e:
 except Exception as e:
     print(f"Something broke and idk why...")
 
+# -----------------------
 # Directory setup
+# -----------------------
+
 def ensure_directories_exist():
     """
     Ensure that the required directories exist. If they don't, create them.
@@ -116,7 +119,10 @@ def ensure_directories_exist():
 # Call the function to ensure directories are present
 ensure_directories_exist()
 
+# -----------------------
 # Logging setup
+# -----------------------
+
 def setup_logging():
     """
     Setup logging configuration to save logs in the 'logs' directory with the filename 'rbc_{date}.log'.
@@ -133,31 +139,65 @@ def setup_logging():
 # Call the logging setup
 setup_logging()
 
-# Database connection constants
-HOST = "127.0.0.1"  # or REMOTE_HOST if needed
+# -----------------------
+# Database connection
+# -----------------------
+
+# Server information
+LOCAL_HOST = "127.0.0.1"
+REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
 PASSWORD = "RBC_Community_Map"
 DATABASE = "city_map"
 
 def connect_to_database():
     """
-    Connect to the MySQL database and return the connection object.
+    Connect to the MySQL database.
+
+    Returns:
+        pymysql.Connection: Database connection object.
     """
     try:
         connection = pymysql.connect(
-            host=HOST,
+            host=LOCAL_HOST,
             user=USER,
             password=PASSWORD,
             database=DATABASE
         )
-        logging.info("Connected to MySQL database")
+        logging.info("Connected to local MySQL instance")
         return connection
     except pymysql.MySQLError as err:
-        logging.error(f"Connection failed: {err}")
-        sys.exit(f"Connection failed: {err}")
+        logging.error("Connection to local MySQL instance failed: %s", err)
+        # Attempt to connect to the remote server
+        try:
+            connection = pymysql.connect(
+                host=REMOTE_HOST,
+                user=USER,
+                password=PASSWORD,
+                database=DATABASE
+            )
+            logging.info("Connected to remote MySQL instance")
+            return connection
+        except pymysql.MySQLError as err:
+            logging.error("Connection to remote MySQL instance failed: %s", err)
+            return None
+
+# -----------------------
+# Load Data from Database
+# -----------------------
 
 def load_data():
+    """
+    Load data from the database and return it as various dictionaries and lists.
+
+    Returns:
+        tuple: Contains columns, rows, banks_coordinates, taverns_coordinates,
+               transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates
+    """
     connection = connect_to_database()
+    if not connection:
+        sys.exit("Failed to connect to the database.")
+
     cursor = connection.cursor()
 
     # Fetch columns
@@ -243,6 +283,13 @@ def load_data():
 
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
+# Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
+columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
+
+# -----------------------
+# CityMapApp Main Class
+# -----------------------
+
 class CityMapApp(QMainWindow):
     """
     Main application class for the RBC City Map.
@@ -250,10 +297,11 @@ class CityMapApp(QMainWindow):
 
     def __init__(self):
         """
-        Initialize the CityMapApp.
+        Initialize the CityMapApp and its components.
         """
         super().__init__()
 
+        self.setWindowIcon(QIcon('favicon.ico'))
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
 
@@ -442,6 +490,7 @@ class CityMapApp(QMainWindow):
 
         left_layout.addWidget(character_frame)
 
+        # Web engine view
         map_layout.addWidget(left_frame)
 
         # Frame for displaying the website
@@ -634,6 +683,10 @@ class CityMapApp(QMainWindow):
         self.save_characters()
         self.character_list.takeItem(self.character_list.row(current_item))
         logging.debug(f"Character {name} deleted.")
+
+    # -----------------------
+    # Minimap Drawing and Update
+    # -----------------------
 
     def draw_minimap(self):
         """
@@ -1091,6 +1144,10 @@ class CharacterDialog(QDialog):
 
         layout.addRow(buttons_layout)
 
+# -----------------------
+# Data Scraping and Update
+# -----------------------
+
 def scrape_avitd_data():
     """
     Scrape guilds and shops data from A View in the Dark and update the database with next update timestamps.
@@ -1235,6 +1292,9 @@ def update_shops(cursor, soup, shops_coordinates, next_update_time):
         else:
             print(f"Shop '{name}' not found in the table.")
 
+# -----------------------
+# Main Entry Point
+# -----------------------
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')

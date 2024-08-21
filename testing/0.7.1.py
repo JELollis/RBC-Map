@@ -16,9 +16,7 @@ Modules:
 - requests
 - datetime
 - bs4 (BeautifulSoup)
-- PyQt6
-- PyQt6.QtWebEngineWidgets
-- PyQt6.QtWebChannel
+- PySide6
 
 Classes:
 - CityMapApp: Main application class for the RBC City Map.
@@ -35,32 +33,77 @@ Functions:
 - get_next_update_times: Retrieve the next update times for guilds and shops from the database.
 
 To install all required modules, run the following command:
- pip install pymysql requests beautifulsoup4 PyQt6 PyQt6-WebEngine PyQt6-WebChannel
+ pip install pymysql requests bs4 PySide6 PySide6-WebEngine
 """
 
 # -----------------------
-# Importing required modules
+# Imports Handling
 # -----------------------
 
 import sys
+import importlib.util
+import os
+
+# List of required modules
+required_modules = [
+    'pickle', 'pymysql', 'requests', 're', 'time', 'sqlite3',
+    'webbrowser', 'datetime', 'bs4', 'PySide6.QtWidgets',
+    'PySide6.QtGui', 'PySide6.QtCore', 'PySide6.QtWebEngineWidgets',
+    'PySide6.QtWebChannel'
+]
+
+
+def check_required_modules(modules):
+    """
+    Check if all required modules are installed.
+
+    Args:
+        modules (list): List of module names as strings.
+
+    Returns:
+        bool: True if all modules are installed, False otherwise.
+    """
+    missing_modules = []
+    for module in modules:
+        if importlib.util.find_spec(module) is None:
+            missing_modules.append(module)
+
+    if missing_modules:
+        print("The following modules are missing:")
+        for mod in missing_modules:
+            print(f"- {mod}")
+        print("\nYou can install them with:")
+        print("pip install pymysql requests bs4 PySide6 PySide6-WebEngine")
+        return False
+    return True
+
+
+# Check for required modules
+if not check_required_modules(required_modules):
+    sys.exit("Missing required modules. Please install them and try again.")
+
+# Proceed with the rest of the imports and program setup
+import logging
 import pickle
 import pymysql
 import requests
 import re
-import os
+import time
+import sqlite3
 import webbrowser
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QScrollArea, QFileDialog, QTabWidget, QColorDialog, QGridLayout)
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
-from PyQt6.QtCore import QUrl, Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSlot
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtWebEngineCore import QWebEngineSettings
-import logging
-
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea
+)
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
+from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QTimer, QEvent, QPropertyAnimation
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtWebEngineCore import QWebEngineSettings
+from PySide6.QtCore import Slot as pyqtSlot
 
 # -----------------------
 # Directory setup
@@ -265,12 +308,15 @@ class CityMapApp(QMainWindow):
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
 
+        # Load the data
+        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates = load_data()
+
         self.zoom_level = 3
         self.minimap_size = 280
         self.column_start = 0
         self.row_start = 0
         self.destination = None
-        self.color_mappings = color_mappings
+        self.color_mappings = self.color_mappings
 
         # Initialize characters list and character_list widget early to avoid attribute errors
         self.characters = []
@@ -311,13 +357,13 @@ class CityMapApp(QMainWindow):
         # Left layout containing the minimap and control buttons
         left_layout = QVBoxLayout()
         left_frame = QFrame()
-        left_frame.setFrameShape(QFrame.Shape.Box)
+        left_frame.setFrameShape(QFrame.Box)
         left_frame.setFixedWidth(300)
         left_frame.setLayout(left_layout)
 
         # Minimap setup
         minimap_frame = QFrame()
-        minimap_frame.setFrameShape(QFrame.Shape.Box)
+        minimap_frame.setFrameShape(QFrame.Box)
         minimap_frame.setFixedSize(self.minimap_size, self.minimap_size)
         minimap_layout = QVBoxLayout()
         minimap_layout.setContentsMargins(0, 0, 0, 0)
@@ -332,7 +378,7 @@ class CityMapApp(QMainWindow):
 
         # Information frame to display closest locations and AP costs
         info_frame = QFrame()
-        info_frame.setFrameShape(QFrame.Shape.Box)
+        info_frame.setFrameShape(QFrame.Box)
         info_frame.setFixedHeight(80)
         info_layout = QVBoxLayout()
         info_frame.setLayout(info_layout)
@@ -340,28 +386,28 @@ class CityMapApp(QMainWindow):
 
         # Labels to display closest locations and destination
         self.bank_label = QLabel()
-        self.bank_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.bank_label.setAlignment(Qt.AlignLeft)
         self.bank_label.setStyleSheet("background-color: blue; color: white;font-weight: bold;")
         self.bank_label.setWordWrap(True)
         self.bank_label.setFixedHeight(15)
         info_layout.addWidget(self.bank_label)
 
         self.transit_label = QLabel()
-        self.transit_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.transit_label.setAlignment(Qt.AlignLeft)
         self.transit_label.setStyleSheet("background-color: red; color: white;font-weight: bold;")
         self.transit_label.setWordWrap(True)
         self.transit_label.setFixedHeight(15)
         info_layout.addWidget(self.transit_label)
 
         self.tavern_label = QLabel()
-        self.tavern_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.tavern_label.setAlignment(Qt.AlignLeft)
         self.tavern_label.setStyleSheet("background-color: orange; color: white;font-weight: bold;")
         self.tavern_label.setWordWrap(True)
         self.tavern_label.setFixedHeight(15)
         info_layout.addWidget(self.tavern_label)
 
         self.destination_label = QLabel()
-        self.destination_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.destination_label.setAlignment(Qt.AlignLeft)
         self.destination_label.setStyleSheet("background-color: green; color: white;font-weight: bold;")
         self.destination_label.setWordWrap(True)
         self.destination_label.setFixedHeight(15)
@@ -372,12 +418,12 @@ class CityMapApp(QMainWindow):
         combo_go_layout.setSpacing(5)
 
         self.combo_columns = QComboBox()
-        self.combo_columns.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.combo_columns.addItems(columns.keys())
+        self.combo_columns.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_columns.addItems(self.columns.keys())
 
         self.combo_rows = QComboBox()
-        self.combo_rows.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.combo_rows.addItems(rows.keys())
+        self.combo_rows.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo_rows.addItems(self.rows.keys())
 
         go_button = QPushButton('Go')
         go_button.setFixedSize(25, 25)
@@ -423,23 +469,23 @@ class CityMapApp(QMainWindow):
         discord_button.clicked.connect(self.open_discord)
         action_layout.addWidget(discord_button)
 
-        shops_guilds_button = QPushButton('Shops/Guilds')
-        shops_guilds_button.setFixedSize(button_size, 25)
-        shops_guilds_button.clicked.connect(self.open_shops_guilds)
-        action_layout.addWidget(shops_guilds_button)
+        website_button = QPushButton('Website')
+        website_button.setFixedSize(button_size, 25)
+        website_button.clicked.connect(self.open_website)
+        action_layout.addWidget(website_button)
 
         left_layout.addLayout(action_layout)
 
         # Character list frame
         character_frame = QFrame()
-        character_frame.setFrameShape(QFrame.Shape.Box)
+        character_frame.setFrameShape(QFrame.Box)
         character_layout = QVBoxLayout()
         character_frame.setLayout(character_layout)
 
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
-        self.character_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.character_list.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.character_list.setFixedHeight(100)
         self.character_list.itemClicked.connect(self.on_character_selected)
         character_layout.addWidget(self.character_list)
@@ -735,11 +781,11 @@ class CityMapApp(QMainWindow):
 
     def add_new_character(self):
         """
-        Add a new character to the list.
+        Add a new character.
         """
         logging.debug("Adding a new character.")
         dialog = CharacterDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             name = dialog.name_edit.text()
             password = dialog.password_edit.text()
             self.characters.append({'name': name, 'password': password})
@@ -761,7 +807,7 @@ class CityMapApp(QMainWindow):
         if character:
             logging.debug(f"Modifying character: {name}")
             dialog = CharacterDialog(self, character)
-            if dialog.exec_():
+            if dialog.exec():
                 character['name'] = dialog.name_edit.text()
                 character['password'] = dialog.password_edit.text()
                 self.save_characters()
@@ -840,12 +886,12 @@ class CityMapApp(QMainWindow):
                 painter.setPen(QColor('white'))
                 painter.drawRect(x0, y0, block_size - border_size, block_size - border_size)
 
-                column_name = next((name for name, coord in columns.items() if coord == column_index), None)
-                row_name = next((name for name, coord in rows.items() if coord == row_index), None)
+                column_name = next((name for name, coord in self.columns.items() if coord == column_index), None)
+                row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index < min(columns.values()) or column_index > max(columns.values()) or row_index < min(
-                        rows.values()) or row_index > max(rows.values()):
+                if column_index < min(self.columns.values()) or column_index > max(self.columns.values()) or row_index < min(
+                        self.rows.values()) or row_index > max(self.rows.values()):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -865,31 +911,31 @@ class CityMapApp(QMainWindow):
                     painter.drawText(text_x, text_y, label_text)
 
         # Draw special locations
-        for (column_index, row_index) in banks_coordinates:
+        for (column_index, row_index) in self.banks_coordinates:
             draw_location(column_index, row_index, self.color_mappings["bank"], "Bank")
 
-        for name, (column_index, row_index) in taverns_coordinates.items():
+        for name, (column_index, row_index) in self.taverns_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["tavern"], name)
 
-        for name, (column_index, row_index) in transits_coordinates.items():
+        for name, (column_index, row_index) in self.transits_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["transit"], name)
 
-        for name, (column_index, row_index) in user_buildings_coordinates.items():
+        for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["user_building"], name)
 
-        for name, (column_index, row_index) in shops_coordinates.items():
+        for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
                 logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
-        for name, (column_index, row_index) in guilds_coordinates.items():
+        for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
                 logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
-        for name, (column_index, row_index) in places_of_interest_coordinates.items():
+        for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
@@ -984,7 +1030,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, list(taverns_coordinates.values()))
+        return self.find_nearest_location(x, y, list(self.taverns_coordinates.values()))
 
     def find_nearest_bank(self, x, y):
         """
@@ -997,7 +1043,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, banks_coordinates)
+        return self.find_nearest_location(x, y, self.banks_coordinates)
 
     def find_nearest_transit(self, x, y):
         """
@@ -1010,7 +1056,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, list(transits_coordinates.values()))
+        return self.find_nearest_location(x, y, list(self.transits_coordinates.values()))
 
     def set_destination(self):
         """
@@ -1067,10 +1113,10 @@ class CityMapApp(QMainWindow):
         """
         column_name = self.combo_columns.currentText()
         row_name = self.combo_rows.currentText()
-        if column_name in columns:
-            self.column_start = columns[column_name] - self.zoom_level // 2
-        if row_name in rows:
-            self.row_start = rows[row_name] - self.zoom_level // 2
+        if column_name in self.columns:
+            self.column_start = self.columns[column_name] - self.zoom_level // 2
+        if row_name in self.rows:
+            self.row_start = self.rows[row_name] - self.zoom_level // 2
         self.update_minimap()
 
     def mousePressEvent(self, event):
@@ -1080,20 +1126,20 @@ class CityMapApp(QMainWindow):
         Args:
             event (QMouseEvent): Mouse event.
         """
-        if event.x() < self.minimap_label.width() and event.y() < self.minimap_label.height():
-            x = event.x()
-            y = event.y()
+        if event.position().x() < self.minimap_label.width() and event.position().y() < self.minimap_label.height():
+            x = event.position().x()
+            y = event.position().y()
 
             block_size = self.minimap_size // self.zoom_level
-            col_clicked = x // block_size
-            row_clicked = y // block_size
+            col_clicked = int(x // block_size)
+            row_clicked = int(y // block_size)
 
             new_column_start = self.column_start + col_clicked - self.zoom_level // 2
             new_row_start = self.row_start + row_clicked - self.zoom_level // 2
 
-            if -1 <= new_column_start <= 200 - self.zoom_level + 1:
+            if -1 <= new_column_start <= 201 - self.zoom_level + 1:
                 self.column_start = new_column_start
-            if -1 <= new_row_start <= 200 - self.zoom_level + 1:
+            if -1 <= new_row_start <= 201 - self.zoom_level + 1:
                 self.row_start = new_row_start
 
             self.update_minimap()
@@ -1125,7 +1171,7 @@ class CityMapApp(QMainWindow):
         # Get details for nearest tavern
         if nearest_tavern:
             tavern_coords = nearest_tavern[0][1]
-            tavern_name = next(name for name, coords in taverns_coordinates.items() if coords == tavern_coords)
+            tavern_name = next(name for name, coords in self.taverns_coordinates.items() if coords == tavern_coords)
             tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
             tavern_intersection = self.get_intersection_name(tavern_coords)
             self.tavern_label.setText(f"{tavern_name} - {tavern_intersection} - AP: {tavern_ap_cost}")
@@ -1140,7 +1186,7 @@ class CityMapApp(QMainWindow):
         # Get details for nearest transit
         if nearest_transit:
             transit_coords = nearest_transit[0][1]
-            transit_name = next(name for name, coords in transits_coordinates.items() if coords == transit_coords)
+            transit_name = next(name for name, coords in self.transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
             transit_intersection = self.get_intersection_name(transit_coords)
             self.transit_label.setText(f"{transit_name} - {transit_intersection} - AP: {transit_ap_cost}")
@@ -1173,7 +1219,7 @@ class CityMapApp(QMainWindow):
             column_name = "ECL"
         else:
             x = x if x % 2 != 0 else x - 1
-            column_name = next((name for name, coord in columns.items() if coord == x), "")
+            column_name = next((name for name, coord in self.columns.items() if coord == x), "")
 
         if y == 0:
             row_name = "NCL"
@@ -1181,7 +1227,7 @@ class CityMapApp(QMainWindow):
             row_name = "SCL"
         else:
             y = y if y % 2 != 0 else y - 1
-            row_name = next((name for name, coord in rows.items() if coord == y), "")
+            row_name = next((name for name, coord in self.rows.items() if coord == y), "")
 
         return f"{column_name} & {row_name}"
 
@@ -1202,6 +1248,12 @@ class CityMapApp(QMainWindow):
         Open the Discord link in the default web browser.
         """
         webbrowser.open("https://discord.gg/ktdG9FZ")
+
+    def open_website(self):
+        """
+        Open the Map Update page in the default web browser.
+        """
+        webbrowser.open("https://lollis-home.ddns.net/viewpage.php?page_id=1")
 
     def show_about_dialog(self):
         """
@@ -1492,7 +1544,7 @@ class CharacterDialog(QDialog):
 
         self.name_edit = QLineEdit(self)
         self.password_edit = QLineEdit(self)
-        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.password_edit.setEchoMode(QLineEdit.Password)
 
         layout.addRow('Name:', self.name_edit)
         layout.addRow('Password:', self.password_edit)
@@ -1666,7 +1718,7 @@ def update_shops(cursor, soup, shops_coordinates, next_update_time):
 # -----------------------
 
 if __name__ == '__main__':
-    setup_logging()
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
     app = QApplication(sys.argv)
     window = CityMapApp()
