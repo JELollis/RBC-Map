@@ -5,3 +5,5 @@ testing/sessions/active_user.pkl
 testing/sessions/users.pkl
 testing/sessions/users.pkl
 /testing/logs
+/logs
+/sessions
