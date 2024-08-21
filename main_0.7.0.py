@@ -1103,6 +1103,11 @@ class CityMapApp(QMainWindow):
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
 
+
+# -----------------------
+# Character Dialog
+# -----------------------
+
 class CharacterDialog(QDialog):
     """
     Dialog for adding or modifying a character.
