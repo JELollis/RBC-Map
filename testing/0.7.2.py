@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.7.1
+# Filename: main_0.7.2
 
 """
 =========================
@@ -16,9 +16,7 @@ Modules:
 - requests
 - datetime
 - bs4 (BeautifulSoup)
-- PyQt6
-- PyQt6.QtWebEngineWidgets
-- PyQt6.QtWebChannel
+- PySide6
 
 Classes:
 - CityMapApp: Main application class for the RBC City Map.
@@ -35,32 +33,75 @@ Functions:
 - get_next_update_times: Retrieve the next update times for guilds and shops from the database.
 
 To install all required modules, run the following command:
- pip install pymysql requests beautifulsoup4 PyQt6 PyQt6-WebEngine PyQt6-WebChannel
+ pip install pymysql requests bs4 PySide6 PySide6-WebEngine
 """
 
 # -----------------------
-# Importing required modules
+# Imports Handling
 # -----------------------
-
 import sys
+import importlib.util
+import os
+
+# List of required modules
+required_modules = [
+    'pickle', 'pymysql', 'requests', 're', 'time', 'sqlite3',
+    'webbrowser', 'datetime', 'bs4', 'PySide6.QtWidgets',
+    'PySide6.QtGui', 'PySide6.QtCore', 'PySide6.QtWebEngineWidgets',
+    'PySide6.QtWebChannel', 'PySide6.QtNetwork'
+]
+
+
+def check_required_modules(modules):
+    """
+    Check if all required modules are installed.
+
+    Args:
+        modules (list): List of module names as strings.
+
+    Returns:
+        bool: True if all modules are installed, False otherwise.
+    """
+    missing_modules = []
+    for module in modules:
+        if importlib.util.find_spec(module) is None:
+            missing_modules.append(module)
+
+    if missing_modules:
+        print("The following modules are missing:")
+        for mod in missing_modules:
+            print(f"- {mod}")
+        print("\nYou can install them with:")
+        print("pip install pymysql requests bs4 PySide6 PySide6-WebEngine")
+        return False
+    return True
+
+
+# Check for required modules
+if not check_required_modules(required_modules):
+    sys.exit("Missing required modules. Please install them and try again.")
+
+# Proceed with the rest of the imports and program setup
+import logging
 import pickle
 import pymysql
 import requests
 import re
-import os
 import webbrowser
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QScrollArea, QFileDialog, QTabWidget, QColorDialog, QGridLayout)
-from PyQt6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
-from PyQt6.QtCore import QUrl, Qt, QRect, QPropertyAnimation, QEasingCurve, pyqtSlot
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebChannel import QWebChannel
-from PyQt6.QtWebEngineCore import QWebEngineSettings
-import logging
-
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea
+)
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
+from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QDateTime, QSize, QTimer
+from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
+from PySide6.QtNetwork import QNetworkCookie
+from PySide6.QtCore import Slot as pyqtSlot
 
 # -----------------------
 # Directory setup
@@ -247,6 +288,12 @@ def load_data():
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 # -----------------------
+# Cookie Storage
+# -----------------------
+
+COOKIE_FILE_PATH = 'sessions/cookies.pkl'
+
+# -----------------------
 # CityMapApp Main Class
 # -----------------------
 
@@ -265,6 +312,26 @@ class CityMapApp(QMainWindow):
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
 
+        # Apply saved theme settings
+        self.load_theme_settings()
+        self.apply_theme()
+
+        # Create a QWebEngineProfile for handling cookies
+        self.web_profile = QWebEngineProfile.defaultProfile()
+
+        # Enable persistent cookies and set the storage path
+        cookie_storage_path = os.path.join(os.getcwd(), 'sessions')
+        os.makedirs(cookie_storage_path, exist_ok=True)
+        self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
+        self.web_profile.setPersistentStoragePath(cookie_storage_path)
+
+        # Set up cookie handling and logging
+        self.setup_cookie_handling()
+
+        # Load the data
+        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates = load_data()
+
+        # Set up the UI components
         self.zoom_level = 3
         self.minimap_size = 280
         self.column_start = 0
@@ -286,15 +353,215 @@ class CityMapApp(QMainWindow):
                 # Exit if no characters are added
                 sys.exit("No characters added. Exiting the application.")
 
+        self.load_destination()
         # Now continue initializing the rest of the UI components
         self.setup_ui()
         self.setup_console_logging()
         self.show()
         self.update_minimap()
 
+    # -----------------------
+    # Load and apply customized UI Theme
+    # -----------------------
+
+    def load_theme_settings(self):
+        """
+        Load the theme settings from a file or default to the color_mappings database entry.
+        """
+        settings_file = 'settings/theme_settings.pkl'
+
+        if os.path.exists(settings_file):
+            try:
+                with open(settings_file, 'rb') as f:
+                    self.color_mappings = pickle.load(f)
+            except (EOFError, pickle.UnpicklingError) as e:
+                logging.error(f"Failed to load theme settings from file: {e}")
+                self.color_mappings = {}
+        else:
+            # Fallback to the database color_mappings
+            connection = connect_to_database()
+            if connection:
+                try:
+                    cursor = connection.cursor()
+                    cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
+                    color_mappings_data = cursor.fetchall()
+                    self.color_mappings = {type_: QColor(color) for type_, color in color_mappings_data}
+                except pymysql.MySQLError as e:
+                    logging.error(f"Failed to load color mappings from database: {e}")
+                    self.color_mappings = {}
+                finally:
+                    connection.close()
+            else:
+                self.color_mappings = {}  # Default to an empty dict if no database entry is found
+
+    def save_theme_settings(self):
+        """
+        Save the theme settings to a file.
+        """
+        settings_file = 'settings/theme_settings.pkl'
+        with open(settings_file, 'wb') as f:
+            pickle.dump(self.color_mappings, f)
+
+    def apply_theme(self):
+        """
+        Apply the theme settings to the application.
+        """
+        # Apply background color
+        background_color = self.color_mappings.get('background', QColor('white')).name()
+
+        # Apply text color
+        text_color = self.color_mappings.get('text_color', QColor('black')).name()
+
+        # Apply button color
+        button_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
+
+        # Apply styles to the entire application
+        self.setStyleSheet(
+            f"""
+            QWidget {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QPushButton {{
+                background-color: {button_color};
+                color: {text_color};
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            QMenuBar {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QMenuBar::item {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QMenu {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QMenu::item {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            """
+        )
+
+    def change_theme(self):
+        """
+        Open the theme customization dialog and apply the selected theme.
+        """
+        dialog = ThemeCustomizationDialog(self, color_mappings=self.color_mappings)
+        if dialog.exec():
+            self.color_mappings = dialog.color_mappings
+            self.apply_theme()
+            self.save_theme_settings()
+
+
+    # -----------------------
+    # Cookie Handling
+    # -----------------------
+
+    def setup_cookie_handling(self):
+        """
+        Set up cookie handling including loading and saving cookies.
+        """
+        self.cookie_store = self.web_profile.cookieStore()
+        self.cookie_store.cookieAdded.connect(self.on_cookie_added)
+        self.load_cookies()
+
+    def load_cookies(self):
+        """
+        Load cookies from a file if available.
+        """
+        if os.path.exists(COOKIE_FILE_PATH):
+            try:
+                with open(COOKIE_FILE_PATH, 'rb') as f:
+                    cookies_data = pickle.load(f)
+                    for cookie_data in cookies_data:
+                        cookie = self.deserialize_cookie(cookie_data)
+                        self.cookie_store.setCookie(cookie, QUrl("https://quiz.ravenblack.net"))
+                    logging.info("Cookies loaded from file.")
+            except (EOFError, pickle.UnpicklingError):
+                logging.warning("Failed to load cookies - file might be empty or corrupt.")
+        else:
+            logging.info("No cookies file found. Creating a new one.")
+
+    def on_cookie_added(self, cookie):
+        """
+        Handle the event when a new cookie is added.
+        """
+        logging.debug(f"Cookie added: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
+        self.save_cookie_to_file(cookie)
+
+    def save_cookie_to_file(self, cookie):
+        """
+        Save the cookies to a file.
+        """
+        cookies = []
+        if os.path.exists(COOKIE_FILE_PATH):
+            try:
+                with open(COOKIE_FILE_PATH, 'rb') as f:
+                    cookies = pickle.load(f)
+            except (EOFError, pickle.UnpicklingError):
+                logging.warning("Failed to load existing cookies - creating a new list.")
+
+        cookies.append(self.serialize_cookie(cookie))
+        with open(COOKIE_FILE_PATH, 'wb') as f:
+            pickle.dump(cookies, f)
+            logging.debug("Cookies saved to file.")
+
+    def serialize_cookie(self, cookie):
+        """
+        Convert a QNetworkCookie to a serializable dictionary.
+
+        Args:
+            cookie (QNetworkCookie): The cookie to serialize.
+
+        Returns:
+            dict: The serialized cookie data.
+        """
+        return {
+            'name': cookie.name().data().decode('utf-8'),
+            'value': cookie.value().data().decode('utf-8'),
+            'domain': cookie.domain(),
+            'path': cookie.path(),
+            'expiry': cookie.expirationDate().toString() if cookie.isSessionCookie() is False else None,
+            'secure': cookie.isSecure(),
+            'httponly': cookie.isHttpOnly(),
+        }
+
+    def deserialize_cookie(self, cookie_data):
+        """
+        Convert a serialized dictionary back to a QNetworkCookie.
+
+        Args:
+            cookie_data (dict): The serialized cookie data.
+
+        Returns:
+            QNetworkCookie: The deserialized cookie.
+        """
+        cookie = QNetworkCookie(
+            name=cookie_data['name'].encode('utf-8'),
+            value=cookie_data['value'].encode('utf-8')
+        )
+        cookie.setDomain(cookie_data['domain'])
+        cookie.setPath(cookie_data['path'])
+        if cookie_data['expiry']:
+            cookie.setExpirationDate(QDateTime.fromString(cookie_data['expiry']))
+        cookie.setSecure(cookie_data['secure'])
+        cookie.setHttpOnly(cookie_data['httponly'])
+
+        return cookie
+
+    # -----------------------
+    # CityMapApp UI Set Up
+    # -----------------------
+
     def setup_ui(self):
         """
-        Setup the main user interface for the application.
+        Set up the main user interface for the application.
         """
 
         central_widget = QWidget()
@@ -303,6 +570,51 @@ class CityMapApp(QMainWindow):
         central_widget.setLayout(main_layout)
 
         self.create_menu_bar()
+
+        # Initialize the QWebEngineView before setting up the browser controls
+        self.website_frame = QWebEngineView(self.web_profile)
+        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+
+        # Create the browser controls layout at the top of the webview
+        self.browser_controls_layout = QHBoxLayout()
+
+        # Load images for back, forward, and refresh buttons
+        back_button = QPushButton()
+        back_button.setIcon(QIcon('./images/back.png'))
+        back_button.setIconSize(QSize(50, 50))
+        back_button.setFixedSize(50, 50)
+        back_button.setStyleSheet("background-color: transparent; border: none;")
+        back_button.clicked.connect(self.website_frame.back)
+        self.browser_controls_layout.addWidget(back_button)
+
+        forward_button = QPushButton()
+        forward_button.setIcon(QIcon('./images/forward.png'))
+        forward_button.setIconSize(QSize(50, 50))
+        forward_button.setFixedSize(50, 50)
+        forward_button.setStyleSheet("background-color: transparent; border: none;")
+        forward_button.clicked.connect(self.website_frame.forward)
+        self.browser_controls_layout.addWidget(forward_button)
+
+        refresh_button = QPushButton()
+        refresh_button.setIcon(QIcon('./images/refresh.png'))
+        refresh_button.setIconSize(QSize(50, 50))
+        refresh_button.setFixedSize(50, 50)
+        refresh_button.setStyleSheet("background-color: transparent; border: none;")
+        refresh_button.clicked.connect(self.website_frame.reload)
+        self.browser_controls_layout.addWidget(refresh_button)
+
+        # Set spacing between buttons to make them closer together
+        self.browser_controls_layout.setSpacing(5)
+        self.browser_controls_layout.setContentsMargins(5, 5, 5, 5)
+
+        # Create a container widget for the webview and controls
+        webview_container = QWidget()
+        webview_layout = QVBoxLayout(webview_container)
+        webview_layout.setContentsMargins(0, 0, 0, 0)
+        webview_layout.addLayout(self.browser_controls_layout)
+        webview_layout.addWidget(self.website_frame)
 
         # Main layout for map and controls
         map_layout = QHBoxLayout()
@@ -423,10 +735,10 @@ class CityMapApp(QMainWindow):
         discord_button.clicked.connect(self.open_discord)
         action_layout.addWidget(discord_button)
 
-        shops_guilds_button = QPushButton('Shops/Guilds')
-        shops_guilds_button.setFixedSize(button_size, 25)
-        shops_guilds_button.clicked.connect(self.open_shops_guilds)
-        action_layout.addWidget(shops_guilds_button)
+        website_button = QPushButton('Website')
+        website_button.setFixedSize(button_size, 25)
+        website_button.clicked.connect(self.open_website)
+        action_layout.addWidget(website_button)
 
         left_layout.addLayout(action_layout)
 
@@ -439,8 +751,7 @@ class CityMapApp(QMainWindow):
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
-        self.character_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.character_list.setFixedHeight(100)
+        self.character_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.character_list.itemClicked.connect(self.on_character_selected)
         character_layout.addWidget(self.character_list)
 
@@ -461,18 +772,24 @@ class CityMapApp(QMainWindow):
 
         left_layout.addWidget(character_frame)
 
-        # Web engine view
+        # Add the webview_container and left_frame to the map layout
         map_layout.addWidget(left_frame)
+        map_layout.addWidget(webview_container, stretch=1)
 
-        # Frame for displaying the website
-        self.website_frame = QWebEngineView()
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        self.website_frame.loadFinished.connect(self.on_webview_load_finished)
-        map_layout.addWidget(self.website_frame)
+        # Make sure the webview expands to fill the remaining space
+        self.website_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.show()
         self.update_minimap()
+
+    def go_back(self):
+        self.website_frame.back()
+
+    def go_forward(self):
+        self.website_frame.forward()
+
+    def refresh_page(self):
+        self.website_frame.reload()
 
     def create_menu_bar(self):
         """
@@ -538,6 +855,10 @@ class CityMapApp(QMainWindow):
         """
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
+    # -----------------------
+    # Error Logging
+    # -----------------------
+
     def setup_console_logging(self):
         """
         Setup console logging within the web engine view.
@@ -575,23 +896,8 @@ class CityMapApp(QMainWindow):
         logging.debug(f"Console message: {message}")
 
     # -----------------------
-    # Web View Handling
+    # Menu Control Items
     # -----------------------
-
-    def on_webview_load_finished(self):
-        """
-        Handle the event when the webview finishes loading.
-        """
-        if not self.webview_loaded:
-            self.webview_loaded = True
-            self.inject_console_logging()
-            self.website_frame.page().toHtml(self.process_html)
-
-    def refresh_webview(self):
-        """
-        Refresh the webview content.
-        """
-        self.website_frame.reload()
 
     def save_webpage_screenshot(self):
         """
@@ -637,7 +943,6 @@ class CityMapApp(QMainWindow):
         """
         try:
             os.makedirs('sessions', exist_ok=True)
-
             with open('sessions/characters.pkl', 'wb') as f:
                 pickle.dump(self.characters, f)
                 logging.debug("Characters saved successfully to file.")
@@ -657,6 +962,8 @@ class CityMapApp(QMainWindow):
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
             self.logout_current_character()
+          # Delay login to allow logout to complete
+            self.login_selected_character()
 
     def logout_current_character(self):
         """
@@ -666,7 +973,7 @@ class CityMapApp(QMainWindow):
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
 
         # Delay login to allow logout to complete
-        self.website_frame.loadFinished.connect(self.login_selected_character)
+        QTimer.singleShot(1000, self.login_selected_character)
 
     def login_selected_character(self):
         """
@@ -691,6 +998,74 @@ class CityMapApp(QMainWindow):
             }}
         """
         self.website_frame.page().runJavaScript(login_script)
+
+    def add_new_character(self):
+        """
+        Add a new character.
+        """
+        logging.debug("Adding a new character.")
+        dialog = CharacterDialog(self)
+        if dialog.exec():
+            name = dialog.name_edit.text()
+            password = dialog.password_edit.text()
+            self.characters.append({'name': name, 'password': password})
+            self.save_characters()
+            self.character_list.addItem(QListWidgetItem(name))
+            logging.debug(f"Character {name} added.")
+
+    def modify_character(self):
+        """
+        Modify the selected character.
+        """
+        current_item = self.character_list.currentItem()
+        if current_item is None:
+            logging.warning("No character selected for modification.")
+            return
+
+        name = current_item.text()
+        character = next((char for char in self.characters if char['name'] == name), None)
+        if character:
+            logging.debug(f"Modifying character: {name}")
+            dialog = CharacterDialog(self, character)
+            if dialog.exec():
+                character['name'] = dialog.name_edit.text()
+                character['password'] = dialog.password_edit.text()
+                self.save_characters()
+                current_item.setText(character['name'])
+                logging.debug(f"Character {name} modified.")
+
+    def delete_character(self):
+        """
+        Delete the selected character.
+        """
+        current_item = self.character_list.currentItem()
+        if current_item is None:
+            logging.warning("No character selected for deletion.")
+            return
+
+        name = current_item.text()
+        self.characters = [char for char in self.characters if char['name'] != name]
+        self.save_characters()
+        self.character_list.takeItem(self.character_list.row(current_item))
+        logging.debug(f"Character {name} deleted.")
+
+    # -----------------------
+    # Web View Handling
+    # -----------------------
+
+    def on_webview_load_finished(self, success):
+        """
+        Handle the event when the webview finishes loading.
+        """
+        if not success:
+            logging.error("Failed to load the webpage.")
+            # You might want to display an error message to the user
+            QMessageBox.critical(self, "Error",
+                                 "Failed to load the webpage. Please check your network connection or try again later.")
+        else:
+            logging.info("Webpage loaded successfully.")
+            # Process the HTML if needed
+            self.website_frame.page().toHtml(self.process_html)
 
     def process_html(self, html):
         """
@@ -732,56 +1107,11 @@ class CityMapApp(QMainWindow):
 
         return None, None
 
-
-    def add_new_character(self):
+    def refresh_webview(self):
         """
-        Add a new character to the list.
+        Refresh the webview content.
         """
-        logging.debug("Adding a new character.")
-        dialog = CharacterDialog(self)
-        if dialog.exec_():
-            name = dialog.name_edit.text()
-            password = dialog.password_edit.text()
-            self.characters.append({'name': name, 'password': password})
-            self.save_characters()
-            self.character_list.addItem(QListWidgetItem(name))
-            logging.debug(f"Character {name} added.")
-
-    def modify_character(self):
-        """
-        Modify the selected character.
-        """
-        current_item = self.character_list.currentItem()
-        if current_item is None:
-            logging.warning("No character selected for modification.")
-            return
-
-        name = current_item.text()
-        character = next((char for char in self.characters if char['name'] == name), None)
-        if character:
-            logging.debug(f"Modifying character: {name}")
-            dialog = CharacterDialog(self, character)
-            if dialog.exec_():
-                character['name'] = dialog.name_edit.text()
-                character['password'] = dialog.password_edit.text()
-                self.save_characters()
-                current_item.setText(character['name'])
-                logging.debug(f"Character {name} modified.")
-
-    def delete_character(self):
-        """
-        Delete the selected character.
-        """
-        current_item = self.character_list.currentItem()
-        if current_item is None:
-            logging.warning("No character selected for deletion.")
-            return
-
-        name = current_item.text()
-        self.characters = [char for char in self.characters if char['name'] != name]
-        self.save_characters()
-        self.character_list.takeItem(self.character_list.row(current_item))
-        logging.debug(f"Character {name} deleted.")
+        self.website_frame.reload()
 
     # -----------------------
     # Minimap Drawing and Update
@@ -1029,7 +1359,7 @@ class CityMapApp(QMainWindow):
         """
         Save the destination to a file.
         """
-        with open('destination.pkl', 'wb') as f:
+        with open('sessions/destination.pkl', 'wb') as f:
             pickle.dump(self.destination, f)
             pickle.dump(datetime.now(), f)
 
@@ -1038,7 +1368,7 @@ class CityMapApp(QMainWindow):
         Load the destination from a file.
         """
         try:
-            with open('destination.pkl', 'rb') as f:
+            with open('sessions/destination.pkl', 'rb') as f:
                 self.destination = pickle.load(f)
                 self.scrape_timestamp = pickle.load(f)
         except FileNotFoundError:
@@ -1080,9 +1410,9 @@ class CityMapApp(QMainWindow):
         Args:
             event (QMouseEvent): Mouse event.
         """
-        if event.x() < self.minimap_label.width() and event.y() < self.minimap_label.height():
-            x = event.x()
-            y = event.y()
+        if event.position().x() < self.minimap_label.width() and event.position().y() < self.minimap_label.height():
+            x = event.position().x()
+            y = event.position().y()
 
             block_size = self.minimap_size // self.zoom_level
             col_clicked = x // block_size
@@ -1189,19 +1519,17 @@ class CityMapApp(QMainWindow):
     # Menu Actions
     # -----------------------
 
-    def change_theme(self):
-        """
-        Change the application's theme by selecting a new background color.
-        """
-        color = QColorDialog.getColor()
-        if color.isValid():
-            self.setStyleSheet(f"background-color: {color.name()};")
-
     def open_discord(self):
         """
         Open the Discord link in the default web browser.
         """
         webbrowser.open("https://discord.gg/ktdG9FZ")
+
+    def open_website(self):
+        """
+        Open the Map Update page in the default web browser.
+        """
+        webbrowser.open("https://lollis-home.ddns.net/viewpage.php?page_id=1")
 
     def show_about_dialog(self):
         """
@@ -1234,13 +1562,13 @@ class CityMapApp(QMainWindow):
 
         scroll_area = QScrollArea()
         scroll_area.setStyleSheet("background-color: black; border: none;")
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         layout.addWidget(scroll_area)
 
         credits_label = QLabel(credits_text)
         credits_label.setStyleSheet("font-size: 18px; color: white; background-color: black;")
-        credits_label.setAlignment(Qt.AlignCenter)
+        credits_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         credits_label.setWordWrap(True)
 
         scroll_area.setWidget(credits_label)
@@ -1252,11 +1580,11 @@ class CityMapApp(QMainWindow):
         animation.setStartValue(QRect(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height()))
         animation.setEndValue(
             QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
-        animation.setEasingCurve(QEasingCurve.Linear)
+        animation.setEasingCurve(QEasingCurve.Type.Linear)
 
         animation.start()
 
-        credits_dialog.exec_()
+        credits_dialog.exec()
 
     def open_shops_guilds(self):
         """
@@ -1334,11 +1662,11 @@ class ThemeCustomizationDialog(QDialog):
 
     def setup_ui_tab(self):
         """
-        Setup the UI tab in the theme customization dialog.
+        Set up the UI tab in the theme customization dialog.
         """
         layout = QGridLayout(self.ui_tab)
 
-        ui_elements = ['default', 'edge', 'text_color']
+        ui_elements = ['background', 'text_color', 'button_color']
         for index, element in enumerate(ui_elements):
             color_square = QLabel()
             color_square.setFixedSize(20, 20)
@@ -1346,18 +1674,16 @@ class ThemeCustomizationDialog(QDialog):
             pixmap.fill(self.color_mappings.get(element, QColor('white')))
             color_square.setPixmap(pixmap)
 
-            combo_box = QComboBox()
-            combo_box.addItems(self.get_color_names())
-            combo_box.setCurrentText(self.color_mappings[element].name())
-            combo_box.currentTextChanged.connect(lambda _, name=element: self.update_color_mapping(name))
+            color_button = QPushButton('Change Color')
+            color_button.clicked.connect(lambda _, el=element, sq=color_square: self.change_color(el, sq))
 
-            layout.addWidget(color_square, index, 0)
-            layout.addWidget(QLabel(f"{element.capitalize()} Color:"), index, 1)
-            layout.addWidget(combo_box, index, 2)
+            layout.addWidget(QLabel(f"{element.replace('_', ' ').capitalize()}:"), index, 0)
+            layout.addWidget(color_square, index, 1)
+            layout.addWidget(color_button, index, 2)
 
     def setup_minimap_tab(self):
         """
-        Setup the Minimap Content tab in the theme customization dialog.
+        Set up the Minimap Content tab in the theme customization dialog.
         """
         layout = QGridLayout(self.minimap_tab)
 
@@ -1369,39 +1695,44 @@ class ThemeCustomizationDialog(QDialog):
             pixmap.fill(self.color_mappings.get(element, QColor('white')))
             color_square.setPixmap(pixmap)
 
-            combo_box = QComboBox()
-            combo_box.addItems(self.get_color_names())
-            combo_box.setCurrentText(self.color_mappings[element].name())
-            combo_box.currentTextChanged.connect(lambda _, name=element: self.update_color_mapping(name))
+            color_button = QPushButton('Change Color')
+            color_button.clicked.connect(lambda _, el=element, sq=color_square: self.change_color(el, sq))
 
-            layout.addWidget(color_square, index, 0)
-            layout.addWidget(QLabel(f"{element.capitalize()} Color:"), index, 1)
-            layout.addWidget(combo_box, index, 2)
+            layout.addWidget(QLabel(f"{element.capitalize()}:"), index, 0)
+            layout.addWidget(color_square, index, 1)
+            layout.addWidget(color_button, index, 2)
 
-    def update_color_mapping(self, element_name):
+    def change_color(self, element_name, color_square):
         """
-        Update the color mapping for a specific element.
+        Open a color dialog to change the color of the specified element.
 
         Args:
             element_name (str): The name of the element.
+            color_square (QLabel): The QLabel that shows the current color.
         """
-        selected_color = QColor(self.sender().currentText())
-        self.color_mappings[element_name] = selected_color
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.color_mappings[element_name] = color
+            pixmap = QPixmap(20, 20)
+            pixmap.fill(color)
+            color_square.setPixmap(pixmap)
 
-        sender_index = self.sender().parent().layout().indexOf(self.sender())
-        color_square = self.sender().parent().layout().itemAt(sender_index - 2).widget()
-        pixmap = QPixmap(20, 20)
-        pixmap.fill(selected_color)
-        color_square.setPixmap(pixmap)
-
-    def get_color_names(self):
+    def apply_theme(self):
         """
-        Get a list of all available color names.
-
-        Returns:
-            list: List of color names.
+        Apply the theme settings to the application.
         """
-        return QColor.colorNames()
+        # Apply background color
+        background_color = self.color_mappings.get('background', QColor('white'))
+        self.setStyleSheet(f"background-color: {background_color.name()};")
+
+        # Apply text and button colors
+        text_color = self.color_mappings.get('text_color', QColor('black')).name()
+        button_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
+        self.setStyleSheet(
+            f"QWidget {{ background-color: {background_color.name()}; }}"
+            f"QPushButton {{ background-color: {button_color}; color: {text_color}; }}"
+            f"QLabel {{ color: {text_color}; }}"
+        )
 
 # -----------------------
 # Shops/Guilds Dialog
@@ -1642,7 +1973,6 @@ def update_guilds(cursor, soup, guilds_coordinates, next_update_time):
         else:
             print(f"Guild '{name}' not found in the table.")
 
-
 def update_shops(cursor, soup, shops_coordinates, next_update_time):
     """
     Update the shops data in the database.
@@ -1666,7 +1996,7 @@ def update_shops(cursor, soup, shops_coordinates, next_update_time):
 # -----------------------
 
 if __name__ == '__main__':
-    setup_logging()
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
     app = QApplication(sys.argv)
     window = CityMapApp()

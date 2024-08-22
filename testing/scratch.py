@@ -96,7 +96,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
-from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QDateTime
+from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QDateTime, QSize, QTimer
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
@@ -320,7 +320,7 @@ class CityMapApp(QMainWindow):
         self.web_profile = QWebEngineProfile.defaultProfile()
 
         # Enable persistent cookies and set the storage path
-        cookie_storage_path = os.path.join(os.getcwd(), 'sessions', 'cookies')
+        cookie_storage_path = os.path.join(os.getcwd(), 'sessions')
         os.makedirs(cookie_storage_path, exist_ok=True)
         self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
         self.web_profile.setPersistentStoragePath(cookie_storage_path)
@@ -571,6 +571,51 @@ class CityMapApp(QMainWindow):
 
         self.create_menu_bar()
 
+        # Initialize the QWebEngineView before setting up the browser controls
+        self.website_frame = QWebEngineView(self.web_profile)
+        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+
+        # Create the browser controls layout at the top of the webview
+        self.browser_controls_layout = QHBoxLayout()
+
+        # Load images for back, forward, and refresh buttons
+        back_button = QPushButton()
+        back_button.setIcon(QIcon('./images/back.png'))
+        back_button.setIconSize(QSize(50, 50))
+        back_button.setFixedSize(50, 50)
+        back_button.setStyleSheet("background-color: transparent; border: none;")
+        back_button.clicked.connect(self.website_frame.back)
+        self.browser_controls_layout.addWidget(back_button)
+
+        forward_button = QPushButton()
+        forward_button.setIcon(QIcon('./images/forward.png'))
+        forward_button.setIconSize(QSize(50, 50))
+        forward_button.setFixedSize(50, 50)
+        forward_button.setStyleSheet("background-color: transparent; border: none;")
+        forward_button.clicked.connect(self.website_frame.forward)
+        self.browser_controls_layout.addWidget(forward_button)
+
+        refresh_button = QPushButton()
+        refresh_button.setIcon(QIcon('./images/refresh.png'))
+        refresh_button.setIconSize(QSize(50, 50))
+        refresh_button.setFixedSize(50, 50)
+        refresh_button.setStyleSheet("background-color: transparent; border: none;")
+        refresh_button.clicked.connect(self.website_frame.reload)
+        self.browser_controls_layout.addWidget(refresh_button)
+
+        # Set spacing between buttons to make them closer together
+        self.browser_controls_layout.setSpacing(5)
+        self.browser_controls_layout.setContentsMargins(5, 5, 5, 5)
+
+        # Create a container widget for the webview and controls
+        webview_container = QWidget()
+        webview_layout = QVBoxLayout(webview_container)
+        webview_layout.setContentsMargins(0, 0, 0, 0)
+        webview_layout.addLayout(self.browser_controls_layout)
+        webview_layout.addWidget(self.website_frame)
+
         # Main layout for map and controls
         map_layout = QHBoxLayout()
         main_layout.addLayout(map_layout)
@@ -706,8 +751,7 @@ class CityMapApp(QMainWindow):
         character_list_label = QLabel('Character List')
         character_layout.addWidget(character_list_label)
 
-        self.character_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.character_list.setFixedHeight(100)
+        self.character_list.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.character_list.itemClicked.connect(self.on_character_selected)
         character_layout.addWidget(self.character_list)
 
@@ -728,18 +772,24 @@ class CityMapApp(QMainWindow):
 
         left_layout.addWidget(character_frame)
 
-        # Web engine view
+        # Add the webview_container and left_frame to the map layout
         map_layout.addWidget(left_frame)
+        map_layout.addWidget(webview_container, stretch=1)
 
-        # Frame for displaying the website
-        self.website_frame = QWebEngineView(self.web_profile)
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        self.website_frame.loadFinished.connect(self.on_webview_load_finished)
-        map_layout.addWidget(self.website_frame)
+        # Make sure the webview expands to fill the remaining space
+        self.website_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.show()
         self.update_minimap()
+
+    def go_back(self):
+        self.website_frame.back()
+
+    def go_forward(self):
+        self.website_frame.forward()
+
+    def refresh_page(self):
+        self.website_frame.reload()
 
     def create_menu_bar(self):
         """
@@ -923,7 +973,7 @@ class CityMapApp(QMainWindow):
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
 
         # Delay login to allow logout to complete
-        self.website_frame.loadFinished.connect(self.login_selected_character)
+        QTimer.singleShot(1000, self.login_selected_character)
 
     def login_selected_character(self):
         """

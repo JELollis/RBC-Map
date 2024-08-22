@@ -10,3 +10,4 @@ testing/sessions/users.pkl
 testing/cookies.pkl
 /testing/sessions
 qodana.yaml
+*.yaml
