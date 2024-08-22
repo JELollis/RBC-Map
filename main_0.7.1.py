@@ -24,7 +24,8 @@ Classes:
 Functions:
 - connect_to_database: Establish a connection to the MySQL database.
 - load_data: Load data from the database and return it as various dictionaries and lists.
-- scrape_avitd_data: Scrape guilds and shops data from 'A View in the Dark' and update the database with next update timestamps.
+- scrape_avitd_data: Scrape guilds and shops data from 'A View in the Dark' and update the database with next update
+- timestamps.
 - extract_next_update_time: Extract the next update time from the text and calculate the next update timestamp.
 - update_guild: Update a single guild in the database.
 - update_shop: Update a single shop in the database.
@@ -103,9 +104,11 @@ from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
 from PySide6.QtCore import Slot as pyqtSlot
 
+
 # -----------------------
 # Directory setup
 # -----------------------
+
 
 def ensure_directories_exist():
     """
@@ -117,8 +120,10 @@ def ensure_directories_exist():
             os.makedirs(directory)
             print(f"Created directory: {directory}")
 
+
 # Call the function to ensure directories are present
 ensure_directories_exist()
+
 
 # -----------------------
 # Logging setup
@@ -137,6 +142,7 @@ def setup_logging():
     )
     print(f"Logging to: {log_filename}")
 
+
 # Call the logging setup
 setup_logging()
 
@@ -150,6 +156,7 @@ REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
 PASSWORD = "RBC_Community_Map"
 DATABASE = "city_map"
+
 
 def connect_to_database():
     """
@@ -182,6 +189,7 @@ def connect_to_database():
         except pymysql.MySQLError as err:
             logging.error("Connection to remote MySQL instance failed: %s", err)
             return None
+
 
 # -----------------------
 # Load Data from Database
@@ -284,6 +292,7 @@ def load_data():
 
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
+
 # Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
@@ -292,6 +301,7 @@ columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, use
 # -----------------------
 
 COOKIE_FILE_PATH = 'sessions/cookies.pkl'
+
 
 # -----------------------
 # CityMapApp Main Class
@@ -458,7 +468,6 @@ class CityMapApp(QMainWindow):
             self.apply_theme()
             self.save_theme_settings()
 
-
     # -----------------------
     # Cookie Handling
     # -----------------------
@@ -597,7 +606,7 @@ class CityMapApp(QMainWindow):
         minimap_layout.addWidget(self.minimap_label)
         left_layout.addWidget(minimap_frame)
 
-        # Information frame to display closest locations and AP costs
+        # Information frame to display the closest locations and AP costs
         info_frame = QFrame()
         info_frame.setFrameShape(QFrame.Shape.Box)
         info_frame.setFixedHeight(80)
@@ -853,7 +862,8 @@ class CityMapApp(QMainWindow):
         """
         Save the current webpage as a screenshot.
         """
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "", "PNG Files (*.png);;All Files (*)")
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "",
+                                                   "PNG Files (*.png);;All Files (*)")
         if file_name:
             self.website_frame.grab().save(file_name)
 
@@ -912,7 +922,7 @@ class CityMapApp(QMainWindow):
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
             self.logout_current_character()
-          # Delay login to allow logout to complete
+            # Delay login to allow logout to complete
             self.login_selected_character()
 
     def logout_current_character(self):
@@ -1490,7 +1500,7 @@ class CityMapApp(QMainWindow):
                           "Version 0.7.1\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
-                          "Developement team shown in credits.\n\n")
+                          "Development team shown in credits.\n\n")
 
     def show_credits_dialog(self):
         """
@@ -1562,6 +1572,7 @@ class CityMapApp(QMainWindow):
             self.update_minimap()
             self.refresh_webview()
 
+
 # -----------------------
 # Theme Customization Dialog
 # -----------------------
@@ -1570,6 +1581,7 @@ class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing the application's theme colors.
     """
+
     def __init__(self, parent=None, color_mappings=None):
         """
         Initialize the theme customization dialog.
@@ -1684,6 +1696,7 @@ class ThemeCustomizationDialog(QDialog):
             f"QLabel {{ color: {text_color}; }}"
         )
 
+
 # -----------------------
 # Shops/Guilds Dialog
 # -----------------------
@@ -1692,6 +1705,7 @@ class ShopsGuildsDialog(QDialog):
     """
     Dialog for selecting a shop or guild as the destination.
     """
+
     def __init__(self, parent=None):
         """
         Initialize the Shops/Guilds dialog.
@@ -1749,6 +1763,7 @@ class ShopsGuildsDialog(QDialog):
             self.selected_name = current_item.text()
         super().accept()
 
+
 # -----------------------
 # Character Dialog
 # -----------------------
@@ -1757,6 +1772,7 @@ class CharacterDialog(QDialog):
     """
     Dialog for adding or modifying a character.
     """
+
     def __init__(self, parent=None, character=None):
         """
         Initialize the CharacterDialog.
@@ -1793,6 +1809,7 @@ class CharacterDialog(QDialog):
         buttons_layout.addWidget(cancel_button)
 
         layout.addRow(buttons_layout)
+
 
 # -----------------------
 # Data Scraping and Update
@@ -1838,6 +1855,7 @@ def scrape_avitd_data():
     connection.commit()
     connection.close()
 
+
 def extract_next_update_time(text):
     """
     Extract the next update time from the text and calculate the next update timestamp.
@@ -1871,6 +1889,7 @@ def extract_next_update_time(text):
     next_update = next_update.replace(second=0, microsecond=0) + timedelta(minutes=1)
     return next_update
 
+
 def update_guild(cursor, name, location, next_update_time):
     """
     Update a single guild in the database.
@@ -1888,6 +1907,7 @@ def update_guild(cursor, name, location, next_update_time):
         WHERE Name=%s
     """, (col, row, next_update_time, name))
 
+
 def update_shop(cursor, name, location, next_update_time):
     """
     Update a single shop in the database.
@@ -1904,6 +1924,7 @@ def update_shop(cursor, name, location, next_update_time):
         SET `Column`=%s, `Row`=%s, next_update=%s 
         WHERE Name=%s
     """, (col, row, next_update_time, name))
+
 
 def update_guilds(cursor, soup, guilds_coordinates, next_update_time):
     """
@@ -1923,6 +1944,7 @@ def update_guilds(cursor, soup, guilds_coordinates, next_update_time):
         else:
             print(f"Guild '{name}' not found in the table.")
 
+
 def update_shops(cursor, soup, shops_coordinates, next_update_time):
     """
     Update the shops data in the database.
@@ -1940,6 +1962,7 @@ def update_shops(cursor, soup, shops_coordinates, next_update_time):
             update_shop(cursor, name, location, next_update_time)
         else:
             print(f"Shop '{name}' not found in the table.")
+
 
 # -----------------------
 # Main Entry Point
