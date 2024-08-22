@@ -52,7 +52,7 @@ try:
         QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
         QMessageBox
     )
-    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
+    from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
     from PyQt5.QtCore import QUrl, Qt
     from PyQt5.QtWebEngineWidgets import QWebEngineView
     import logging
@@ -85,7 +85,7 @@ except ModuleNotFoundError as e:
                 QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget,
                 QListWidgetItem, QMessageBox
             )
-            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen
+            from PyQt5.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon
             from PyQt5.QtCore import QUrl, Qt
             from PyQt5.QtWebEngineWidgets import QWebEngineView
             import logging
@@ -102,7 +102,10 @@ except ModuleNotFoundError as e:
 except Exception as e:
     print(f"Something broke and idk why...")
 
+# -----------------------
 # Directory setup
+# -----------------------
+
 def ensure_directories_exist():
     """
     Ensure that the required directories exist. If they don't, create them.
@@ -116,7 +119,10 @@ def ensure_directories_exist():
 # Call the function to ensure directories are present
 ensure_directories_exist()
 
+# -----------------------
 # Logging setup
+# -----------------------
+
 def setup_logging():
     """
     Setup logging configuration to save logs in the 'logs' directory with the filename 'rbc_{date}.log'.
@@ -133,7 +139,11 @@ def setup_logging():
 # Call the logging setup
 setup_logging()
 
-# Database connection constants
+# -----------------------
+# Database connection
+# -----------------------
+
+# Server information
 LOCAL_HOST = "127.0.0.1"
 REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
@@ -158,6 +168,7 @@ def connect_to_database():
         return connection
     except pymysql.MySQLError as err:
         logging.error("Connection to local MySQL instance failed: %s", err)
+        # Attempt to connect to the remote server
         try:
             connection = pymysql.connect(
                 host=REMOTE_HOST,
@@ -170,6 +181,10 @@ def connect_to_database():
         except pymysql.MySQLError as err:
             logging.error("Connection to remote MySQL instance failed: %s", err)
             return None
+
+# -----------------------
+# Load Data from Database
+# -----------------------
 
 def load_data():
     """
@@ -185,52 +200,95 @@ def load_data():
 
     cursor = connection.cursor()
 
-    cursor.execute("SELECT * FROM `columns`")
+    # Fetch columns
+    cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
     columns_data = cursor.fetchall()
-    columns = {name: coordinate for _, name, coordinate in columns_data}
+    columns = {name: int(coordinate) for name, coordinate in columns_data}
 
-    cursor.execute("SELECT * FROM `rows`")
+    # Fetch rows
+    cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
     rows_data = cursor.fetchall()
-    rows = {name: coordinate for _, name, coordinate in rows_data}
+    rows = {name: int(coordinate) for name, coordinate in rows_data}
 
+    # Fetch coordinates from banks table
     cursor.execute("SELECT `Column`, `Row` FROM banks")
     banks_data = cursor.fetchall()
-    banks_coordinates = [(columns[col] + 1, rows[row] + 1) for col, row in banks_data]
+    banks_coordinates = [
+        (columns.get(col) + 1 if columns.get(col) is not None else None,
+         rows.get(row) + 1 if rows.get(row) is not None else None)
+        for col, row in banks_data
+    ]
+    banks_coordinates = [(col, row) for col, row in banks_coordinates if col is not None and row is not None]
 
-    cursor.execute("SELECT * FROM taverns")
+    # Fetch taverns
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM taverns")
     taverns_data = cursor.fetchall()
-    taverns_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, col, row, name in taverns_data if columns.get(col) is not None and rows.get(row) is not None}
+    taverns_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in taverns_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-    cursor.execute("SELECT * FROM transits")
+    # Fetch transits
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM transits")
     transits_data = cursor.fetchall()
-    transits_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, col, row, name in transits_data if columns.get(col) is not None and rows.get(row) is not None}
+    transits_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in transits_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-    cursor.execute("SELECT * FROM userbuildings")
+    # Fetch user buildings
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM userbuildings")
     user_buildings_data = cursor.fetchall()
-    user_buildings_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row in user_buildings_data if columns.get(col) is not None and rows.get(row) is not None}
+    user_buildings_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in user_buildings_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-    cursor.execute("SELECT * FROM color_mappings")
+    # Fetch color mappings
+    cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
     color_mappings_data = cursor.fetchall()
-    color_mappings = {type_: QColor(color) for _, type_, color in color_mappings_data}
+    color_mappings = {type_: QColor(color) for type_, color in color_mappings_data}
 
-    cursor.execute("SELECT * FROM shops")
+    # Fetch shops
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM shops")
     shops_data = cursor.fetchall()
-    shops_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row, next_update in shops_data if columns.get(col) is not None and rows.get(row) is not None}
+    shops_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in shops_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-    cursor.execute("SELECT * FROM guilds")
+    # Fetch guilds
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM guilds")
     guilds_data = cursor.fetchall()
-    guilds_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row, next_update in guilds_data if columns.get(col) is not None and rows.get(row) is not None}
+    guilds_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in guilds_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-    cursor.execute("SELECT * FROM placesofinterest")
+    # Fetch places of interest
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM placesofinterest")
     places_of_interest_data = cursor.fetchall()
-    places_of_interest_coordinates = {name: (columns.get(col) + 1, rows.get(row) + 1) for _, name, col, row in places_of_interest_data if columns.get(col) is not None and rows.get(row) is not None}
+    places_of_interest_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in places_of_interest_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
     connection.close()
 
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
-# Ensure load_data() is called before initializing the CityMapApp
+# Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
+
+# -----------------------
+# CityMapApp Main Class
+# -----------------------
 
 class CityMapApp(QMainWindow):
     """
@@ -239,19 +297,23 @@ class CityMapApp(QMainWindow):
 
     def __init__(self):
         """
-        Initialize the CityMapApp.
+        Initialize the CityMapApp and its components.
         """
         super().__init__()
 
+        self.setWindowIcon(QIcon('favicon.ico'))
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
+
+        # Load the data
+        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates = load_data()
 
         self.zoom_level = 3
         self.minimap_size = 280
         self.column_start = 0
         self.row_start = 0
         self.destination = None
-        self.color_mappings = color_mappings
+        self.color_mappings = self.color_mappings
 
         # Initialize characters list and character_list widget early to avoid attribute errors
         self.characters = []
@@ -340,11 +402,11 @@ class CityMapApp(QMainWindow):
 
         self.combo_columns = QComboBox()
         self.combo_columns.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.combo_columns.addItems(columns.keys())
+        self.combo_columns.addItems(self.columns.keys())
 
         self.combo_rows = QComboBox()
         self.combo_rows.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.combo_rows.addItems(rows.keys())
+        self.combo_rows.addItems(self.rows.keys())
 
         go_button = QPushButton('Go')
         go_button.setFixedSize(25, 25)
@@ -428,6 +490,7 @@ class CityMapApp(QMainWindow):
 
         left_layout.addWidget(character_frame)
 
+        # Web engine view
         map_layout.addWidget(left_frame)
 
         # Frame for displaying the website
@@ -621,6 +684,10 @@ class CityMapApp(QMainWindow):
         self.character_list.takeItem(self.character_list.row(current_item))
         logging.debug(f"Character {name} deleted.")
 
+    # -----------------------
+    # Minimap Drawing and Update
+    # -----------------------
+
     def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations.
@@ -674,12 +741,12 @@ class CityMapApp(QMainWindow):
                 painter.setPen(QColor('white'))
                 painter.drawRect(x0, y0, block_size - border_size, block_size - border_size)
 
-                column_name = next((name for name, coord in columns.items() if coord == column_index), None)
-                row_name = next((name for name, coord in rows.items() if coord == row_index), None)
+                column_name = next((name for name, coord in self.columns.items() if coord == column_index), None)
+                row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index < min(columns.values()) or column_index > max(columns.values()) or row_index < min(
-                        rows.values()) or row_index > max(rows.values()):
+                if column_index < min(self.columns.values()) or column_index > max(self.columns.values()) or row_index < min(
+                        self.rows.values()) or row_index > max(self.rows.values()):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -699,31 +766,31 @@ class CityMapApp(QMainWindow):
                     painter.drawText(text_x, text_y, label_text)
 
         # Draw special locations
-        for (column_index, row_index) in banks_coordinates:
+        for (column_index, row_index) in self.banks_coordinates:
             draw_location(column_index, row_index, self.color_mappings["bank"], "Bank")
 
-        for name, (column_index, row_index) in taverns_coordinates.items():
+        for name, (column_index, row_index) in self.taverns_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["tavern"], name)
 
-        for name, (column_index, row_index) in transits_coordinates.items():
+        for name, (column_index, row_index) in self.transits_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["transit"], name)
 
-        for name, (column_index, row_index) in user_buildings_coordinates.items():
+        for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["user_building"], name)
 
-        for name, (column_index, row_index) in shops_coordinates.items():
+        for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
                 logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
-        for name, (column_index, row_index) in guilds_coordinates.items():
+        for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
                 logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
-        for name, (column_index, row_index) in places_of_interest_coordinates.items():
+        for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
@@ -818,7 +885,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, list(taverns_coordinates.values()))
+        return self.find_nearest_location(x, y, list(self.taverns_coordinates.values()))
 
     def find_nearest_bank(self, x, y):
         """
@@ -831,7 +898,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, banks_coordinates)
+        return self.find_nearest_location(x, y, self.banks_coordinates)
 
     def find_nearest_transit(self, x, y):
         """
@@ -844,7 +911,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, list(transits_coordinates.values()))
+        return self.find_nearest_location(x, y, list(self.transits_coordinates.values()))
 
     def set_destination(self):
         """
@@ -901,10 +968,10 @@ class CityMapApp(QMainWindow):
         """
         column_name = self.combo_columns.currentText()
         row_name = self.combo_rows.currentText()
-        if column_name in columns:
-            self.column_start = columns[column_name] - self.zoom_level // 2
-        if row_name in rows:
-            self.row_start = rows[row_name] - self.zoom_level // 2
+        if column_name in self.columns:
+            self.column_start = self.columns[column_name] - self.zoom_level // 2
+        if row_name in self.rows:
+            self.row_start = self.rows[row_name] - self.zoom_level // 2
         self.update_minimap()
 
     def mousePressEvent(self, event):
@@ -959,7 +1026,7 @@ class CityMapApp(QMainWindow):
         # Get details for nearest tavern
         if nearest_tavern:
             tavern_coords = nearest_tavern[0][1]
-            tavern_name = next(name for name, coords in taverns_coordinates.items() if coords == tavern_coords)
+            tavern_name = next(name for name, coords in self.taverns_coordinates.items() if coords == tavern_coords)
             tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
             tavern_intersection = self.get_intersection_name(tavern_coords)
             self.tavern_label.setText(f"{tavern_name} - {tavern_intersection} - AP: {tavern_ap_cost}")
@@ -974,7 +1041,7 @@ class CityMapApp(QMainWindow):
         # Get details for nearest transit
         if nearest_transit:
             transit_coords = nearest_transit[0][1]
-            transit_name = next(name for name, coords in transits_coordinates.items() if coords == transit_coords)
+            transit_name = next(name for name, coords in self.transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
             transit_intersection = self.get_intersection_name(transit_coords)
             self.transit_label.setText(f"{transit_name} - {transit_intersection} - AP: {transit_ap_cost}")
@@ -1007,7 +1074,7 @@ class CityMapApp(QMainWindow):
             column_name = "ECL"
         else:
             x = x if x % 2 != 0 else x - 1
-            column_name = next((name for name, coord in columns.items() if coord == x), "")
+            column_name = next((name for name, coord in self.columns.items() if coord == x), "")
 
         if y == 0:
             row_name = "NCL"
@@ -1015,7 +1082,7 @@ class CityMapApp(QMainWindow):
             row_name = "SCL"
         else:
             y = y if y % 2 != 0 else y - 1
-            row_name = next((name for name, coord in rows.items() if coord == y), "")
+            row_name = next((name for name, coord in self.rows.items() if coord == y), "")
 
         return f"{column_name} & {row_name}"
 
@@ -1035,6 +1102,11 @@ class CityMapApp(QMainWindow):
         msg.setWindowTitle("Coming Soon")
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec_()
+
+
+# -----------------------
+# Character Dialog
+# -----------------------
 
 class CharacterDialog(QDialog):
     """
@@ -1076,6 +1148,10 @@ class CharacterDialog(QDialog):
         buttons_layout.addWidget(cancel_button)
 
         layout.addRow(buttons_layout)
+
+# -----------------------
+# Data Scraping and Update
+# -----------------------
 
 def scrape_avitd_data():
     """
@@ -1184,13 +1260,14 @@ def update_shop(cursor, name, location, next_update_time):
         WHERE Name=%s
     """, (col, row, next_update_time, name))
 
-def update_guilds(cursor, soup, next_update_time):
+def update_guilds(cursor, soup, guilds_coordinates, next_update_time):
     """
     Update the guilds data in the database.
 
     Args:
         cursor (pymysql.cursors.Cursor): Database cursor.
         soup (BeautifulSoup): BeautifulSoup object containing the HTML data.
+        guilds_coordinates (dict): Dictionary of guild names and their coordinates.
         next_update_time (datetime): The next update timestamp.
     """
     for name in guilds_coordinates:
@@ -1201,13 +1278,15 @@ def update_guilds(cursor, soup, next_update_time):
         else:
             print(f"Guild '{name}' not found in the table.")
 
-def update_shops(cursor, soup, next_update_time):
+
+def update_shops(cursor, soup, shops_coordinates, next_update_time):
     """
     Update the shops data in the database.
 
     Args:
         cursor (pymysql.cursors.Cursor): Database cursor.
         soup (BeautifulSoup): BeautifulSoup object containing the HTML data.
+        shops_coordinates (dict): Dictionary of shop names and their coordinates.
         next_update_time (datetime): The next update timestamp.
     """
     for name in shops_coordinates:
@@ -1217,6 +1296,10 @@ def update_shops(cursor, soup, next_update_time):
             update_shop(cursor, name, location, next_update_time)
         else:
             print(f"Shop '{name}' not found in the table.")
+
+# -----------------------
+# Main Entry Point
+# -----------------------
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
