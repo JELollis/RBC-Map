@@ -312,6 +312,10 @@ class CityMapApp(QMainWindow):
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
 
+        # Apply saved theme settings
+        self.load_theme_settings()
+        self.apply_theme()
+
         # Create a QWebEngineProfile for handling cookies
         self.web_profile = QWebEngineProfile.defaultProfile()
 
@@ -355,6 +359,105 @@ class CityMapApp(QMainWindow):
         self.setup_console_logging()
         self.show()
         self.update_minimap()
+
+    # -----------------------
+    # Load and apply customized UI Theme
+    # -----------------------
+
+    def load_theme_settings(self):
+        """
+        Load the theme settings from a file or default to the color_mappings database entry.
+        """
+        settings_file = 'settings/theme_settings.pkl'
+
+        if os.path.exists(settings_file):
+            try:
+                with open(settings_file, 'rb') as f:
+                    self.color_mappings = pickle.load(f)
+            except (EOFError, pickle.UnpicklingError) as e:
+                logging.error(f"Failed to load theme settings from file: {e}")
+                self.color_mappings = {}
+        else:
+            # Fallback to the database color_mappings
+            connection = connect_to_database()
+            if connection:
+                try:
+                    cursor = connection.cursor()
+                    cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
+                    color_mappings_data = cursor.fetchall()
+                    self.color_mappings = {type_: QColor(color) for type_, color in color_mappings_data}
+                except pymysql.MySQLError as e:
+                    logging.error(f"Failed to load color mappings from database: {e}")
+                    self.color_mappings = {}
+                finally:
+                    connection.close()
+            else:
+                self.color_mappings = {}  # Default to an empty dict if no database entry is found
+
+    def save_theme_settings(self):
+        """
+        Save the theme settings to a file.
+        """
+        settings_file = 'settings/theme_settings.pkl'
+        with open(settings_file, 'wb') as f:
+            pickle.dump(self.color_mappings, f)
+
+    def apply_theme(self):
+        """
+        Apply the theme settings to the application.
+        """
+        # Apply background color
+        background_color = self.color_mappings.get('background', QColor('white')).name()
+
+        # Apply text color
+        text_color = self.color_mappings.get('text_color', QColor('black')).name()
+
+        # Apply button color
+        button_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
+
+        # Apply styles to the entire application
+        self.setStyleSheet(
+            f"""
+            QWidget {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QPushButton {{
+                background-color: {button_color};
+                color: {text_color};
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            QMenuBar {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QMenuBar::item {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QMenu {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            QMenu::item {{
+                background-color: {background_color};
+                color: {text_color};
+            }}
+            """
+        )
+
+    def change_theme(self):
+        """
+        Open the theme customization dialog and apply the selected theme.
+        """
+        dialog = ThemeCustomizationDialog(self, color_mappings=self.color_mappings)
+        if dialog.exec():
+            self.color_mappings = dialog.color_mappings
+            self.apply_theme()
+            self.save_theme_settings()
+
 
     # -----------------------
     # Cookie Handling
@@ -900,11 +1003,19 @@ class CityMapApp(QMainWindow):
     # Web View Handling
     # -----------------------
 
-    def on_webview_load_finished(self):
+    def on_webview_load_finished(self, success):
         """
         Handle the event when the webview finishes loading.
         """
-        self.website_frame.page().toHtml(self.process_html)
+        if not success:
+            logging.error("Failed to load the webpage.")
+            # You might want to display an error message to the user
+            QMessageBox.critical(self, "Error",
+                                 "Failed to load the webpage. Please check your network connection or try again later.")
+        else:
+            logging.info("Webpage loaded successfully.")
+            # Process the HTML if needed
+            self.website_frame.page().toHtml(self.process_html)
 
     def process_html(self, html):
         """
@@ -1358,14 +1469,6 @@ class CityMapApp(QMainWindow):
     # Menu Actions
     # -----------------------
 
-    def change_theme(self):
-        """
-        Change the application's theme by selecting a new background color.
-        """
-        color = QColorDialog.getColor()
-        if color.isValid():
-            self.setStyleSheet(f"background-color: {color.name()};")
-
     def open_discord(self):
         """
         Open the Discord link in the default web browser.
@@ -1513,7 +1616,7 @@ class ThemeCustomizationDialog(QDialog):
         """
         layout = QGridLayout(self.ui_tab)
 
-        ui_elements = ['default', 'edge', 'text_color']
+        ui_elements = ['background', 'text_color', 'button_color']
         for index, element in enumerate(ui_elements):
             color_square = QLabel()
             color_square.setFixedSize(20, 20)
@@ -1521,14 +1624,12 @@ class ThemeCustomizationDialog(QDialog):
             pixmap.fill(self.color_mappings.get(element, QColor('white')))
             color_square.setPixmap(pixmap)
 
-            combo_box = QComboBox()
-            combo_box.addItems(self.get_color_names())
-            combo_box.setCurrentText(self.color_mappings[element].name())
-            combo_box.currentTextChanged.connect(lambda _, name=element: self.update_color_mapping(name))
+            color_button = QPushButton('Change Color')
+            color_button.clicked.connect(lambda _, el=element, sq=color_square: self.change_color(el, sq))
 
-            layout.addWidget(color_square, index, 0)
-            layout.addWidget(QLabel(f"{element.capitalize()} Color:"), index, 1)
-            layout.addWidget(combo_box, index, 2)
+            layout.addWidget(QLabel(f"{element.replace('_', ' ').capitalize()}:"), index, 0)
+            layout.addWidget(color_square, index, 1)
+            layout.addWidget(color_button, index, 2)
 
     def setup_minimap_tab(self):
         """
@@ -1544,39 +1645,44 @@ class ThemeCustomizationDialog(QDialog):
             pixmap.fill(self.color_mappings.get(element, QColor('white')))
             color_square.setPixmap(pixmap)
 
-            combo_box = QComboBox()
-            combo_box.addItems(self.get_color_names())
-            combo_box.setCurrentText(self.color_mappings[element].name())
-            combo_box.currentTextChanged.connect(lambda _, name=element: self.update_color_mapping(name))
+            color_button = QPushButton('Change Color')
+            color_button.clicked.connect(lambda _, el=element, sq=color_square: self.change_color(el, sq))
 
-            layout.addWidget(color_square, index, 0)
-            layout.addWidget(QLabel(f"{element.capitalize()} Color:"), index, 1)
-            layout.addWidget(combo_box, index, 2)
+            layout.addWidget(QLabel(f"{element.capitalize()}:"), index, 0)
+            layout.addWidget(color_square, index, 1)
+            layout.addWidget(color_button, index, 2)
 
-    def update_color_mapping(self, element_name):
+    def change_color(self, element_name, color_square):
         """
-        Update the color mapping for a specific element.
+        Open a color dialog to change the color of the specified element.
 
         Args:
             element_name (str): The name of the element.
+            color_square (QLabel): The QLabel that shows the current color.
         """
-        selected_color = QColor(self.sender().currentText())
-        self.color_mappings[element_name] = selected_color
+        color = QColorDialog.getColor()
+        if color.isValid():
+            self.color_mappings[element_name] = color
+            pixmap = QPixmap(20, 20)
+            pixmap.fill(color)
+            color_square.setPixmap(pixmap)
 
-        sender_index = self.sender().parent().layout().indexOf(self.sender())
-        color_square = self.sender().parent().layout().itemAt(sender_index - 2).widget()
-        pixmap = QPixmap(20, 20)
-        pixmap.fill(selected_color)
-        color_square.setPixmap(pixmap)
-
-    def get_color_names(self):
+    def apply_theme(self):
         """
-        Get a list of all available color names.
-
-        Returns:
-            list: List of color names.
+        Apply the theme settings to the application.
         """
-        return QColor.colorNames()
+        # Apply background color
+        background_color = self.color_mappings.get('background', QColor('white'))
+        self.setStyleSheet(f"background-color: {background_color.name()};")
+
+        # Apply text and button colors
+        text_color = self.color_mappings.get('text_color', QColor('black')).name()
+        button_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
+        self.setStyleSheet(
+            f"QWidget {{ background-color: {background_color.name()}; }}"
+            f"QPushButton {{ background-color: {button_color}; color: {text_color}; }}"
+            f"QLabel {{ color: {text_color}; }}"
+        )
 
 # -----------------------
 # Shops/Guilds Dialog
