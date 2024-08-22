@@ -48,7 +48,7 @@ required_modules = [
     'pickle', 'pymysql', 'requests', 're', 'time', 'sqlite3',
     'webbrowser', 'datetime', 'bs4', 'PySide6.QtWidgets',
     'PySide6.QtGui', 'PySide6.QtCore', 'PySide6.QtWebEngineWidgets',
-    'PySide6.QtWebChannel'
+    'PySide6.QtWebChannel', 'PySide6.QtNetwork'
 ]
 
 
@@ -96,10 +96,11 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
-from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation
+from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QDateTime
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
+from PySide6.QtNetwork import QNetworkCookie
 from PySide6.QtCore import Slot as pyqtSlot
 
 # -----------------------
@@ -287,6 +288,12 @@ def load_data():
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 # -----------------------
+# Cookie Storage
+# -----------------------
+
+COOKIE_FILE_PATH = 'sessions/cookies.pkl'
+
+# -----------------------
 # CityMapApp Main Class
 # -----------------------
 
@@ -314,12 +321,13 @@ class CityMapApp(QMainWindow):
         self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.ForcePersistentCookies)
         self.web_profile.setPersistentStoragePath(cookie_storage_path)
 
-        # Set up cookie logging
-        self.setup_cookie_logging()
+        # Set up cookie handling and logging
+        self.setup_cookie_handling()
 
         # Load the data
         self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates = load_data()
 
+        # Set up the UI components
         self.zoom_level = 3
         self.minimap_size = 280
         self.column_start = 0
@@ -341,27 +349,112 @@ class CityMapApp(QMainWindow):
                 # Exit if no characters are added
                 sys.exit("No characters added. Exiting the application.")
 
+        self.load_destination()
         # Now continue initializing the rest of the UI components
         self.setup_ui()
         self.setup_console_logging()
         self.show()
         self.update_minimap()
 
-    def setup_cookie_logging(self):
-        """
-        Set up logging for cookies using the cookieAdded signal.
-        """
-        cookie_store = self.web_profile.cookieStore()
-        cookie_store.cookieAdded.connect(self.log_cookie)
+    # -----------------------
+    # Cookie Handling
+    # -----------------------
 
-    def log_cookie(self, cookie):
+    def setup_cookie_handling(self):
         """
-        Log a single cookie when it is added.
+        Set up cookie handling including loading and saving cookies.
+        """
+        self.cookie_store = self.web_profile.cookieStore()
+        self.cookie_store.cookieAdded.connect(self.on_cookie_added)
+        self.load_cookies()
 
-        Args:
-            cookie (QNetworkCookie): The cookie object being added.
+    def load_cookies(self):
+        """
+        Load cookies from a file if available.
+        """
+        if os.path.exists(COOKIE_FILE_PATH):
+            try:
+                with open(COOKIE_FILE_PATH, 'rb') as f:
+                    cookies_data = pickle.load(f)
+                    for cookie_data in cookies_data:
+                        cookie = self.deserialize_cookie(cookie_data)
+                        self.cookie_store.setCookie(cookie, QUrl("https://quiz.ravenblack.net"))
+                    logging.info("Cookies loaded from file.")
+            except (EOFError, pickle.UnpicklingError):
+                logging.warning("Failed to load cookies - file might be empty or corrupt.")
+        else:
+            logging.info("No cookies file found. Creating a new one.")
+
+    def on_cookie_added(self, cookie):
+        """
+        Handle the event when a new cookie is added.
         """
         logging.debug(f"Cookie added: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
+        self.save_cookie_to_file(cookie)
+
+    def save_cookie_to_file(self, cookie):
+        """
+        Save the cookies to a file.
+        """
+        cookies = []
+        if os.path.exists(COOKIE_FILE_PATH):
+            try:
+                with open(COOKIE_FILE_PATH, 'rb') as f:
+                    cookies = pickle.load(f)
+            except (EOFError, pickle.UnpicklingError):
+                logging.warning("Failed to load existing cookies - creating a new list.")
+
+        cookies.append(self.serialize_cookie(cookie))
+        with open(COOKIE_FILE_PATH, 'wb') as f:
+            pickle.dump(cookies, f)
+            logging.debug("Cookies saved to file.")
+
+    def serialize_cookie(self, cookie):
+        """
+        Convert a QNetworkCookie to a serializable dictionary.
+
+        Args:
+            cookie (QNetworkCookie): The cookie to serialize.
+
+        Returns:
+            dict: The serialized cookie data.
+        """
+        return {
+            'name': cookie.name().data().decode('utf-8'),
+            'value': cookie.value().data().decode('utf-8'),
+            'domain': cookie.domain(),
+            'path': cookie.path(),
+            'expiry': cookie.expirationDate().toString() if cookie.isSessionCookie() is False else None,
+            'secure': cookie.isSecure(),
+            'httponly': cookie.isHttpOnly(),
+        }
+
+    def deserialize_cookie(self, cookie_data):
+        """
+        Convert a serialized dictionary back to a QNetworkCookie.
+
+        Args:
+            cookie_data (dict): The serialized cookie data.
+
+        Returns:
+            QNetworkCookie: The deserialized cookie.
+        """
+        cookie = QNetworkCookie(
+            name=cookie_data['name'].encode('utf-8'),
+            value=cookie_data['value'].encode('utf-8')
+        )
+        cookie.setDomain(cookie_data['domain'])
+        cookie.setPath(cookie_data['path'])
+        if cookie_data['expiry']:
+            cookie.setExpirationDate(QDateTime.fromString(cookie_data['expiry']))
+        cookie.setSecure(cookie_data['secure'])
+        cookie.setHttpOnly(cookie_data['httponly'])
+
+        return cookie
+
+    # -----------------------
+    # CityMapApp UI Set Up
+    # -----------------------
 
     def setup_ui(self):
         """
@@ -609,6 +702,10 @@ class CityMapApp(QMainWindow):
         """
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
+    # -----------------------
+    # Error Logging
+    # -----------------------
+
     def setup_console_logging(self):
         """
         Setup console logging within the web engine view.
@@ -644,25 +741,6 @@ class CityMapApp(QMainWindow):
         """
         print(f"Console message: {message}")
         logging.debug(f"Console message: {message}")
-
-    # -----------------------
-    # Web View Handling
-    # -----------------------
-
-    def on_webview_load_finished(self):
-        """
-        Handle the event when the webview finishes loading.
-        """
-        if not self.webview_loaded:
-            self.webview_loaded = True
-            self.inject_console_logging()
-            self.website_frame.page().toHtml(self.process_html)
-
-    def refresh_webview(self):
-        """
-        Refresh the webview content.
-        """
-        self.website_frame.reload()
 
     # -----------------------
     # Menu Control Items
@@ -712,7 +790,6 @@ class CityMapApp(QMainWindow):
         """
         try:
             os.makedirs('sessions', exist_ok=True)
-
             with open('sessions/characters.pkl', 'wb') as f:
                 pickle.dump(self.characters, f)
                 logging.debug("Characters saved successfully to file.")
@@ -769,46 +846,6 @@ class CityMapApp(QMainWindow):
         """
         self.website_frame.page().runJavaScript(login_script)
 
-    def process_html(self, html):
-        """
-        Process the HTML content of the webview to extract coordinates and update the minimap.
-
-        Args:
-            html (str): HTML content as a string.
-        """
-        x_coord, y_coord = self.extract_coordinates_from_html(html)
-        if x_coord is not None and y_coord is not None:
-            self.column_start = x_coord
-            self.row_start = y_coord
-            self.update_minimap()
-
-    def extract_coordinates_from_html(self, html):
-        """
-        Extract coordinates from the HTML content.
-
-        Args:
-            html (str): HTML content as a string.
-
-        Returns:
-            tuple: x and y coordinates.
-        """
-        soup = BeautifulSoup(html, 'html.parser')
-        x_input = soup.find('input', {'name': 'x'})
-        y_input = soup.find('input', {'name': 'y'})
-        if x_input and y_input:
-            return int(x_input['value']), int(y_input['value'])
-
-        current_location_td = soup.find('td', {'class': 'street', 'style': 'border: solid 1px white;'})
-
-        if current_location_td:
-            form = current_location_td.find('form')
-            if form:
-                x_value = int(form.find('input', {'name': 'x'})['value'])
-                y_value = int(form.find('input', {'name': 'y'})['value'])
-                return x_value, y_value
-
-        return None, None
-
     def add_new_character(self):
         """
         Add a new character.
@@ -858,6 +895,62 @@ class CityMapApp(QMainWindow):
         self.save_characters()
         self.character_list.takeItem(self.character_list.row(current_item))
         logging.debug(f"Character {name} deleted.")
+
+    # -----------------------
+    # Web View Handling
+    # -----------------------
+
+    def on_webview_load_finished(self):
+        """
+        Handle the event when the webview finishes loading.
+        """
+        self.website_frame.page().toHtml(self.process_html)
+
+    def process_html(self, html):
+        """
+        Process the HTML content of the webview to extract coordinates and update the minimap.
+
+        Args:
+            html (str): HTML content as a string.
+        """
+        x_coord, y_coord = self.extract_coordinates_from_html(html)
+        if x_coord is not None and y_coord is not None:
+            self.column_start = x_coord
+            self.row_start = y_coord
+            self.update_minimap()
+
+    def extract_coordinates_from_html(self, html):
+        """
+        Extract coordinates from the HTML content.
+
+        Args:
+            html (str): HTML content as a string.
+
+        Returns:
+            tuple: x and y coordinates.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        x_input = soup.find('input', {'name': 'x'})
+        y_input = soup.find('input', {'name': 'y'})
+        if x_input and y_input:
+            return int(x_input['value']), int(y_input['value'])
+
+        current_location_td = soup.find('td', {'class': 'street', 'style': 'border: solid 1px white;'})
+
+        if current_location_td:
+            form = current_location_td.find('form')
+            if form:
+                x_value = int(form.find('input', {'name': 'x'})['value'])
+                y_value = int(form.find('input', {'name': 'y'})['value'])
+                return x_value, y_value
+
+        return None, None
+
+    def refresh_webview(self):
+        """
+        Refresh the webview content.
+        """
+        self.website_frame.reload()
 
     # -----------------------
     # Minimap Drawing and Update

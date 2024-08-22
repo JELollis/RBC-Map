@@ -8,3 +8,5 @@ testing/sessions/users.pkl
 /logs
 /sessions
 testing/cookies.pkl
+/testing/sessions
+qodana.yaml
