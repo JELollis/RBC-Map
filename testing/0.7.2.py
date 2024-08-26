@@ -96,12 +96,14 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
-from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QDateTime, QSize, QTimer
+from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
+from PySide6.QtCore import Slot as pyqtSlot
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
-from PySide6.QtCore import Slot as pyqtSlot
+import sqlite3
+
 
 # -----------------------
 # Directory setup
@@ -117,8 +119,10 @@ def ensure_directories_exist():
             os.makedirs(directory)
             print(f"Created directory: {directory}")
 
+
 # Call the function to ensure directories are present
 ensure_directories_exist()
+
 
 # -----------------------
 # Logging setup
@@ -137,6 +141,7 @@ def setup_logging():
     )
     print(f"Logging to: {log_filename}")
 
+
 # Call the logging setup
 setup_logging()
 
@@ -150,6 +155,7 @@ REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
 PASSWORD = "RBC_Community_Map"
 DATABASE = "city_map"
+
 
 def connect_to_database():
     """
@@ -183,6 +189,7 @@ def connect_to_database():
             logging.error("Connection to remote MySQL instance failed: %s", err)
             return None
 
+
 # -----------------------
 # Load Data from Database
 # -----------------------
@@ -192,8 +199,7 @@ def load_data():
     Load data from the database and return it as various dictionaries and lists.
 
     Returns:
-        tuple: Contains columns, rows, banks_coordinates, taverns_coordinates,
-               transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates
+        tuple: Contains columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
     """
     connection = connect_to_database()
     if not connection:
@@ -211,15 +217,14 @@ def load_data():
     rows_data = cursor.fetchall()
     rows = {name: int(coordinate) for name, coordinate in rows_data}
 
-    # Fetch coordinates from banks table
+    # Fetch coordinates from banks table with column and row names
     cursor.execute("SELECT `Column`, `Row` FROM banks")
     banks_data = cursor.fetchall()
     banks_coordinates = [
-        (columns.get(col) + 1 if columns.get(col) is not None else None,
-         rows.get(row) + 1 if rows.get(row) is not None else None)
+        (columns.get(col), rows.get(row), col, row)
         for col, row in banks_data
+        if columns.get(col) is not None and rows.get(row) is not None
     ]
-    banks_coordinates = [(col, row) for col, row in banks_coordinates if col is not None and row is not None]
 
     # Fetch taverns
     cursor.execute("SELECT `Name`, `Column`, `Row` FROM taverns")
@@ -284,14 +289,102 @@ def load_data():
 
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
+
 # Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 # -----------------------
-# Cookie Storage
+# SQLite Cookie Storage Setup
 # -----------------------
 
-COOKIE_FILE_PATH = 'sessions/cookies.pkl'
+COOKIE_DB_PATH = './sessions/cookies.db'
+
+
+def initialize_cookie_db():
+    """
+    Initialize the SQLite database for storing cookies.
+    """
+    connection = sqlite3.connect(COOKIE_DB_PATH)
+    cursor = connection.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS cookies (
+            name TEXT,
+            value TEXT,
+            domain TEXT,
+            path TEXT,
+            expiry TEXT,
+            secure INTEGER,
+            httponly INTEGER
+        )
+    ''')
+    connection.commit()
+    connection.close()
+
+
+def save_cookie_to_db(cookie):
+    """
+    Save a single cookie to the SQLite database.
+
+    Args:
+        cookie (QNetworkCookie): The cookie to save.
+    """
+    connection = sqlite3.connect(COOKIE_DB_PATH)
+    cursor = connection.cursor()
+    cursor.execute('''
+        INSERT INTO cookies (name, value, domain, path, expiry, secure, httponly)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        cookie.name().data().decode('utf-8'),
+        cookie.value().data().decode('utf-8'),
+        cookie.domain(),
+        cookie.path(),
+        cookie.expirationDate().toString() if not cookie.isSessionCookie() else None,
+        int(cookie.isSecure()),
+        int(cookie.isHttpOnly())
+    ))
+    connection.commit()
+    connection.close()
+
+
+def load_cookies_from_db():
+    """
+    Load all cookies from the SQLite database.
+
+    Returns:
+        list: A list of QNetworkCookie objects.
+    """
+    connection = sqlite3.connect(COOKIE_DB_PATH)
+    cursor = connection.cursor()
+    cursor.execute('SELECT name, value, domain, path, expiry, secure, httponly FROM cookies')
+    rows = cursor.fetchall()
+    cookies = []
+    for row in rows:
+        cookie = QNetworkCookie(
+            name=row[0].encode('utf-8'),
+            value=row[1].encode('utf-8')
+        )
+        cookie.setDomain(row[2])
+        cookie.setPath(row[3])
+
+        if row[4]:
+            cookie.setExpirationDate(QDateTime.fromString(row[4]))
+        cookie.setSecure(bool(row[5]))
+        cookie.setHttpOnly(bool(row[6]))
+        cookies.append(cookie)
+    connection.close()
+    return cookies
+
+
+def clear_cookie_db():
+    """
+    Clear all cookies from the SQLite database.
+    """
+    connection = sqlite3.connect(COOKIE_DB_PATH)
+    cursor = connection.cursor()
+    cursor.execute('DELETE FROM cookies')
+    connection.commit()
+    connection.close()
+
 
 # -----------------------
 # CityMapApp Main Class
@@ -307,6 +400,8 @@ class CityMapApp(QMainWindow):
         Initialize the CityMapApp and its components.
         """
         super().__init__()
+
+        self.scraper = AVITDScraper()
 
         self.setWindowIcon(QIcon('favicon.ico'))
         self.setWindowTitle('RBC City Map')
@@ -352,6 +447,8 @@ class CityMapApp(QMainWindow):
             if not self.characters:
                 # Exit if no characters are added
                 sys.exit("No characters added. Exiting the application.")
+
+        self.load_last_active_character()  # Load the last active character
 
         self.load_destination()
         # Now continue initializing the rest of the UI components
@@ -458,7 +555,6 @@ class CityMapApp(QMainWindow):
             self.apply_theme()
             self.save_theme_settings()
 
-
     # -----------------------
     # Cookie Handling
     # -----------------------
@@ -467,93 +563,47 @@ class CityMapApp(QMainWindow):
         """
         Set up cookie handling including loading and saving cookies.
         """
+        initialize_cookie_db()
         self.cookie_store = self.web_profile.cookieStore()
         self.cookie_store.cookieAdded.connect(self.on_cookie_added)
         self.load_cookies()
 
     def load_cookies(self):
         """
-        Load cookies from a file if available.
+        Load cookies from the SQLite database.
         """
-        if os.path.exists(COOKIE_FILE_PATH):
-            try:
-                with open(COOKIE_FILE_PATH, 'rb') as f:
-                    cookies_data = pickle.load(f)
-                    for cookie_data in cookies_data:
-                        cookie = self.deserialize_cookie(cookie_data)
-                        self.cookie_store.setCookie(cookie, QUrl("https://quiz.ravenblack.net"))
-                    logging.info("Cookies loaded from file.")
-            except (EOFError, pickle.UnpicklingError):
-                logging.warning("Failed to load cookies - file might be empty or corrupt.")
-        else:
-            logging.info("No cookies file found. Creating a new one.")
+        cookies = load_cookies_from_db()
+        for cookie in cookies:
+            self.cookie_store.setCookie(cookie, QUrl("https://quiz.ravenblack.net"))
+        logging.info("Cookies loaded from SQLite database.")
 
     def on_cookie_added(self, cookie):
         """
-        Handle the event when a new cookie is added.
+        Handle the event when a new cookie is added, ensuring no duplicates are stored.
         """
-        logging.debug(f"Cookie added: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
-        self.save_cookie_to_file(cookie)
+        # Prevent adding duplicate cookies
+        connection = sqlite3.connect(COOKIE_DB_PATH)
+        cursor = connection.cursor()
 
-    def save_cookie_to_file(self, cookie):
-        """
-        Save the cookies to a file.
-        """
-        cookies = []
-        if os.path.exists(COOKIE_FILE_PATH):
-            try:
-                with open(COOKIE_FILE_PATH, 'rb') as f:
-                    cookies = pickle.load(f)
-            except (EOFError, pickle.UnpicklingError):
-                logging.warning("Failed to load existing cookies - creating a new list.")
+        cursor.execute('''
+            SELECT COUNT(*) FROM cookies 
+            WHERE name = ? AND domain = ? AND path = ?
+        ''', (
+            cookie.name().data().decode('utf-8'),
+            cookie.domain(),
+            cookie.path()
+        ))
+        result = cursor.fetchone()
 
-        cookies.append(self.serialize_cookie(cookie))
-        with open(COOKIE_FILE_PATH, 'wb') as f:
-            pickle.dump(cookies, f)
-            logging.debug("Cookies saved to file.")
+        if result[0] == 0:
+            save_cookie_to_db(cookie)
+            logging.debug(
+                f"Cookie added: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
+        else:
+            logging.debug(
+                f"Duplicate cookie ignored: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
 
-    def serialize_cookie(self, cookie):
-        """
-        Convert a QNetworkCookie to a serializable dictionary.
-
-        Args:
-            cookie (QNetworkCookie): The cookie to serialize.
-
-        Returns:
-            dict: The serialized cookie data.
-        """
-        return {
-            'name': cookie.name().data().decode('utf-8'),
-            'value': cookie.value().data().decode('utf-8'),
-            'domain': cookie.domain(),
-            'path': cookie.path(),
-            'expiry': cookie.expirationDate().toString() if cookie.isSessionCookie() is False else None,
-            'secure': cookie.isSecure(),
-            'httponly': cookie.isHttpOnly(),
-        }
-
-    def deserialize_cookie(self, cookie_data):
-        """
-        Convert a serialized dictionary back to a QNetworkCookie.
-
-        Args:
-            cookie_data (dict): The serialized cookie data.
-
-        Returns:
-            QNetworkCookie: The deserialized cookie.
-        """
-        cookie = QNetworkCookie(
-            name=cookie_data['name'].encode('utf-8'),
-            value=cookie_data['value'].encode('utf-8')
-        )
-        cookie.setDomain(cookie_data['domain'])
-        cookie.setPath(cookie_data['path'])
-        if cookie_data['expiry']:
-            cookie.setExpirationDate(QDateTime.fromString(cookie_data['expiry']))
-        cookie.setSecure(cookie_data['secure'])
-        cookie.setHttpOnly(cookie_data['httponly'])
-
-        return cookie
+        connection.close()
 
     # -----------------------
     # CityMapApp UI Set Up
@@ -583,31 +633,31 @@ class CityMapApp(QMainWindow):
         # Load images for back, forward, and refresh buttons
         back_button = QPushButton()
         back_button.setIcon(QIcon('./images/back.png'))
-        back_button.setIconSize(QSize(50, 50))
-        back_button.setFixedSize(50, 50)
+        back_button.setIconSize(QSize(30, 30))
+        back_button.setFixedSize(30, 30)
         back_button.setStyleSheet("background-color: transparent; border: none;")
         back_button.clicked.connect(self.website_frame.back)
         self.browser_controls_layout.addWidget(back_button)
 
         forward_button = QPushButton()
         forward_button.setIcon(QIcon('./images/forward.png'))
-        forward_button.setIconSize(QSize(50, 50))
-        forward_button.setFixedSize(50, 50)
+        forward_button.setIconSize(QSize(30, 30))
+        forward_button.setFixedSize(30, 30)
         forward_button.setStyleSheet("background-color: transparent; border: none;")
         forward_button.clicked.connect(self.website_frame.forward)
         self.browser_controls_layout.addWidget(forward_button)
 
         refresh_button = QPushButton()
         refresh_button.setIcon(QIcon('./images/refresh.png'))
-        refresh_button.setIconSize(QSize(50, 50))
-        refresh_button.setFixedSize(50, 50)
+        refresh_button.setIconSize(QSize(30, 30))
+        refresh_button.setFixedSize(30, 30)
         refresh_button.setStyleSheet("background-color: transparent; border: none;")
         refresh_button.clicked.connect(self.website_frame.reload)
         self.browser_controls_layout.addWidget(refresh_button)
 
         # Set spacing between buttons to make them closer together
         self.browser_controls_layout.setSpacing(5)
-        self.browser_controls_layout.setContentsMargins(5, 5, 5, 5)
+        self.browser_controls_layout.addStretch(1)
 
         # Create a container widget for the webview and controls
         webview_container = QWidget()
@@ -717,7 +767,7 @@ class CityMapApp(QMainWindow):
 
         set_destination_button = QPushButton('Set Destination')
         set_destination_button.setFixedSize(button_size, 25)
-        set_destination_button.clicked.connect(self.set_destination)
+        set_destination_button.clicked.connect(self.open_set_destination_dialog)
         zoom_layout.addWidget(set_destination_button)
 
         left_layout.addLayout(zoom_layout)
@@ -855,9 +905,9 @@ class CityMapApp(QMainWindow):
         """
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
-    # -----------------------
-    # Error Logging
-    # -----------------------
+        # -----------------------
+        # Error Logging
+        # -----------------------
 
     def setup_console_logging(self):
         """
@@ -872,16 +922,16 @@ class CityMapApp(QMainWindow):
         Inject JavaScript into the web page to capture console logs and send them to PyQt.
         """
         script = """
-            (function() {
-                var console_log = console.log;
-                console.log = function(message) {
-                    console_log(message);
-                    if (typeof qtHandler !== 'undefined' && qtHandler.handleConsoleMessage) {
-                        qtHandler.handleConsoleMessage(message);
-                    }
-                };
-            })();
-        """
+                    (function() {
+                        var console_log = console.log;
+                        console.log = function(message) {
+                            console_log(message);
+                            if (typeof qtHandler !== 'undefined' && qtHandler.handleConsoleMessage) {
+                                qtHandler.handleConsoleMessage(message);
+                            }
+                        };
+                    })();
+                """
         self.website_frame.page().runJavaScript(script)
 
     @pyqtSlot(str)
@@ -903,7 +953,8 @@ class CityMapApp(QMainWindow):
         """
         Save the current webpage as a screenshot.
         """
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "", "PNG Files (*.png);;All Files (*)")
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "",
+                                                   "PNG Files (*.png);;All Files (*)")
         if file_name:
             self.website_frame.grab().save(file_name)
 
@@ -961,8 +1012,9 @@ class CityMapApp(QMainWindow):
         if selected_character:
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
+            self.save_last_active_character()  # Save the selected character as the last active one
             self.logout_current_character()
-          # Delay login to allow logout to complete
+            # Delay login to allow logout to complete
             self.login_selected_character()
 
     def logout_current_character(self):
@@ -988,15 +1040,15 @@ class CityMapApp(QMainWindow):
         password = self.selected_character['password']
 
         login_script = f"""
-            var loginForm = document.querySelector('form');
-            if (loginForm) {{
-                loginForm.iam.value = '{name}';
-                loginForm.passwd.value = '{password}';
-                loginForm.submit();
-            }} else {{
-                console.error('Login form not found.');
-            }}
-        """
+                    var loginForm = document.querySelector('form');
+                    if (loginForm) {{
+                        loginForm.iam.value = '{name}';
+                        loginForm.passwd.value = '{password}';
+                        loginForm.submit();
+                    }} else {{
+                        console.error('Login form not found.');
+                    }}
+                """
         self.website_frame.page().runJavaScript(login_script)
 
     def add_new_character(self):
@@ -1048,6 +1100,31 @@ class CityMapApp(QMainWindow):
         self.save_characters()
         self.character_list.takeItem(self.character_list.row(current_item))
         logging.debug(f"Character {name} deleted.")
+
+    def save_last_active_character(self):
+        """
+        Save the last active character to a file.
+        """
+        try:
+            with open('sessions/last_active_character.pkl', 'wb') as f:
+                pickle.dump(self.selected_character, f)
+                logging.debug("Last active character saved successfully.")
+        except Exception as e:
+            logging.error(f"Failed to save last active character: {e}")
+
+    def load_last_active_character(self):
+        """
+        Load the last active character from a file and log in automatically.
+        """
+        try:
+            with open('sessions/last_active_character.pkl', 'rb') as f:
+                self.selected_character = pickle.load(f)
+                logging.debug(f"Last active character loaded: {self.selected_character['name']}")
+                self.login_selected_character()
+        except FileNotFoundError:
+            logging.warning("Last active character file not found. No character loaded.")
+        except Exception as e:
+            logging.error(f"Failed to load last active character: {e}")
 
     # -----------------------
     # Web View Handling
@@ -1170,12 +1247,13 @@ class CityMapApp(QMainWindow):
                 painter.setPen(QColor('white'))
                 painter.drawRect(x0, y0, block_size - border_size, block_size - border_size)
 
-                column_name = next((name for name, coord in columns.items() if coord == column_index), None)
-                row_name = next((name for name, coord in rows.items() if coord == row_index), None)
+                column_name = next((name for name, coord in self.columns.items() if coord == column_index), None)
+                row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index < min(columns.values()) or column_index > max(columns.values()) or row_index < min(
-                        rows.values()) or row_index > max(rows.values()):
+                if column_index < min(self.columns.values()) or column_index > max(
+                        self.columns.values()) or row_index < min(
+                    self.rows.values()) or row_index > max(self.rows.values()):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -1195,31 +1273,32 @@ class CityMapApp(QMainWindow):
                     painter.drawText(text_x, text_y, label_text)
 
         # Draw special locations
-        for (column_index, row_index) in banks_coordinates:
-            draw_location(column_index, row_index, self.color_mappings["bank"], "Bank")
+        for (col, row, col_name, row_name) in self.banks_coordinates:
+            if col_name and row_name:
+                draw_location(col + 1, row + 1, self.color_mappings["bank"], f"{col_name}[{row_name}]")
 
-        for name, (column_index, row_index) in taverns_coordinates.items():
+        for name, (column_index, row_index) in self.taverns_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["tavern"], name)
 
-        for name, (column_index, row_index) in transits_coordinates.items():
+        for name, (column_index, row_index) in self.transits_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["transit"], name)
 
-        for name, (column_index, row_index) in user_buildings_coordinates.items():
+        for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["user_building"], name)
 
-        for name, (column_index, row_index) in shops_coordinates.items():
+        for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
                 logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
-        for name, (column_index, row_index) in guilds_coordinates.items():
+        for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
                 logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
-        for name, (column_index, row_index) in places_of_interest_coordinates.items():
+        for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
@@ -1250,7 +1329,7 @@ class CityMapApp(QMainWindow):
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
                 (nearest_bank[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_bank[1] - self.row_start) * block_size + block_size // 2
+                (nearest_bank[1] - self.row_start) * block_size // 2
             )
 
         if nearest_transit:
@@ -1260,7 +1339,7 @@ class CityMapApp(QMainWindow):
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
                 (nearest_transit[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_transit[1] - self.row_start) * block_size + block_size // 2
+                (nearest_transit[1] - self.row_start) * block_size // 2
             )
 
         # Draw destination line
@@ -1270,7 +1349,7 @@ class CityMapApp(QMainWindow):
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
                 (self.destination[0] - self.column_start) * block_size + block_size // 2,
-                (self.destination[1] - self.row_start) * block_size + block_size // 2
+                (self.destination[1] - self.row_start) * block_size // 2
             )
 
         painter.end()
@@ -1327,7 +1406,7 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, banks_coordinates)
+        return self.find_nearest_location(x, y, [(col + 1, row + 1) for (col, row, _, _) in banks_coordinates])
 
     def find_nearest_transit(self, x, y):
         """
@@ -1371,7 +1450,8 @@ class CityMapApp(QMainWindow):
             with open('sessions/destination.pkl', 'rb') as f:
                 self.destination = pickle.load(f)
                 self.scrape_timestamp = pickle.load(f)
-        except FileNotFoundError:
+        except (FileNotFoundError, EOFError):
+            logging.warning("Destination file not found or is empty. Setting defaults.")
             self.destination = None
             self.scrape_timestamp = datetime.min
 
@@ -1402,6 +1482,16 @@ class CityMapApp(QMainWindow):
         if row_name in rows:
             self.row_start = rows[row_name] - self.zoom_level // 2
         self.update_minimap()
+
+    def open_set_destination_dialog(self):
+        """
+        Open the Set Destination Dialog.
+        """
+        dialog = SetDestinationDialog(self)
+        if dialog.exec():
+            # Logic to handle the selected destination can be added here
+            self.load_destination()
+            self.update_minimap()
 
     def mousePressEvent(self, event):
         """
@@ -1497,23 +1587,20 @@ class CityMapApp(QMainWindow):
         x, y = coords
 
         # Special cases for edges of the map
-        if x == 0:
-            column_name = "WCL"
-        elif x == 200:
-            column_name = "ECL"
+        if x <= min(columns.values()) - 1:
+            column_name = "Edge of Map"
         else:
-            x = x if x % 2 != 0 else x - 1
-            column_name = next((name for name, coord in columns.items() if coord == x), "")
+            column_name = next((name for name, coord in columns.items() if coord == x - 1), "Edge of Map")
 
-        if y == 0:
-            row_name = "NCL"
-        elif y == 200:
-            row_name = "SCL"
+        if y <= min(rows.values()) - 1:
+            row_name = "Edge of Map"
         else:
-            y = y if y % 2 != 0 else y - 1
-            row_name = next((name for name, coord in rows.items() if coord == y), "")
+            row_name = next((name for name, coord in rows.items() if coord == y - 1), "Edge of Map")
 
-        return f"{column_name} & {row_name}"
+        if column_name == "Edge of Map" or row_name == "Edge of Map":
+            return "Edge of Map"
+        else:
+            return f"{column_name} & {row_name}"
 
     # -----------------------
     # Menu Actions
@@ -1521,96 +1608,77 @@ class CityMapApp(QMainWindow):
 
     def open_discord(self):
         """
-        Open the Discord link in the default web browser.
+        Open the RBC Discord invite link.
         """
-        webbrowser.open("https://discord.gg/ktdG9FZ")
+        webbrowser.open('https://discord.gg/nwEa8FaTDS')
 
     def open_website(self):
         """
-        Open the Map Update page in the default web browser.
+        Open the RBC Website in the system default browser.
         """
-        webbrowser.open("https://lollis-home.ddns.net/viewpage.php?page_id=1")
+        webbrowser.open('https://lollis-home.ddns.net/viewpage.php?page_id=1')
 
     def show_about_dialog(self):
         """
-        Show the About dialog with application details.
+        Show an 'About' dialog box with information about the application.
         """
         QMessageBox.about(self, "About RBC City Map",
-                          "RBC City Map Application\n\n"
-                          "Version 0.7.1\n\n"
-                          "This application allows you to view the city map of RavenBlack City, "
-                          "set destinations, and navigate through various locations.\n\n"
-                          "Developement team shown in credits.\n\n")
+                          "RBC City Map Application\nVersion 0.7.2\n\nA map viewing tool for RavenBlack City.")
 
     def show_credits_dialog(self):
         """
-        Show the Credits dialog with details of the development team.
+        Show a 'Credits' dialog box with credits for the application.
         """
         credits_text = (
-            "Credits to the team who made this happen:\n\n"
-            "Windows: Jonathan Lollis (Nesmuth), Justin Solivan\n\n"
-            "Apple OSx Compatibility: Joseph Lemois\n\n"
-            "Linux Compatibility: Josh \"Blaskewitts\" Corse, Fern Lovebond\n\n"
-            "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n"
+            "RBC City Map Credits\n\n"
+            "Development:\n- Developer Name\n- Additional Developer\n\n"
+            "Special Thanks:\n- Thanked Person 1\n- Thanked Person 2\n\n"
+            "Graphics:\n- Graphic Artist 1\n- Graphic Artist 2\n\n"
+            "Testing:\n- Tester 1\n- Tester 2"
         )
+        QMessageBox.information(self, "Credits", credits_text)
 
-        credits_dialog = QDialog()
-        credits_dialog.setWindowTitle('Credits')
-        credits_dialog.setFixedSize(600, 400)
 
-        layout = QVBoxLayout(credits_dialog)
+class CharacterDialog(QDialog):
+    """
+    A dialog for adding or modifying a character.
+    """
 
-        scroll_area = QScrollArea()
-        scroll_area.setStyleSheet("background-color: black; border: none;")
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        layout.addWidget(scroll_area)
-
-        credits_label = QLabel(credits_text)
-        credits_label.setStyleSheet("font-size: 18px; color: white; background-color: black;")
-        credits_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        credits_label.setWordWrap(True)
-
-        scroll_area.setWidget(credits_label)
-
-        credits_label.setGeometry(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height())
-
-        animation = QPropertyAnimation(credits_label, b"geometry")
-        animation.setDuration(30000)
-        animation.setStartValue(QRect(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height()))
-        animation.setEndValue(
-            QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
-        animation.setEasingCurve(QEasingCurve.Type.Linear)
-
-        animation.start()
-
-        credits_dialog.exec()
-
-    def open_shops_guilds(self):
+    def __init__(self, parent=None, character=None):
         """
-        Open the Shops/Guilds dialog for the user to select a shop or guild as the destination.
-        """
-        dialog = ShopsGuildsDialog(self)
-        if dialog.exec():
-            selected_name = dialog.selected_name
-            if selected_name:
-                if dialog.is_shop:
-                    self.set_custom_destination(shops_coordinates[selected_name])
-                else:
-                    self.set_custom_destination(guilds_coordinates[selected_name])
-
-    def set_custom_destination(self, coordinates):
-        """
-        Set a custom destination on the minimap.
+        Initialize the character dialog.
 
         Args:
-            coordinates (tuple): Coordinates of the destination.
+            parent (QWidget): Parent widget.
+            character (dict, optional): Character dictionary to modify. Defaults to None.
         """
-        if coordinates:
-            self.destination = coordinates
-            self.save_destination()
-            self.update_minimap()
-            self.refresh_webview()
+        super().__init__(parent)
+        self.setWindowTitle("Character")
+
+        self.name_edit = QLineEdit()
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+
+        if character:
+            self.name_edit.setText(character['name'])
+            self.password_edit.setText(character['password'])
+
+        layout = QFormLayout()
+        layout.addRow("Name:", self.name_edit)
+        layout.addRow("Password:", self.password_edit)
+
+        button_box = QHBoxLayout()
+        ok_button = QPushButton("OK")
+        cancel_button = QPushButton("Cancel")
+        button_box.addWidget(ok_button)
+        button_box.addWidget(cancel_button)
+
+        layout.addRow(button_box)
+        self.setLayout(layout)
+
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+
 
 # -----------------------
 # Theme Customization Dialog
@@ -1620,6 +1688,7 @@ class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing the application's theme colors.
     """
+
     def __init__(self, parent=None, color_mappings=None):
         """
         Initialize the theme customization dialog.
@@ -1734,270 +1803,356 @@ class ThemeCustomizationDialog(QDialog):
             f"QLabel {{ color: {text_color}; }}"
         )
 
+
 # -----------------------
 # Shops/Guilds Dialog
 # -----------------------
 
-class ShopsGuildsDialog(QDialog):
+class SetDestinationDialog(QDialog):
     """
-    Dialog for selecting a shop or guild as the destination.
+    A dialog for setting a destination on the map.
     """
+
     def __init__(self, parent=None):
         """
-        Initialize the Shops/Guilds dialog.
-
-        Args:
-            parent (QWidget): The parent widget.
-        """
-        super().__init__(parent)
-        self.setWindowTitle('Select Shops or Guilds')
-        self.setFixedSize(300, 400)
-
-        layout = QVBoxLayout(self)
-
-        self.is_shop = True
-        self.selected_name = None
-
-        self.shop_guild_combo = QComboBox(self)
-        self.shop_guild_combo.addItems(['Shops', 'Guilds'])
-        self.shop_guild_combo.currentIndexChanged.connect(self.update_list)
-        layout.addWidget(self.shop_guild_combo)
-
-        self.list_widget = QListWidget(self)
-        layout.addWidget(self.list_widget)
-
-        buttons_layout = QHBoxLayout()
-
-        select_button = QPushButton('Select', self)
-        select_button.clicked.connect(self.accept)
-        buttons_layout.addWidget(select_button)
-
-        cancel_button = QPushButton('Cancel', self)
-        cancel_button.clicked.connect(self.reject)
-        buttons_layout.addWidget(cancel_button)
-
-        layout.addLayout(buttons_layout)
-
-        self.update_list()
-
-    def update_list(self):
-        """
-        Update the list of shops or guilds based on the selected category.
-        """
-        self.list_widget.clear()
-        self.is_shop = self.shop_guild_combo.currentText() == 'Shops'
-        items = shops_coordinates if self.is_shop else guilds_coordinates
-        for name in items.keys():
-            self.list_widget.addItem(QListWidgetItem(name))
-
-    def accept(self):
-        """
-        Accept the dialog and set the selected shop or guild.
-        """
-        current_item = self.list_widget.currentItem()
-        if current_item:
-            self.selected_name = current_item.text()
-        super().accept()
-
-# -----------------------
-# Character Dialog
-# -----------------------
-
-class CharacterDialog(QDialog):
-    """
-    Dialog for adding or modifying a character.
-    """
-    def __init__(self, parent=None, character=None):
-        """
-        Initialize the CharacterDialog.
+        Initialize the set destination dialog.
 
         Args:
             parent (QWidget): Parent widget.
             character (dict, optional): Character data to populate the fields. Defaults to None.
         """
         super().__init__(parent)
-        self.setWindowTitle('Character')
-        self.setFixedSize(300, 150)
+        self.setWindowTitle("Set Destination")
 
-        layout = QFormLayout(self)
+        self.setLayout(QVBoxLayout())
+        self.resize(600, 400)  # Adjust this size to fit your screen
 
-        self.name_edit = QLineEdit(self)
-        self.password_edit = QLineEdit(self)
-        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        # Tab widget to hold map view and dropdowns
+        self.tab_widget = QTabWidget(self)
+        self.layout().addWidget(self.tab_widget)
 
-        layout.addRow('Name:', self.name_edit)
-        layout.addRow('Password:', self.password_edit)
+        # Minimap centered on the player's current location
+        self.minimap_widget = QWidget()
+        self.tab_widget.addTab(self.minimap_widget, "Minimap")
+        minimap_layout = QVBoxLayout()
+        self.minimap_widget.setLayout(minimap_layout)
 
-        if character:
-            self.name_edit.setText(character['name'])
-            self.password_edit.setText(character['password'])
+        self.minimap_label = QLabel()
+        self.minimap_label.setFixedSize(400, 400)
+        self.minimap_label.setStyleSheet("background-color: lightgrey;")
+        minimap_layout.addWidget(self.minimap_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        buttons_layout = QHBoxLayout()
+        # Comboboxes to select destinations
+        self.dropdown_widget = QWidget()
+        self.tab_widget.addTab(self.dropdown_widget, "Dropdowns")
+        dropdown_layout = QFormLayout()
+        self.dropdown_widget.setLayout(dropdown_layout)
 
-        ok_button = QPushButton('OK', self)
-        ok_button.clicked.connect(self.accept)
-        buttons_layout.addWidget(ok_button)
+        self.tavern_dropdown = QComboBox()
+        self.bank_dropdown = QComboBox()
+        self.transit_dropdown = QComboBox()
+        self.shop_dropdown = QComboBox()
+        self.guild_dropdown = QComboBox()
+        self.poi_dropdown = QComboBox()
+        self.user_building_dropdown = QComboBox()
 
-        cancel_button = QPushButton('Cancel', self)
+        # Populate dropdowns with values from the database
+        self.populate_dropdown(self.tavern_dropdown, taverns_coordinates.keys())
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in banks_coordinates])
+        self.populate_dropdown(self.transit_dropdown, transits_coordinates.keys())
+        self.populate_dropdown(self.shop_dropdown, shops_coordinates.keys())
+        self.populate_dropdown(self.guild_dropdown, guilds_coordinates.keys())
+        self.populate_dropdown(self.poi_dropdown, places_of_interest_coordinates.keys())
+        self.populate_dropdown(self.user_building_dropdown, user_buildings_coordinates.keys())
+
+        dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
+        dropdown_layout.addRow("Bank:", self.bank_dropdown)
+        dropdown_layout.addRow("Transit:", self.transit_dropdown)
+        dropdown_layout.addRow("Shop:", self.shop_dropdown)
+        dropdown_layout.addRow("Guild:", self.guild_dropdown)
+        dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
+        dropdown_layout.addRow("User Building:", self.user_building_dropdown)
+
+        # Add control buttons
+        button_layout = QHBoxLayout()
+        update_button = QPushButton("Update")
+        update_button.clicked.connect(self.update_comboboxes)
+        cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
-        buttons_layout.addWidget(cancel_button)
+        go_button = QPushButton("Go")
+        go_button.clicked.connect(self.accept)
 
-        layout.addRow(buttons_layout)
+        button_layout.addWidget(update_button)
+        button_layout.addWidget(cancel_button)
+        button_layout.addWidget(go_button)
 
-# -----------------------
-# Data Scraping and Update
-# -----------------------
+        self.layout().addLayout(button_layout)
 
-def scrape_avitd_data():
+        # Connect minimap click to update location
+        self.minimap_label.mousePressEvent = self.on_minimap_click
+
+    def populate_dropdown(self, dropdown, items):
+        """
+        Populate a dropdown with a list of items.
+
+        Args:
+            dropdown (QComboBox): The dropdown to populate.
+            items (list): The list of items to add to the dropdown.
+        """
+        dropdown.addItem("Select a destination")
+        dropdown.addItems(items)
+
+    def update_comboboxes(self):
+        """
+        Update the dropdown options with refreshed data from the database.
+        """
+        self.populate_dropdown(self.tavern_dropdown, taverns_coordinates.keys())
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in banks_coordinates])
+        self.populate_dropdown(self.transit_dropdown, transits_coordinates.keys())
+        self.populate_dropdown(self.shop_dropdown, shops_coordinates.keys())
+        self.populate_dropdown(self.guild_dropdown, guilds_coordinates.keys())
+        self.populate_dropdown(self.poi_dropdown, places_of_interest_coordinates.keys())
+        self.populate_dropdown(self.user_building_dropdown, user_buildings_coordinates.keys())
+
+    def on_minimap_click(self, event):
+        """
+        Handle the minimap click event to set a new destination.
+        """
+        minimap_size = self.minimap_label.size()
+        minimap_x = event.position().x()
+        minimap_y = event.position().y()
+
+        # Calculate the corresponding coordinates
+        map_width = minimap_size.width()
+        map_height = minimap_size.height()
+        x_ratio = minimap_x / map_width
+        y_ratio = minimap_y / map_height
+        map_x = int(x_ratio * 200)
+        map_y = int(y_ratio * 200)
+
+        print(f"Clicked at map coordinates: {map_x}, {map_y}")
+        logging.debug(f"Clicked at map coordinates: {map_x}, {map_y}")
+
+
+class AVITDScraper:
     """
-    Scrape guilds and shops data from A View in the Dark and update the database with next update timestamps.
+    A scraper class for 'A View in the Dark' to update guilds and shops data in the database.
     """
-    url = "https://aviewinthedark.net/"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
 
-    connection = connect_to_database()
-    if not connection:
-        sys.exit("Failed to connect to the database.")
+    def __init__(self):
+        """
+        Initialize the scraper with required headers.
+        """
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        }
 
-    cursor = connection.cursor()
+    def scrape_guilds(self):
+        """
+        Scrape guilds data from 'A View in the Dark' and update the database.
+        """
+        url = 'https://quiz.ravenblack.net/guilds'
+        try:
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
 
-    # Extract the time for next update
-    guilds_next_update_text = None
-    shops_next_update_text = None
+            guilds = []
+            guild_rows = soup.find_all('tr', class_='guild')
+            for row in guild_rows:
+                columns = row.find_all('td')
+                name = columns[0].text.strip()
+                coordinates = re.search(r'\((\d+), (\d+)\)', columns[1].text.strip())
+                if coordinates:
+                    x = int(coordinates.group(1))
+                    y = int(coordinates.group(2))
+                    next_update = self.extract_next_update_time(columns[3].text.strip())
 
-    next_change_divs = soup.find_all('div', class_='next_change')
-    for div in next_change_divs:
-        if "Guilds" in div.text:
-            guilds_next_update_text = div.text
-        elif "Shops" in div.text:
-            shops_next_update_text = div.text
+                    guilds.append((name, x, y, next_update))
 
-    if not guilds_next_update_text or not shops_next_update_text:
-        sys.exit("Failed to find the next update times for guilds and shops.")
+            self.update_guilds(guilds)
 
-    print("Guilds next update text:", guilds_next_update_text)
-    print("Shops next update text:", shops_next_update_text)
+        except requests.RequestException as e:
+            logging.error(f"Failed to scrape guilds: {e}")
 
-    guilds_next_update_time = extract_next_update_time(guilds_next_update_text)
-    shops_next_update_time = extract_next_update_time(shops_next_update_text)
+    def scrape_shops(self):
+        """
+        Scrape shops data from 'A View in the Dark' and update the database.
+        """
+        url = 'https://quiz.ravenblack.net/shops'
+        try:
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
 
-    update_guilds(cursor, soup, guilds_next_update_time)
-    update_shops(cursor, soup, shops_next_update_time)
+            shops = []
+            shop_rows = soup.find_all('tr', class_='shop')
+            for row in shop_rows:
+                columns = row.find_all('td')
+                name = columns[0].text.strip()
+                coordinates = re.search(r'\((\d+), (\d+)\)', columns[1].text.strip())
+                if coordinates:
+                    x = int(coordinates.group(1))
+                    y = int(coordinates.group(2))
+                    next_update = self.extract_next_update_time(columns[3].text.strip())
 
-    connection.commit()
-    connection.close()
+                    shops.append((name, x, y, next_update))
 
-def extract_next_update_time(text):
+            self.update_shops(shops)
+
+        except requests.RequestException as e:
+            logging.error(f"Failed to scrape shops: {e}")
+
+    def extract_next_update_time(self, text):
+        """
+        Extract the next update time from the text.
+
+        Args:
+            text (str): Text containing the update time.
+
+        Returns:
+            str: Formatted next update time string.
+        """
+        match = re.search(r'(\d+)\s+days?\s+(\d+):(\d+)', text)
+        if match:
+            days = int(match.group(1))
+            hours = int(match.group(2))
+            minutes = int(match.group(3))
+            next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes)
+            return next_update.strftime('%Y-%m-%d %H:%M:%S')
+        return 'NA'
+
+    def update_guild(self, cursor, name, x, y, next_update):
+        """
+        Update a single guild in the database.
+
+        Args:
+            cursor (pymysql.cursors.Cursor): Database cursor.
+            name (str): Guild name.
+            x (int): X coordinate.
+            y (int): Y coordinate.
+            next_update (str): Next update time.
+        """
+        cursor.execute(
+            """
+            INSERT INTO guilds (`Name`, `Column`, `Row`, `Next_Update`)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE `Next_Update` = VALUES(`Next_Update`)
+            """, (name, x, y, next_update)
+        )
+
+    def update_shop(self, cursor, name, x, y, next_update):
+        """
+        Update a single shop in the database.
+
+        Args:
+            cursor (pymysql.cursors.Cursor): Database cursor.
+            name (str): Shop name.
+            x (int): X coordinate.
+            y (int): Y coordinate.
+            next_update (str): Next update time.
+        """
+        cursor.execute(
+            """
+            INSERT INTO shops (`Name`, `Column`, `Row`, `Next_Update`)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE `Next_Update` = VALUES(`Next_Update`)
+            """, (name, x, y, next_update)
+        )
+
+    def update_guilds(self, guilds):
+        """
+        Update the guilds data in the database.
+
+        Args:
+            guilds (list): List of guild data tuples (name, x, y, next_update).
+        """
+        connection = connect_to_database()
+        if not connection:
+            logging.error("Failed to connect to the database.")
+            return
+
+        try:
+            cursor = connection.cursor()
+            for guild in guilds:
+                self.update_guild(cursor, guild[0], guild[1], guild[2], guild[3])
+            connection.commit()
+            logging.info("Guilds updated successfully.")
+        except pymysql.MySQLError as e:
+            logging.error(f"Failed to update guilds: {e}")
+        finally:
+            connection.close()
+
+    def update_shops(self, shops):
+        """
+        Update the shops data in the database.
+
+        Args:
+            shops (list): List of shop data tuples (name, x, y, next_update).
+        """
+        connection = connect_to_database()
+        if not connection:
+            logging.error("Failed to connect to the database.")
+            return
+
+        try:
+            cursor = connection.cursor()
+            for shop in shops:
+                self.update_shop(cursor, shop[0], shop[1], shop[2], shop[3])
+            connection.commit()
+            logging.info("Shops updated successfully.")
+        except pymysql.MySQLError as e:
+            logging.error(f"Failed to update shops: {e}")
+        finally:
+            connection.close()
+
+    def get_next_update_times(self):
+        """
+        Retrieve the next update times for guilds and shops from the database.
+
+        Returns:
+            dict: Dictionary containing the next update times.
+        """
+        connection = connect_to_database()
+        if not connection:
+            logging.error("Failed to connect to the database.")
+            return {}
+
+        try:
+            cursor = connection.cursor()
+
+            cursor.execute("SELECT MIN(Next_Update) FROM guilds WHERE Next_Update != 'NA'")
+            next_guild_update = cursor.fetchone()[0]
+
+            cursor.execute("SELECT MIN(Next_Update) FROM shops WHERE Next_Update != 'NA'")
+            next_shop_update = cursor.fetchone()[0]
+
+            return {
+                'guilds': next_guild_update,
+                'shops': next_shop_update
+            }
+        except pymysql.MySQLError as e:
+            logging.error(f"Failed to retrieve next update times: {e}")
+            return {}
+        finally:
+            connection.close()
+
+    def scrape_avitd_data(self):
+        """
+        Scrape data from 'A View in the Dark' and update the database.
+        """
+        self.scrape_guilds()
+        self.scrape_shops()
+
+
+def main():
     """
-    Extract the next update time from the text and calculate the next update timestamp.
-
-    Args:
-        text (str): Text containing the update time.
-
-    Returns:
-        datetime: The next update timestamp.
+    Main function to run the RBC City Map Application.
     """
-    # Regular expression to find all integers followed by time units
-    matches = re.findall(r'(\d+)\s*(days?|h|m|s)', text)
-
-    # Initialize time components
-    days = hours = minutes = seconds = 0
-
-    # Assign values based on time units
-    for value, unit in matches:
-        value = int(value)
-        if 'day' in unit:
-            days = value
-        elif 'h' in unit:
-            hours = value
-        elif 'm' in unit:
-            minutes = value
-        elif 's' in unit:
-            seconds = value
-
-    # Calculate the next update time
-    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
-    next_update = next_update.replace(second=0, microsecond=0) + timedelta(minutes=1)
-    return next_update
-
-def update_guild(cursor, name, location, next_update_time):
-    """
-    Update a single guild in the database.
-
-    Args:
-        cursor (pymysql.cursors.Cursor): Database cursor.
-        name (str): Name of the guild.
-        location (str): Location of the guild.
-        next_update_time (datetime): The next update timestamp.
-    """
-    col, row = location.split(' and ')
-    cursor.execute("""
-        UPDATE guilds 
-        SET `Column`=%s, `Row`=%s, next_update=%s 
-        WHERE Name=%s
-    """, (col, row, next_update_time, name))
-
-def update_shop(cursor, name, location, next_update_time):
-    """
-    Update a single shop in the database.
-
-    Args:
-        cursor (pymysql.cursors.Cursor): Database cursor.
-        name (str): Name of the shop.
-        location (str): Location of the shop.
-        next_update_time (datetime): The next update timestamp.
-    """
-    col, row = location.split(' and ')
-    cursor.execute("""
-        UPDATE shops 
-        SET `Column`=%s, `Row`=%s, next_update=%s 
-        WHERE Name=%s
-    """, (col, row, next_update_time, name))
-
-def update_guilds(cursor, soup, guilds_coordinates, next_update_time):
-    """
-    Update the guilds data in the database.
-
-    Args:
-        cursor (pymysql.cursors.Cursor): Database cursor.
-        soup (BeautifulSoup): BeautifulSoup object containing the HTML data.
-        guilds_coordinates (dict): Dictionary of guild names and their coordinates.
-        next_update_time (datetime): The next update timestamp.
-    """
-    for name in guilds_coordinates:
-        location_tag = soup.find('td', string=name)
-        if location_tag:
-            location = location_tag.find_next_sibling('td').text.replace('SE of ', '').strip()
-            update_guild(cursor, name, location, next_update_time)
-        else:
-            print(f"Guild '{name}' not found in the table.")
-
-def update_shops(cursor, soup, shops_coordinates, next_update_time):
-    """
-    Update the shops data in the database.
-
-    Args:
-        cursor (pymysql.cursors.Cursor): Database cursor.
-        soup (BeautifulSoup): BeautifulSoup object containing the HTML data.
-        shops_coordinates (dict): Dictionary of shop names and their coordinates.
-        next_update_time (datetime): The next update timestamp.
-    """
-    for name in shops_coordinates:
-        location_tag = soup.find('td', string=name)
-        if location_tag:
-            location = location_tag.find_next_sibling('td').text.replace('SE of ', '').strip()
-            update_shop(cursor, name, location, next_update_time)
-        else:
-            print(f"Shop '{name}' not found in the table.")
-
-# -----------------------
-# Main Entry Point
-# -----------------------
-
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
     app = QApplication(sys.argv)
     window = CityMapApp()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

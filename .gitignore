@@ -11,3 +11,5 @@ testing/cookies.pkl
 /testing/sessions
 qodana.yaml
 *.yaml
+/.idea
+/.idea
