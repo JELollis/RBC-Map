@@ -62,4 +62,6 @@ Apple OSx Compatibility: Joseph Lemois
 
 Linux Compatibility: Blaskewitts, Fern Lovebond
 
+Android Compatibility: Jonathan Lollis
+
 Design and Layout: Shuvi, Blair Wilson
