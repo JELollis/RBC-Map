@@ -63,3 +63,15 @@ Apple OSx Compatibility: Joseph Lemois
 Linux Compatibility: Blaskewitts, Fern Lovebond
 
 Design and Layout: Shuvi, Blair Wilson
+
+
+### New Features in Recent Versions
+
+#### Character Management
+- Added features to manage multiple characters within the application, including adding, modifying, and deleting characters. Character data is stored securely using the `pickle` module.
+
+#### Theme Customization
+- Introduced theme customization options allowing users to personalize the application's appearance. Users can save and load their theme settings, offering a more personalized experience.
+
+#### Database Viewer
+- A new database viewer utility has been added for advanced users. This feature allows direct interaction with the underlying data tables, providing detailed views and management options.

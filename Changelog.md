@@ -84,3 +84,28 @@
 - **Distance Calculation**: Improved AP cost calculation using Chebyshev distance.
   - Enhanced distance calculations for more accurate AP costs.
   - Updated information frame to display AP costs for nearest locations and destinations.
+
+### Version 0.6.2
+- **Improved Import Handling**: Added better handling for module imports with an automated installation option for missing dependencies.
+- **Database Connection**: Enhanced the logic for connecting to both local and remote MySQL databases with fallback mechanisms.
+- **Error Handling**: Implemented more robust error handling during the initialization phase.
+
+### Version 0.6.3
+- **Character Management**: Added features to manage characters, including adding, modifying, and deleting characters. The character data is now stored using `pickle`.
+- **UI Enhancements**: Updated the UI to include a character list and management buttons, with a new feature to select characters from a list and log in automatically.
+- **Website Button**: Added a button for future website integration, with a "Coming Soon" popup for now.
+
+### Version 0.7.0
+- **Theme Customization**: Introduced a new feature for customizing the application theme, including saving and loading theme settings.
+- **Database Viewer**: Added a database viewer utility for viewing and managing data tables directly within the application.
+- **Enhanced Logging**: Implemented a more comprehensive logging setup, including log files for debugging and tracking usage.
+
+### Version 0.7.1
+- **Credits and About Dialogs**: Added detailed "About" and "Credits" dialogs with scrolling animations and detailed acknowledgments.
+- **Menu Actions**: Expanded the menu with new actions for opening Discord, the RBC website, and viewing application details.
+- **Edge Case Handling**: Improved handling of edge cases on the map, such as interactions at the very edges of the grid.
+
+### Version 0.7.2
+- **Intersection Naming**: Updated the intersection naming logic to handle cases where locations are at the edge of the map, ensuring consistent and accurate labels.
+- **SQLite Cookie Storage**: Implemented an SQLite-based cookie storage system for managing session cookies within the application.
+- **User Interface Updates**: Enhanced various UI components, including a more dynamic and responsive map view, improved character management, and additional customization options.
