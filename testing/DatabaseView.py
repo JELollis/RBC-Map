@@ -1,10 +1,13 @@
+#!/usr/bin/env python3
+# Filename: DatabaseView
+
 import sys
 import pymysql
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget,
-    QTableWidget, QTableWidgetItem
-)
 import logging
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget,
+    QTableWidget, QTableWidgetItem)
+from PySide6.QtGui import QAction
 
 # Database connection constants
 HOST = "127.0.0.1"  # or REMOTE_HOST if needed
@@ -33,17 +36,23 @@ def connect_to_database():
 
 def fetch_table_data(cursor, table_name):
     """
-    Fetch data from the specified table and return it as a list of tuples.
+    Fetch data from the specified table and return it as a list of tuples,
+    including column names.
 
     Args:
         cursor: MySQL cursor object.
         table_name: Name of the table to fetch data from.
 
     Returns:
-        List of tuples containing the table data.
+        List of tuples containing column names and table data.
     """
+    cursor.execute(f"DESCRIBE `{table_name}`")
+    column_names = [col[0] for col in cursor.fetchall()]
+
     cursor.execute(f"SELECT * FROM `{table_name}`")
-    return cursor.fetchall()
+    data = cursor.fetchall()
+
+    return column_names, data
 
 
 class DatabaseViewer(QMainWindow):
@@ -62,28 +71,28 @@ class DatabaseViewer(QMainWindow):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
-        for table_name, data in tables_data.items():
-            self.add_table_tab(table_name, data)
+        for table_name, (column_names, data) in tables_data.items():
+            self.add_table_tab(table_name, column_names, data)
 
-    def add_table_tab(self, table_name, data):
+    def add_table_tab(self, table_name, column_names, data):
         """
         Add a new tab for a table.
 
         Args:
             table_name: The name of the table.
+            column_names: List of column names for the table.
             data: The data to display in the table.
         """
         table_widget = QTableWidget()
         table_widget.setRowCount(len(data))
-        table_widget.setColumnCount(len(data[0]) if data else 0)
-        table_widget.setHorizontalHeaderLabels([f"Column {i + 1}" for i in range(len(data[0]))])
+        table_widget.setColumnCount(len(column_names))
+        table_widget.setHorizontalHeaderLabels(column_names)
 
         for row_idx, row_data in enumerate(data):
             for col_idx, col_data in enumerate(row_data):
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(col_data)))
 
         self.tab_widget.addTab(table_widget, table_name)
-
 
 def main():
     """
@@ -97,7 +106,8 @@ def main():
     tables_data = {}
 
     for table_name in tables_to_fetch:
-        tables_data[table_name] = fetch_table_data(cursor, table_name)
+        column_names, data = fetch_table_data(cursor, table_name)
+        tables_data[table_name] = (column_names, data)
 
     cursor.close()
     connection.close()
@@ -105,7 +115,7 @@ def main():
     app = QApplication(sys.argv)
     viewer = DatabaseViewer(tables_data)
     viewer.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 
 if __name__ == '__main__':

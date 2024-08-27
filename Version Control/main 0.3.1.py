@@ -3,13 +3,13 @@
 
 import tkinter as tk
 from tkinter import ttk
-from variables import vertical_street_names, horizontal_street_names
+from variables import rows, columns, color_map
 
 class Map:
-    def __init__(self, size, horizontal_street_names, vertical_street_names):
+    def __init__(self, size, rows, Columns):
         self.size = size
-        self.horizontal_street_names = horizontal_street_names
-        self.vertical_street_names = vertical_street_names
+        self.rows = rows
+        self.Columns = Columns
         self.zoom_levels = [3, 5, 7, 9]
         self.current_zoom_level = 0
         self.current_location = (self.size // 2, self.size // 2)
@@ -17,8 +17,8 @@ class Map:
         self.ncl = 0
 
     def go_to_location(self, x_street, y_street):
-        x = max(0, min(self.horizontal_street_names[x_street] * 2, self.size - 1))
-        y = max(0, min(self.vertical_street_names[y_street] * 2, self.size - 1))
+        x = max(0, min(self.rows[x_street] * 2, self.size - 1))
+        y = max(0, min(self.Columns[y_street] * 2, self.size - 1))
         self.current_location = (x, y)
 
     def update_minimap(self):
@@ -49,7 +49,7 @@ button_frame.grid(row=1, column=0)
 extra_buttons_frame.grid(row=2, column=0)
 
 # Create the map instance
-map_instance = Map(200, horizontal_street_names, vertical_street_names)
+map_instance = Map(200, rows, columns)
 
 # Minimap
 minimap_canvas = tk.Canvas(minimap_frame, width=minimap_size, height=minimap_size, bg="lightgray")
@@ -63,7 +63,7 @@ second_closest_button.pack(pady=5)
 third_closest_button = tk.Button(button_frame, text="3rd Closest Locations")
 third_closest_button.pack(pady=5)
 
-set_destination_button = tk.Button(zoom_frame, text="Set Destination")  # Assuming zoom_frame exists
+#set_destination_button = tk.Button(zoom_frame, text="Set Destination")  # Assuming zoom_frame exists
 set_destination_button.pack(side=tk.LEFT, padx=5)
 
 refresh_button = tk.Button(extra_buttons_frame, text="Refresh Map")

@@ -104,7 +104,6 @@ from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
 import sqlite3
 
-
 # -----------------------
 # Directory setup
 # -----------------------
@@ -119,10 +118,8 @@ def ensure_directories_exist():
             os.makedirs(directory)
             print(f"Created directory: {directory}")
 
-
 # Call the function to ensure directories are present
 ensure_directories_exist()
-
 
 # -----------------------
 # Logging setup
@@ -141,7 +138,6 @@ def setup_logging():
     )
     print(f"Logging to: {log_filename}")
 
-
 # Call the logging setup
 setup_logging()
 
@@ -155,7 +151,6 @@ REMOTE_HOST = "lollis-home.ddns.net"
 USER = "rbc_maps"
 PASSWORD = "RBC_Community_Map"
 DATABASE = "city_map"
-
 
 def connect_to_database():
     """
@@ -189,7 +184,6 @@ def connect_to_database():
             logging.error("Connection to remote MySQL instance failed: %s", err)
             return None
 
-
 # -----------------------
 # Load Data from Database
 # -----------------------
@@ -221,9 +215,8 @@ def load_data():
     cursor.execute("SELECT `Column`, `Row` FROM banks")
     banks_data = cursor.fetchall()
     banks_coordinates = [
-        (columns.get(col), rows.get(row), col, row)
+        (col, row, None, None)
         for col, row in banks_data
-        if columns.get(col) is not None and rows.get(row) is not None
     ]
 
     # Fetch taverns
@@ -289,7 +282,6 @@ def load_data():
 
     return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
-
 # Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
@@ -298,7 +290,6 @@ columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, use
 # -----------------------
 
 COOKIE_DB_PATH = './sessions/cookies.db'
-
 
 def initialize_cookie_db():
     """
@@ -319,7 +310,6 @@ def initialize_cookie_db():
     ''')
     connection.commit()
     connection.close()
-
 
 def save_cookie_to_db(cookie):
     """
@@ -344,7 +334,6 @@ def save_cookie_to_db(cookie):
     ))
     connection.commit()
     connection.close()
-
 
 def load_cookies_from_db():
     """
@@ -374,7 +363,6 @@ def load_cookies_from_db():
     connection.close()
     return cookies
 
-
 def clear_cookie_db():
     """
     Clear all cookies from the SQLite database.
@@ -384,7 +372,6 @@ def clear_cookie_db():
     cursor.execute('DELETE FROM cookies')
     connection.commit()
     connection.close()
-
 
 # -----------------------
 # CityMapApp Main Class
@@ -451,7 +438,6 @@ class CityMapApp(QMainWindow):
         self.load_last_active_character()  # Load the last active character
 
         self.load_destination()
-        # Now continue initializing the rest of the UI components
         self.setup_ui()
         self.setup_console_logging()
         self.show()
@@ -1012,10 +998,9 @@ class CityMapApp(QMainWindow):
         if selected_character:
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
-            self.save_last_active_character()  # Save the selected character as the last active one
+            self.save_last_active_character()
             self.logout_current_character()
-            # Delay login to allow logout to complete
-            self.login_selected_character()
+            QTimer.singleShot(1000, self.login_selected_character)
 
     def logout_current_character(self):
         """
@@ -1136,7 +1121,6 @@ class CityMapApp(QMainWindow):
         """
         if not success:
             logging.error("Failed to load the webpage.")
-            # You might want to display an error message to the user
             QMessageBox.critical(self, "Error",
                                  "Failed to load the webpage. Please check your network connection or try again later.")
         else:
@@ -1253,7 +1237,7 @@ class CityMapApp(QMainWindow):
                 # Draw cell background color
                 if column_index < min(self.columns.values()) or column_index > max(
                         self.columns.values()) or row_index < min(
-                    self.rows.values()) or row_index > max(self.rows.values()):
+                        self.rows.values()) or row_index > max(self.rows.values()):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -1275,7 +1259,8 @@ class CityMapApp(QMainWindow):
         # Draw special locations
         for (col, row, col_name, row_name) in self.banks_coordinates:
             if col_name and row_name:
-                draw_location(col + 1, row + 1, self.color_mappings["bank"], f"{col_name}[{row_name}]")
+                draw_location(self.columns[col], self.rows[row], self.color_mappings["bank"],
+                              f"{col_name} & {row_name}")
 
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             draw_location(column_index, row_index, self.color_mappings["tavern"], name)
@@ -1349,8 +1334,9 @@ class CityMapApp(QMainWindow):
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
                 (self.destination[0] - self.column_start) * block_size + block_size // 2,
-                (self.destination[1] - self.row_start) * block_size // 2
+                (self.destination[1] - self.row_start) * block_size + block_size // 2
             )
+
 
         painter.end()
         self.minimap_label.setPixmap(pixmap)
@@ -1406,7 +1392,22 @@ class CityMapApp(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        return self.find_nearest_location(x, y, [(col + 1, row + 1) for (col, row, _, _) in banks_coordinates])
+        valid_banks = []
+        for col, row, _, _ in self.banks_coordinates:
+            try:
+                col_index = self.columns[col]
+                row_index = self.rows[row]
+            except KeyError:
+                logging.warning(
+                    f"Bank location with column '{col}' and row '{row}' could not be found in the available columns or rows.")
+                continue
+            valid_banks.append((col_index, row_index))
+
+        if not valid_banks:
+            logging.warning("No valid bank locations found.")
+            return None
+
+        return self.find_nearest_location(x, y, valid_banks)
 
     def find_nearest_transit(self, x, y):
         """
@@ -1484,12 +1485,8 @@ class CityMapApp(QMainWindow):
         self.update_minimap()
 
     def open_set_destination_dialog(self):
-        """
-        Open the Set Destination Dialog.
-        """
-        dialog = SetDestinationDialog(self)
+        dialog = set_destination_dialog(self)
         if dialog.exec():
-            # Logic to handle the selected destination can be added here
             self.load_destination()
             self.update_minimap()
 
@@ -1620,24 +1617,63 @@ class CityMapApp(QMainWindow):
 
     def show_about_dialog(self):
         """
-        Show an 'About' dialog box with information about the application.
+        Show the About dialog with application details.
         """
         QMessageBox.about(self, "About RBC City Map",
-                          "RBC City Map Application\nVersion 0.7.2\n\nA map viewing tool for RavenBlack City.")
+                          "RBC City Map Application\n\n"
+                          "Version 0.7.1\n\n"
+                          "This application allows you to view the city map of RavenBlack City, "
+                          "set destinations, and navigate through various locations.\n\n"
+                          "Development team shown in credits.\n\n")
 
     def show_credits_dialog(self):
         """
-        Show a 'Credits' dialog box with credits for the application.
+        Show the Credits dialog with details of the development team.
         """
         credits_text = (
-            "RBC City Map Credits\n\n"
-            "Development:\n- Developer Name\n- Additional Developer\n\n"
-            "Special Thanks:\n- Thanked Person 1\n- Thanked Person 2\n\n"
-            "Graphics:\n- Graphic Artist 1\n- Graphic Artist 2\n\n"
-            "Testing:\n- Tester 1\n- Tester 2"
+            "Credits to the team who made this happen:\n\n"
+            "Windows: Jonathan Lollis (Nesmuth), Justin Solivan\n\n"
+            "Apple OSx Compatibility: Joseph Lemois\n\n"
+            "Linux Compatibility: Josh \"Blaskewitts\" Corse, Fern Lovebond\n\n"
+            "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n"
         )
-        QMessageBox.information(self, "Credits", credits_text)
 
+        credits_dialog = QDialog()
+        credits_dialog.setWindowTitle('Credits')
+        credits_dialog.setFixedSize(600, 400)
+
+        layout = QVBoxLayout(credits_dialog)
+
+        scroll_area = QScrollArea()
+        scroll_area.setStyleSheet("background-color: black; border: none;")
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        layout.addWidget(scroll_area)
+
+        credits_label = QLabel(credits_text)
+        credits_label.setStyleSheet("font-size: 18px; color: white; background-color: black;")
+        credits_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        credits_label.setWordWrap(True)
+
+        scroll_area.setWidget(credits_label)
+
+        credits_label.setGeometry(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height())
+
+        animation = QPropertyAnimation(credits_label, b"geometry")
+        animation.setDuration(30000)
+        animation.setStartValue(QRect(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height()))
+        animation.setEndValue(
+            QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
+        animation.setEasingCurve(QEasingCurve.Type.Linear)
+
+        animation.start()
+
+        credits_dialog.exec()
+
+
+# -----------------------
+# Character Dialog
+# -----------------------
 
 class CharacterDialog(QDialog):
     """
@@ -1678,7 +1714,6 @@ class CharacterDialog(QDialog):
 
         ok_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
-
 
 # -----------------------
 # Theme Customization Dialog
@@ -1803,12 +1838,11 @@ class ThemeCustomizationDialog(QDialog):
             f"QLabel {{ color: {text_color}; }}"
         )
 
-
 # -----------------------
-# Shops/Guilds Dialog
+# Set Destination Dialog
 # -----------------------
 
-class SetDestinationDialog(QDialog):
+class set_destination_dialog(QDialog):
     """
     A dialog for setting a destination on the map.
     """
@@ -1819,35 +1853,19 @@ class SetDestinationDialog(QDialog):
 
         Args:
             parent (QWidget): Parent widget.
-            character (dict, optional): Character data to populate the fields. Defaults to None.
         """
         super().__init__(parent)
         self.setWindowTitle("Set Destination")
+        self.resize(200, 200)
 
-        self.setLayout(QVBoxLayout())
-        self.resize(600, 400)  # Adjust this size to fit your screen
+        # Store the parent reference to access its methods
+        self.parent = parent
 
-        # Tab widget to hold map view and dropdowns
-        self.tab_widget = QTabWidget(self)
-        self.layout().addWidget(self.tab_widget)
-
-        # Minimap centered on the player's current location
-        self.minimap_widget = QWidget()
-        self.tab_widget.addTab(self.minimap_widget, "Minimap")
-        minimap_layout = QVBoxLayout()
-        self.minimap_widget.setLayout(minimap_layout)
-
-        self.minimap_label = QLabel()
-        self.minimap_label.setFixedSize(400, 400)
-        self.minimap_label.setStyleSheet("background-color: lightgrey;")
-        minimap_layout.addWidget(self.minimap_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        # Set up the main layout for the dialog
+        main_layout = QVBoxLayout(self)
 
         # Comboboxes to select destinations
-        self.dropdown_widget = QWidget()
-        self.tab_widget.addTab(self.dropdown_widget, "Dropdowns")
         dropdown_layout = QFormLayout()
-        self.dropdown_widget.setLayout(dropdown_layout)
-
         self.tavern_dropdown = QComboBox()
         self.bank_dropdown = QComboBox()
         self.transit_dropdown = QComboBox()
@@ -1857,13 +1875,13 @@ class SetDestinationDialog(QDialog):
         self.user_building_dropdown = QComboBox()
 
         # Populate dropdowns with values from the database
-        self.populate_dropdown(self.tavern_dropdown, taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in banks_coordinates])
-        self.populate_dropdown(self.transit_dropdown, transits_coordinates.keys())
-        self.populate_dropdown(self.shop_dropdown, shops_coordinates.keys())
-        self.populate_dropdown(self.guild_dropdown, guilds_coordinates.keys())
-        self.populate_dropdown(self.poi_dropdown, places_of_interest_coordinates.keys())
-        self.populate_dropdown(self.user_building_dropdown, user_buildings_coordinates.keys())
+        self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
+        self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
+        self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
+        self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
+        self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
+        self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
 
         dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
         dropdown_layout.addRow("Bank:", self.bank_dropdown)
@@ -1873,66 +1891,132 @@ class SetDestinationDialog(QDialog):
         dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
         dropdown_layout.addRow("User Building:", self.user_building_dropdown)
 
+        custom_location_layout = QHBoxLayout()
+        self.columns_dropdown = QComboBox()
+        self.rows_dropdown = QComboBox()
+        self.directional_dropdown = QComboBox()
+
+        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys())
+        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys())
+        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
+
+        custom_location_layout.addWidget(QLabel("ABC Street:"))
+        custom_location_layout.addWidget(self.columns_dropdown)
+        custom_location_layout.addWidget(QLabel("123 Street:"))
+        custom_location_layout.addWidget(self.rows_dropdown)
+        custom_location_layout.addWidget(QLabel("Direction:"))
+        custom_location_layout.addWidget(self.directional_dropdown)
+
+        main_layout.addLayout(dropdown_layout)
+        main_layout.addLayout(custom_location_layout)
+
         # Add control buttons
         button_layout = QHBoxLayout()
-        update_button = QPushButton("Update")
+
+        set_button = QPushButton("Set Destination")
+        set_button.clicked.connect(self.set_destination)
+        clear_button = QPushButton("Clear Destination")
+        clear_button.clicked.connect(self.clear_destination)
+        update_button = QPushButton("Update Data")
         update_button.clicked.connect(self.update_comboboxes)
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
         go_button = QPushButton("Go")
         go_button.clicked.connect(self.accept)
 
-        button_layout.addWidget(update_button)
-        button_layout.addWidget(cancel_button)
-        button_layout.addWidget(go_button)
-
-        self.layout().addLayout(button_layout)
-
-        # Connect minimap click to update location
-        self.minimap_label.mousePressEvent = self.on_minimap_click
+        button_layout.addWidget(set_button, 0, 0)
+        button_layout.addWidget(clear_button, 0, 1)
+        button_layout.addWidget(update_button, 1, 0)
+        button_layout.addWidget(cancel_button, 1, 1)
+        main_layout.addLayout(button_layout)
 
     def populate_dropdown(self, dropdown, items):
-        """
-        Populate a dropdown with a list of items.
-
-        Args:
-            dropdown (QComboBox): The dropdown to populate.
-            items (list): The list of items to add to the dropdown.
-        """
+        dropdown.clear()
         dropdown.addItem("Select a destination")
         dropdown.addItems(items)
 
     def update_comboboxes(self):
-        """
-        Update the dropdown options with refreshed data from the database.
-        """
-        self.populate_dropdown(self.tavern_dropdown, taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in banks_coordinates])
-        self.populate_dropdown(self.transit_dropdown, transits_coordinates.keys())
-        self.populate_dropdown(self.shop_dropdown, shops_coordinates.keys())
-        self.populate_dropdown(self.guild_dropdown, guilds_coordinates.keys())
-        self.populate_dropdown(self.poi_dropdown, places_of_interest_coordinates.keys())
-        self.populate_dropdown(self.user_building_dropdown, user_buildings_coordinates.keys())
+        self.parent.columns, self.parent.rows, self.parent.banks_coordinates, self.parent.taverns_coordinates, self.parent.transits_coordinates, self.parent.user_buildings_coordinates, self.parent.color_mappings, self.parent.shops_coordinates, self.parent.guilds_coordinates, self.parent.places_of_interest_coordinates = load_data()
 
-    def on_minimap_click(self, event):
+        self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
+        self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
+        self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
+        self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
+        self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
+        self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
+        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys())
+        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys())
+
+    def clear_destination(self):
         """
-        Handle the minimap click event to set a new destination.
+        Clear the currently set destination and update the minimap.
         """
-        minimap_size = self.minimap_label.size()
-        minimap_x = event.position().x()
-        minimap_y = event.position().y()
+        # Clear the destination in the parent application
+        self.parent.destination = None
 
-        # Calculate the corresponding coordinates
-        map_width = minimap_size.width()
-        map_height = minimap_size.height()
-        x_ratio = minimap_x / map_width
-        y_ratio = minimap_y / map_height
-        map_x = int(x_ratio * 200)
-        map_y = int(y_ratio * 200)
+        # Save the cleared destination to the file to ensure persistence
+        with open('sessions/destination.pkl', 'wb') as f:
+            pickle.dump(self.parent.destination, f)
+            pickle.dump(datetime.now(), f)
+        self.parent.update_minimap()
+        self.accept()
 
-        print(f"Clicked at map coordinates: {map_x}, {map_y}")
-        logging.debug(f"Clicked at map coordinates: {map_x}, {map_y}")
+    def set_destination(self):
+        selected_tavern = self.tavern_dropdown.currentText()
+        selected_bank = self.bank_dropdown.currentText()
+        selected_transit = self.transit_dropdown.currentText()
+        selected_shop = self.shop_dropdown.currentText()
+        selected_guild = self.guild_dropdown.currentText()
+        selected_poi = self.poi_dropdown.currentText()
+        selected_user_building = self.user_building_dropdown.currentText()
 
+        if selected_tavern != "Select a destination":
+            self.parent.destination = self.parent.taverns_coordinates[selected_tavern]
+        elif selected_bank != "Select a destination":
+            col_name, row_name = selected_bank.split(" & ")
+            self.parent.destination = (self.parent.columns[col_name], self.parent.rows[row_name])
+        elif selected_transit != "Select a destination":
+            self.parent.destination = self.parent.transits_coordinates[selected_transit]
+        elif selected_shop != "Select a destination":
+            self.parent.destination = self.parent.shops_coordinates[selected_shop]
+        elif selected_guild != "Select a destination":
+            self.parent.destination = self.parent.guilds_coordinates[selected_guild]
+        elif selected_poi != "Select a destination":
+            self.parent.destination = self.parent.places_of_interest_coordinates[selected_poi]
+        elif selected_user_building != "Select a destination":
+            self.parent.destination = self.parent.user_buildings_coordinates[selected_user_building]
+        else:
+            col_name = self.columns_dropdown.currentText()
+            row_name = self.rows_dropdown.currentText()
+            direction = self.directional_dropdown.currentText()
+
+            if col_name and row_name and direction:
+                col = self.parent.columns[col_name]
+                row = self.parent.rows[row_name]
+
+                # Apply direction - correctly
+                if direction == "East":
+                    col += 1  # Only move to the East
+                elif direction == "South":
+                    row += 1  # Only move to the South
+                elif direction == "South East":
+                    col += 1  # Move to the East
+                    row += 1  # Move to the South
+
+                self.parent.destination = (col, row)
+
+        # After setting the destination, save it and update the map
+        if self.parent.destination:
+            self.parent.save_destination()
+            self.parent.update_minimap()
+        self.accept()
+
+        logging.debug(f"Setting destination to col={col}, row={row} for direction={direction}")
+
+# -----------------------
+# AVITD Scraper Class
+# -----------------------
 
 class AVITDScraper:
     """

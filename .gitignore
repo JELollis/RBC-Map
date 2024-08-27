@@ -13,3 +13,4 @@ qodana.yaml
 *.yaml
 /.idea
 /.idea
+/Version Control/__pycache__
