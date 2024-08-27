@@ -95,7 +95,7 @@ def check_required_modules(modules):
         for mod in missing_modules:
             print(f"- {mod}")
         print("\nYou can install them with:")
-        print("pip install pymysql requests bs4 PySide6 PySide6-WebEngine")
+        print("pip install {mod}")
         return False
     return True
 
@@ -1249,6 +1249,7 @@ class CityMapApp(QMainWindow):
                 painter.setPen(QColor('white'))
                 painter.drawText(text_x, text_y, label_text)
 
+        # Draw the grid
         for i in range(self.zoom_level):
             for j in range(self.zoom_level):
                 column_index = self.column_start + j
@@ -1285,35 +1286,59 @@ class CityMapApp(QMainWindow):
                     painter.setPen(QColor('white'))
                     painter.drawText(text_x, text_y, label_text)
 
-        # Draw special locations
-        for (col, row, col_name, row_name) in self.banks_coordinates:
-            if col_name and row_name:
-                draw_location(self.columns[col], self.rows[row], self.color_mappings["bank"],
-                              f"{col_name} & {row_name}")
+        # Draw special locations (banks with correct offsets)
+        for (col_name, row_name, _, _) in self.banks_coordinates:
+            column_index = self.columns.get(col_name)
+            row_index = self.rows.get(row_name)
+            if column_index is not None and row_index is not None:
+                # Adjust bank coordinates by +1 to match the tavern and transit coordinate system
+                adjusted_column_index = column_index + 1
+                adjusted_row_index = row_index + 1
+                logging.debug(
+                    f"Drawing bank at {col_name} & {row_name} with coordinates ({adjusted_column_index}, {adjusted_row_index})")
+                draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
+            else:
+                logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
+        # Draw other locations as before
         for name, (column_index, row_index) in self.taverns_coordinates.items():
-            draw_location(column_index, row_index, self.color_mappings["tavern"], name)
+            if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing tavern '{name}' at coordinates ({column_index}, {row_index})")
+                draw_location(column_index, row_index, self.color_mappings["tavern"], name)
+            else:
+                logging.warning(f"Skipping tavern '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.transits_coordinates.items():
-            draw_location(column_index, row_index, self.color_mappings["transit"], name)
+            if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing transit '{name}' at coordinates ({column_index}, {row_index})")
+                draw_location(column_index, row_index, self.color_mappings["transit"], name)
+            else:
+                logging.warning(f"Skipping transit '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.user_buildings_coordinates.items():
-            draw_location(column_index, row_index, self.color_mappings["user_building"], name)
+            if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing user building '{name}' at coordinates ({column_index}, {row_index})")
+                draw_location(column_index, row_index, self.color_mappings["user_building"], name)
+            else:
+                logging.warning(f"Skipping user building '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing shop '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
                 logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing guild '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
                 logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing place of interest '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
                 logging.warning(f"Skipping place of interest '{name}' due to missing coordinates")
@@ -1327,37 +1352,44 @@ class CityMapApp(QMainWindow):
         nearest_transit = self.find_nearest_transit(current_x, current_y)
 
         if nearest_tavern:
-            nearest_tavern = nearest_tavern[0][1]
+            nearest_tavern_coords = nearest_tavern[0][1]
+            logging.debug(
+                f"Drawing line to nearest tavern at coordinates ({nearest_tavern_coords[0]}, {nearest_tavern_coords[1]})")
             painter.setPen(QPen(QColor('orange'), 3))  # Set pen color to orange and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_tavern[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_tavern[1] - self.row_start) * block_size + block_size // 2
+                (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
+                (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
             )
 
         if nearest_bank:
-            nearest_bank = nearest_bank[0][1]
+            nearest_bank_coords = nearest_bank[0][1]
+            logging.debug(
+                f"Drawing line to nearest bank at coordinates ({nearest_bank_coords[0] + 1}, {nearest_bank_coords[1] + 1})")
             painter.setPen(QPen(QColor('blue'), 3))  # Set pen color to blue and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_bank[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_bank[1] - self.row_start) * block_size // 2
+                (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
+                (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
             )
 
         if nearest_transit:
-            nearest_transit = nearest_transit[0][1]
+            nearest_transit_coords = nearest_transit[0][1]
+            logging.debug(
+                f"Drawing line to nearest transit at coordinates ({nearest_transit_coords[0]}, {nearest_transit_coords[1]})")
             painter.setPen(QPen(QColor('red'), 3))  # Set pen color to red and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_transit[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_transit[1] - self.row_start) * block_size // 2
+                (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
+                (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
             )
 
         # Draw destination line
         if self.destination:
+            logging.debug(f"Drawing line to destination at coordinates ({self.destination[0]}, {self.destination[1]})")
             painter.setPen(QPen(QColor('green'), 3))  # Set pen color to green and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
@@ -1365,7 +1397,6 @@ class CityMapApp(QMainWindow):
                 (self.destination[0] - self.column_start) * block_size + block_size // 2,
                 (self.destination[1] - self.row_start) * block_size + block_size // 2
             )
-
 
         painter.end()
         self.minimap_label.setPixmap(pixmap)
@@ -1571,7 +1602,7 @@ class CityMapApp(QMainWindow):
         # Get details for nearest tavern
         if nearest_tavern:
             tavern_coords = nearest_tavern[0][1]
-            tavern_name = next(name for name, coords in taverns_coordinates.items() if coords == tavern_coords)
+            tavern_name = next(name for name, coords in self.taverns_coordinates.items() if coords == tavern_coords)
             tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
             tavern_intersection = self.get_intersection_name(tavern_coords)
             self.tavern_label.setText(f"{tavern_name} - {tavern_intersection} - AP: {tavern_ap_cost}")
@@ -1579,14 +1610,15 @@ class CityMapApp(QMainWindow):
         # Get details for nearest bank
         if nearest_bank:
             bank_coords = nearest_bank[0][1]
-            bank_ap_cost = self.calculate_ap_cost((current_x, current_y), bank_coords)
-            bank_intersection = self.get_intersection_name(bank_coords)
+            adjusted_bank_coords = (bank_coords[0] + 1, bank_coords[1] + 1)
+            bank_ap_cost = self.calculate_ap_cost((current_x, current_y), adjusted_bank_coords)
+            bank_intersection = self.get_intersection_name(adjusted_bank_coords)
             self.bank_label.setText(f"OmniBank - {bank_intersection} - AP: {bank_ap_cost}")
 
         # Get details for nearest transit
         if nearest_transit:
             transit_coords = nearest_transit[0][1]
-            transit_name = next(name for name, coords in transits_coordinates.items() if coords == transit_coords)
+            transit_name = next(name for name, coords in self.transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
             transit_intersection = self.get_intersection_name(transit_coords)
             self.transit_label.setText(f"{transit_name} - {transit_intersection} - AP: {transit_ap_cost}")
@@ -1613,15 +1645,15 @@ class CityMapApp(QMainWindow):
         x, y = coords
 
         # Special cases for edges of the map
-        if x <= min(columns.values()) - 1:
+        if x <= min(self.columns.values()) - 1:
             column_name = "Edge of Map"
         else:
-            column_name = next((name for name, coord in columns.items() if coord == x - 1), "Edge of Map")
+            column_name = next((name for name, coord in self.columns.items() if coord == x - 1), "Edge of Map")
 
-        if y <= min(rows.values()) - 1:
+        if y <= min(self.rows.values()) - 1:
             row_name = "Edge of Map"
         else:
-            row_name = next((name for name, coord in rows.items() if coord == y - 1), "Edge of Map")
+            row_name = next((name for name, coord in self.rows.items() if coord == y - 1), "Edge of Map")
 
         if column_name == "Edge of Map" or row_name == "Edge of Map":
             return "Edge of Map"
@@ -2042,15 +2074,12 @@ class set_destination_dialog(QDialog):
         update_button.clicked.connect(self.update_comboboxes)
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
-        go_button = QPushButton("Go")
-        go_button.clicked.connect(self.accept)
 
         # Add buttons to the layout using the correct syntax for QGridLayout
         button_layout.addWidget(set_button, 0, 0)
         button_layout.addWidget(clear_button, 0, 1)
         button_layout.addWidget(update_button, 1, 0)
         button_layout.addWidget(cancel_button, 1, 1)
-        button_layout.addWidget(go_button, 2, 0, 1, 2)  # Span Go button across two columns
 
         main_layout.addLayout(button_layout)
 
@@ -2095,48 +2124,55 @@ class set_destination_dialog(QDialog):
         selected_poi = self.poi_dropdown.currentText()
         selected_user_building = self.user_building_dropdown.currentText()
 
+        col, row = None, None  # Initialize col and row to None
+        direction = None  # Initialize direction to None
+
         if selected_tavern != "Select a destination":
-            self.parent.destination = self.parent.taverns_coordinates[selected_tavern]
+            col, row = self.parent.taverns_coordinates[selected_tavern]
         elif selected_bank != "Select a destination":
             col_name, row_name = selected_bank.split(" & ")
-            self.parent.destination = (self.parent.columns[col_name], self.parent.rows[row_name])
+            col, row = self.parent.columns[col_name], self.parent.rows[row_name]
+            col += 1  # Adjust bank coordinates by +1
+            row += 1
         elif selected_transit != "Select a destination":
-            self.parent.destination = self.parent.transits_coordinates[selected_transit]
+            col, row = self.parent.transits_coordinates[selected_transit]
         elif selected_shop != "Select a destination":
-            self.parent.destination = self.parent.shops_coordinates[selected_shop]
+            col, row = self.parent.shops_coordinates[selected_shop]
         elif selected_guild != "Select a destination":
-            self.parent.destination = self.parent.guilds_coordinates[selected_guild]
+            col, row = self.parent.guilds_coordinates[selected_guild]
         elif selected_poi != "Select a destination":
-            self.parent.destination = self.parent.places_of_interest_coordinates[selected_poi]
+            col, row = self.parent.places_of_interest_coordinates[selected_poi]
         elif selected_user_building != "Select a destination":
-            self.parent.destination = self.parent.user_buildings_coordinates[selected_user_building]
+            col, row = self.parent.user_buildings_coordinates[selected_user_building]
         else:
             col_name = self.columns_dropdown.currentText()
             row_name = self.rows_dropdown.currentText()
             direction = self.directional_dropdown.currentText()
 
-            if col_name and row_name and direction:
-                col = self.parent.columns[col_name]
-                row = self.parent.rows[row_name]
+            if col_name and row_name:
+                col = self.parent.columns.get(col_name)
+                row = self.parent.rows.get(row_name)
 
-                # Apply direction - correctly
-                if direction == "East":
-                    col += 1  # Only move to the East
-                elif direction == "South":
-                    row += 1  # Only move to the South
-                elif direction == "South East":
-                    col += 1  # Move to the East
-                    row += 1  # Move to the South
+                if col is not None and row is not None:
+                    # Apply direction
+                    if direction == "East":
+                        col += 1  # Only move to the East
+                    elif direction == "South":
+                        row += 1  # Only move to the South
+                    elif direction == "South East":
+                        col += 1  # Move to the East
+                        row += 1  # Move to the South
 
-                self.parent.destination = (col, row)
-
-        # After setting the destination, save it and update the map
-        if self.parent.destination:
+        # If col and row are set, update the destination
+        if col is not None and row is not None:
+            self.parent.destination = (col, row)
             self.parent.save_destination()
             self.parent.update_minimap()
-        self.accept()
+            self.accept()
+            logging.debug(f"Setting destination to col={col}, row={row} for direction={direction}")
+        else:
+            logging.warning("No valid destination selected or incorrect coordinates provided.")
 
-        logging.debug(f"Setting destination to col={col}, row={row} for direction={direction}")
 
 # -----------------------
 # AVITD Scraper Class
