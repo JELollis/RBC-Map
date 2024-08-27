@@ -20,6 +20,7 @@ Modules:
 
 Classes:
 - CityMapApp: Main application class for the RBC City Map.
+- DatabaseViewer: Class to view database tables.
 
 Functions:
 - connect_to_database: Establish a connection to the MySQL database.

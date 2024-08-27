@@ -5,32 +5,55 @@
 =========================
 RBC City Map Application
 =========================
-This application provides a graphical interface to view a city map of RavenBlack City.
-It includes features such as viewing the map, zooming in and out, setting destinations,
-and refreshing the map with updated data from the 'A View in the Dark' website.
+This application provides a comprehensive graphical interface for viewing and navigating
+the city map of RavenBlack City. It includes features such as zooming in and out, setting
+and saving destinations, viewing the closest points of interest, and managing user characters.
+The map data is dynamically fetched from a MySQL database, with support for refreshing data
+from the 'A View in the Dark' website.
 
 Modules:
-- sys
-- pickle
-- pymysql
-- requests
-- datetime
-- bs4 (BeautifulSoup)
-- PySide6
+- sys: Provides access to system-specific parameters and functions.
+- os: Used for interacting with the operating system (e.g., directory management).
+- pickle: Facilitates the serialization and deserialization of Python objects.
+- pymysql: Interface for connecting to and interacting with a MySQL database.
+- requests: Allows sending HTTP requests to interact with external websites.
+- re: Provides regular expression matching operations.
+- datetime: Supplies classes for manipulating dates and times.
+- bs4 (BeautifulSoup): Used for parsing HTML and XML documents.
+- PySide6: Provides a set of Python bindings for the Qt application framework.
+- sqlite3: Interface for SQLite database management.
 
 Classes:
-- CityMapApp: Main application class for the RBC City Map.
+- CityMapApp: The main application class that initializes and manages the user interface,
+  character management, web scraping, and map functionalities.
+- DatabaseViewer: A utility class that displays the contents of database tables in a tabbed view.
+- CharacterDialog: A dialog class for adding or modifying user characters.
+- ThemeCustomizationDialog: A dialog class for customizing the application theme.
+- set_destination_dialog: A dialog class for setting a destination on the map.
+- AVITDScraper: A scraper class that fetches data from 'A View in the Dark' to update guilds
+  and shops data in the database.
 
 Functions:
-- connect_to_database: Establish a connection to the MySQL database.
-- load_data: Load data from the database and return it as various dictionaries and lists.
-- scrape_avitd_data: Scrape guilds and shops data from 'A View in the Dark' and update the database with next update timestamps.
-- extract_next_update_time: Extract the next update time from the text and calculate the next update timestamp.
-- update_guild: Update a single guild in the database.
-- update_shop: Update a single shop in the database.
-- update_guilds: Update the guilds data in the database.
-- update_shops: Update the shops data in the database.
-- get_next_update_times: Retrieve the next update times for guilds and shops from the database.
+- connect_to_database: Establishes a connection to the MySQL database and handles connection errors.
+- load_data: Loads various map data from the database, including coordinates for banks, taverns, transits,
+  user buildings, shops, guilds, and places of interest.
+- initialize_cookie_db: Sets up an SQLite database for storing cookies.
+- save_cookie_to_db: Saves individual cookies to the SQLite database.
+- load_cookies_from_db: Loads cookies from the SQLite database into the web engine.
+- clear_cookie_db: Clears all cookies from the SQLite database.
+- fetch_table_data: Retrieves and returns the column names and data from a specified database table.
+- extract_coordinates_from_html: Extracts map coordinates from the loaded HTML content.
+- find_nearest_location: Finds the nearest point of interest based on a given set of coordinates.
+- calculate_ap_cost: Calculates the Action Point (AP) cost between two map coordinates.
+- update_guilds: Updates the guilds data in the MySQL database using scraped data.
+- update_shops: Updates the shops data in the MySQL database using scraped data.
+- get_next_update_times: Retrieves the next update times for guilds and shops from the MySQL database.
+- inject_console_logging: Injects JavaScript into the web page to capture and log console messages.
+- apply_theme: Applies the currently selected theme to the application UI.
+- save_theme_settings: Saves the customized theme settings to a file.
+- load_theme_settings: Loads the saved theme settings from a file or database.
+- show_about_dialog: Displays the 'About' dialog with information about the application.
+- show_credits_dialog: Displays the 'Credits' dialog with information about contributors.
 
 To install all required modules, run the following command:
  pip install pymysql requests bs4 PySide6 PySide6-WebEngine
@@ -93,7 +116,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
@@ -829,7 +852,7 @@ class CityMapApp(QMainWindow):
 
     def create_menu_bar(self):
         """
-        Create the menu bar with File, Settings, and Help menus.
+        Create the menu bar with File, Settings, Tools, and Help menus.
         """
         menu_bar = self.menuBar()
 
@@ -860,6 +883,12 @@ class CityMapApp(QMainWindow):
         zoom_out_action = QAction('Zoom Out', self)
         zoom_out_action.triggered.connect(self.zoom_out_browser)
         settings_menu.addAction(zoom_out_action)
+
+        # Tools menu
+        tools_menu = menu_bar.addMenu('Tools')
+        database_viewer_action = QAction('Database Viewer', self)
+        database_viewer_action.triggered.connect(self.open_database_viewer)
+        tools_menu.addAction(database_viewer_action)
 
         # Help menu
         help_menu = menu_bar.addMenu('Help')
@@ -1671,8 +1700,100 @@ class CityMapApp(QMainWindow):
         credits_dialog.exec()
 
 
+
+    def open_database_viewer(self):
+        """
+        Open the database viewer.
+        """
+        # Initialize tables data
+        connection = connect_to_database()
+        if not connection:
+            QMessageBox.critical(self, "Error", "Failed to connect to the database.")
+            return
+
+        cursor = connection.cursor()
+
+        # Specify the tables to fetch
+        tables_to_fetch = ['columns', 'rows', 'banks', 'taverns', 'transits', 'userbuildings', 'shops', 'guilds',
+                           'placesofinterest']
+        tables_data = {}
+
+        for table_name in tables_to_fetch:
+            column_names, data = self.fetch_table_data(cursor, table_name)
+            tables_data[table_name] = (column_names, data)
+
+        cursor.close()
+        connection.close()
+
+        # Show the database viewer
+        self.database_viewer = DatabaseViewer(tables_data)
+        self.database_viewer.show()
+
+    def fetch_table_data(self, cursor, table_name):
+        """
+        Fetch data from the specified table and return it as a list of tuples, including column names.
+
+        Args:
+            cursor: MySQL cursor object.
+            table_name: Name of the table to fetch data from.
+
+        Returns:
+            List of tuples containing column names and table data.
+        """
+        cursor.execute(f"DESCRIBE `{table_name}`")
+        column_names = [col[0] for col in cursor.fetchall()]
+
+        cursor.execute(f"SELECT * FROM `{table_name}`")
+        data = cursor.fetchall()
+
+        return column_names, data
+
+
 # -----------------------
-# Character Dialog
+# Database Viewer Class
+# -----------------------
+
+class DatabaseViewer(QMainWindow):
+    """
+    Main application class for viewing database tables.
+    """
+
+    def __init__(self, tables_data):
+        """
+        Initialize the DatabaseViewer with table data.
+        """
+        super().__init__()
+        self.setWindowTitle('MySQL Database Viewer')
+        self.setGeometry(100, 100, 800, 600)
+
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        for table_name, (column_names, data) in tables_data.items():
+            self.add_table_tab(table_name, column_names, data)
+
+    def add_table_tab(self, table_name, column_names, data):
+        """
+        Add a new tab for a table.
+
+        Args:
+            table_name: The name of the table.
+            column_names: List of column names for the table.
+            data: The data to display in the table.
+        """
+        table_widget = QTableWidget()
+        table_widget.setRowCount(len(data))
+        table_widget.setColumnCount(len(column_names))
+        table_widget.setHorizontalHeaderLabels(column_names)
+
+        for row_idx, row_data in enumerate(data):
+            for col_idx, col_data in enumerate(row_data):
+                table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(col_data)))
+
+        self.tab_widget.addTab(table_widget, table_name)
+
+# -----------------------
+# Character Dialog Class
 # -----------------------
 
 class CharacterDialog(QDialog):
@@ -1911,7 +2032,7 @@ class set_destination_dialog(QDialog):
         main_layout.addLayout(custom_location_layout)
 
         # Add control buttons
-        button_layout = QHBoxLayout()
+        button_layout = QGridLayout()  # Change to QGridLayout to accommodate (widget, row, column) syntax
 
         set_button = QPushButton("Set Destination")
         set_button.clicked.connect(self.set_destination)
@@ -1924,10 +2045,13 @@ class set_destination_dialog(QDialog):
         go_button = QPushButton("Go")
         go_button.clicked.connect(self.accept)
 
+        # Add buttons to the layout using the correct syntax for QGridLayout
         button_layout.addWidget(set_button, 0, 0)
         button_layout.addWidget(clear_button, 0, 1)
         button_layout.addWidget(update_button, 1, 0)
         button_layout.addWidget(cancel_button, 1, 1)
+        button_layout.addWidget(go_button, 2, 0, 1, 2)  # Span Go button across two columns
+
         main_layout.addLayout(button_layout)
 
     def populate_dropdown(self, dropdown, items):
