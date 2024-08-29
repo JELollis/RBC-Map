@@ -885,9 +885,16 @@ class CityMapApp(QMainWindow):
 
         # Tools menu
         tools_menu = menu_bar.addMenu('Tools')
+
+        # Database Viewer Tool
         database_viewer_action = QAction('Database Viewer', self)
         database_viewer_action.triggered.connect(self.open_database_viewer)
         tools_menu.addAction(database_viewer_action)
+
+        # Shopping List Tool
+        shopping_list_action = QAction('Shopping List Generator', self)
+        shopping_list_action.triggered.connect(self.open_shopping_list_tool)
+        tools_menu.addAction(shopping_list_action)
 
         # Help menu
         help_menu = menu_bar.addMenu('Help')
@@ -980,6 +987,13 @@ class CityMapApp(QMainWindow):
         if file_name:
             self.grab().save(file_name)
 
+    def open_shopping_list_tool(self):
+        """
+        Opens the Shopping List Tool window.
+        """
+        self.shopping_list_tool = ShoppingListTool()
+        self.shopping_list_tool.show()
+        
     # -----------------------
     # Character Management
     # -----------------------
@@ -2027,7 +2041,152 @@ class ThemeCustomizationDialog(QDialog):
         )
 
 # -----------------------
-# Set Destination Dialog
+# AVITD Scraper Class
+# -----------------------
+
+class AVITDScraper:
+    """
+    A scraper class for 'A View in the Dark' to update guilds and shops data in the database.
+    """
+
+    def __init__(self):
+        """
+        Initialize the scraper with required headers and database connection.
+        """
+        self.url = "https://aviewinthedark.net/"
+        self.connection = connect_to_database()  # Using the global connect_to_database method
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        }
+
+        # Set up logging
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.info("AVITDScraper initialized.")
+
+    def scrape_guilds_and_shops(self):
+        """
+        Scrape the guilds and shops data from the website and update the database.
+        """
+        logging.info("Starting to scrape guilds and shops.")
+        response = requests.get(self.url, headers=self.headers)
+        logging.debug(f"Received response: {response.status_code}")
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        guilds = self.scrape_section(soup, "the guilds")
+        shops = self.scrape_section(soup, "the shops")
+        guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
+        shops_next_update = self.extract_next_update_time(soup, 'Shops')
+
+        # Display results in the console (for debugging purposes)
+        self.display_results(guilds, shops, guilds_next_update, shops_next_update)
+
+        # Update the database with scraped data
+        self.update_database(guilds, "guilds", guilds_next_update)
+        self.update_database(shops, "shops", shops_next_update)
+        logging.info("Finished scraping and updating the database.")
+
+    def scrape_section(self, soup, section_image_alt):
+        """
+        Scrape a specific section (guilds or shops) from the website.
+        """
+        logging.debug(f"Scraping section: {section_image_alt}")
+        data = []
+        section_image = soup.find('img', alt=section_image_alt)
+        if not section_image:
+            logging.warning(f"No data found for {section_image_alt}.")
+            return data
+
+        table = section_image.find_next('table')
+        rows = table.find_all('tr', class_=['odd', 'even'])
+
+        for row in rows:
+            columns = row.find_all('td')
+            if len(columns) < 2:
+                logging.debug(f"Skipping row due to insufficient columns: {row}")
+                continue
+
+            name = columns[0].text.strip()
+            location = columns[1].text.strip().replace("SE of ", "").strip()
+
+            try:
+                column, row = location.split(" and ")
+                data.append((name, column, row))
+                logging.debug(f"Extracted data - Name: {name}, Column: {column}, Row: {row}")
+            except ValueError:
+                logging.warning(f"Location format unexpected for {name}: {location}")
+
+        logging.info(f"Scraped {len(data)} entries from {section_image_alt}.")
+        return data
+
+    def extract_next_update_time(self, soup, section_name):
+        """
+        Extract the next update time for a specific section (guilds or shops).
+        """
+        logging.debug(f"Extracting next update time for section: {section_name}")
+        section_divs = soup.find_all('div', class_='next_change')
+        for div in section_divs:
+            if section_name in div.text:
+                match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
+                if match:
+                    days = int(match.group(1))
+                    hours = int(match.group(2))
+                    minutes = int(match.group(3))
+                    seconds = int(match.group(4))
+                    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+                    logging.debug(f"Next update time for {section_name}: {next_update}")
+                    return next_update.strftime('%Y-%m-%d %H:%M:%S')
+        logging.warning(f"No next update time found for {section_name}.")
+        return 'NA'
+
+    def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
+        """
+        Display the results of the scraping in the console for debugging purposes.
+        """
+        logging.info(f"Guilds Next Update: {guilds_next_update}")
+        logging.info(f"Shops Next Update: {shops_next_update}")
+
+        logging.info("Guilds Data:")
+        for guild in guilds:
+            logging.info(f"Name: {guild[0]}, Column: {guild[1]}, Row: {guild[2]}")
+
+        logging.info("Shops Data:")
+        for shop in shops:
+            logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
+
+    def update_database(self, data, table, next_update):
+        """
+        Update the database with the scraped data.
+        """
+        if not self.connection:
+            logging.error("Failed to connect to the database.")
+            return
+
+        cursor = self.connection.cursor()
+        for name, column, row in data:
+            try:
+                logging.debug(f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
+                cursor.execute(
+                    f"UPDATE {table} SET `Column`=%s, `Row`=%s, `next_update`=%s WHERE `Name`=%s",
+                    (column, row, next_update, name)
+                )
+            except pymysql.MySQLError as e:
+                logging.error(f"Failed to update {table} entry '{name}': {e}")
+
+        self.connection.commit()
+        cursor.close()
+        logging.info(f"Database updated for {table}.")
+
+    def close_connection(self):
+        """
+        Close the database connection.
+        """
+        if self.connection:
+            self.connection.close()
+            logging.info("Database connection closed.")
+
+# -----------------------
+# Tools
 # -----------------------
 
 class set_destination_dialog(QDialog):
@@ -2214,150 +2373,185 @@ class set_destination_dialog(QDialog):
             logging.warning("No valid destination selected or incorrect coordinates provided.")
 
 
-# -----------------------
-# AVITD Scraper Class
-# -----------------------
-
-class AVITDScraper:
-    """
-    A scraper class for 'A View in the Dark' to update guilds and shops data in the database.
-    """
-
+class ShoppingListTool(QMainWindow):
     def __init__(self):
-        """
-        Initialize the scraper with required headers and database connection.
-        """
-        self.url = "https://aviewinthedark.net/"
-        self.connection = connect_to_database()  # Using the global connect_to_database method
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        }
+        super().__init__()
+        self.setWindowTitle("Shopping List Tool")
+        self.setGeometry(100, 100, 600, 400)
 
-        # Set up logging
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-        logging.info("AVITDScraper initialized.")
-
-    def scrape_guilds_and_shops(self):
-        """
-        Scrape the guilds and shops data from the website and update the database.
-        """
-        logging.info("Starting to scrape guilds and shops.")
-        response = requests.get(self.url, headers=self.headers)
-        logging.debug(f"Received response: {response.status_code}")
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        guilds = self.scrape_section(soup, "the guilds")
-        shops = self.scrape_section(soup, "the shops")
-        guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
-        shops_next_update = self.extract_next_update_time(soup, 'Shops')
-
-        # Display results in the console (for debugging purposes)
-        self.display_results(guilds, shops, guilds_next_update, shops_next_update)
-
-        # Update the database with scraped data
-        self.update_database(guilds, "guilds", guilds_next_update)
-        self.update_database(shops, "shops", shops_next_update)
-        logging.info("Finished scraping and updating the database.")
-
-    def scrape_section(self, soup, section_image_alt):
-        """
-        Scrape a specific section (guilds or shops) from the website.
-        """
-        logging.debug(f"Scraping section: {section_image_alt}")
-        data = []
-        section_image = soup.find('img', alt=section_image_alt)
-        if not section_image:
-            logging.warning(f"No data found for {section_image_alt}.")
-            return data
-
-        table = section_image.find_next('table')
-        rows = table.find_all('tr', class_=['odd', 'even'])
-
-        for row in rows:
-            columns = row.find_all('td')
-            if len(columns) < 2:
-                logging.debug(f"Skipping row due to insufficient columns: {row}")
-                continue
-
-            name = columns[0].text.strip()
-            location = columns[1].text.strip().replace("SE of ", "").strip()
-
-            try:
-                column, row = location.split(" and ")
-                data.append((name, column, row))
-                logging.debug(f"Extracted data - Name: {name}, Column: {column}, Row: {row}")
-            except ValueError:
-                logging.warning(f"Location format unexpected for {name}: {location}")
-
-        logging.info(f"Scraped {len(data)} entries from {section_image_alt}.")
-        return data
-
-    def extract_next_update_time(self, soup, section_name):
-        """
-        Extract the next update time for a specific section (guilds or shops).
-        """
-        logging.debug(f"Extracting next update time for section: {section_name}")
-        section_divs = soup.find_all('div', class_='next_change')
-        for div in section_divs:
-            if section_name in div.text:
-                match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
-                if match:
-                    days = int(match.group(1))
-                    hours = int(match.group(2))
-                    minutes = int(match.group(3))
-                    seconds = int(match.group(4))
-                    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
-                    logging.debug(f"Next update time for {section_name}: {next_update}")
-                    return next_update.strftime('%Y-%m-%d %H:%M:%S')
-        logging.warning(f"No next update time found for {section_name}.")
-        return 'NA'
-
-    def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
-        """
-        Display the results of the scraping in the console for debugging purposes.
-        """
-        logging.info(f"Guilds Next Update: {guilds_next_update}")
-        logging.info(f"Shops Next Update: {shops_next_update}")
-
-        logging.info("Guilds Data:")
-        for guild in guilds:
-            logging.info(f"Name: {guild[0]}, Column: {guild[1]}, Row: {guild[2]}")
-
-        logging.info("Shops Data:")
-        for shop in shops:
-            logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
-
-    def update_database(self, data, table, next_update):
-        """
-        Update the database with the scraped data.
-        """
+        self.connection = connect_to_database()
         if not self.connection:
-            logging.error("Failed to connect to the database.")
-            return
+            print("Failed to connect to the database.")
+            sys.exit(1)
 
-        cursor = self.connection.cursor()
-        for name, column, row in data:
-            try:
-                logging.debug(f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
-                cursor.execute(
-                    f"UPDATE {table} SET `Column`=%s, `Row`=%s, `next_update`=%s WHERE `Name`=%s",
-                    (column, row, next_update, name)
-                )
-            except pymysql.MySQLError as e:
-                logging.error(f"Failed to update {table} entry '{name}': {e}")
+        self.cursor = self.connection.cursor()
 
-        self.connection.commit()
-        cursor.close()
-        logging.info(f"Database updated for {table}.")
+        self.setup_ui()
 
-    def close_connection(self):
+    def setup_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+
+        # Create dropdowns for selecting shop and charisma level
+        form_layout = QFormLayout()
+
+        self.shop_dropdown = QComboBox()
+        self.populate_shop_dropdown()
+        form_layout.addRow("Select Shop:", self.shop_dropdown)
+
+        self.charisma_dropdown = QComboBox()
+        self.charisma_dropdown.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
+        form_layout.addRow("Select Charisma Level:", self.charisma_dropdown)
+
+        main_layout.addLayout(form_layout)
+
+        # Create list widgets for shopping list
+        self.item_list = QListWidget()
+        self.shopping_list = QListWidget()
+
+        main_layout.addWidget(QLabel("Available Items"))
+        main_layout.addWidget(self.item_list)
+
+        # Add buttons for adding/removing items
+        button_layout = QVBoxLayout()
+
+        add_button = QPushButton("Add Item")
+        add_button.clicked.connect(self.add_item_to_list)
+        button_layout.addWidget(add_button)
+
+        remove_button = QPushButton("Remove Item")
+        remove_button.clicked.connect(self.remove_item_from_list)
+        button_layout.addWidget(remove_button)
+
+        main_layout.addLayout(button_layout)
+        main_layout.addWidget(QLabel("Shopping List"))
+        main_layout.addWidget(self.shopping_list)
+
+        # Create a label to display the total of the shopping list
+        self.total_label = QLabel("List Total: 0 Coins")
+        main_layout.addWidget(self.total_label)
+
+        # Load the items when the shop or charisma level changes
+        self.shop_dropdown.currentIndexChanged.connect(self.load_items)
+        self.charisma_dropdown.currentIndexChanged.connect(self.update_shopping_list_prices)
+
+        # Load items initially
+        self.load_items()
+
+    def populate_shop_dropdown(self):
         """
-        Close the database connection.
+        Populate the shop dropdown with available shops from the database.
         """
-        if self.connection:
-            self.connection.close()
-            logging.info("Database connection closed.")
+        self.cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
+        shops = self.cursor.fetchall()
+        for shop in shops:
+            self.shop_dropdown.addItem(shop[0])
+
+    def load_items(self):
+        """
+        Load items from the selected shop and charisma level into the item list.
+        """
+        self.item_list.clear()
+        shop_name = self.shop_dropdown.currentText()
+        charisma_level = self.charisma_dropdown.currentText()
+
+        if charisma_level == "No Charisma":
+            price_column = "base_price"
+        elif charisma_level == "Charisma 1":
+            price_column = "charisma_level_1"
+        elif charisma_level == "Charisma 2":
+            price_column = "charisma_level_2"
+        elif charisma_level == "Charisma 3":
+            price_column = "charisma_level_3"
+        else:
+            price_column = "base_price"  # Default to base_price
+
+        query = f"""
+        SELECT item_name, {price_column}
+        FROM shop_items
+        WHERE shop_name = %s
+        """
+        self.cursor.execute(query, (shop_name,))
+        items = self.cursor.fetchall()
+
+        for item in items:
+            item_name = item[0]
+            price = item[1]
+            self.item_list.addItem(f"{item_name} - {price} Coins")
+
+    def add_item_to_list(self):
+        """
+        Add the selected item to the shopping list.
+        """
+        selected_item = self.item_list.currentItem()
+        if selected_item:
+            item_name = selected_item.text().split(" - ")[0]
+            price = int(selected_item.text().split(" - ")[1].split()[0])
+            self.shopping_list.addItem(f"{item_name} - {price} Coins")
+            self.update_total()
+
+    def remove_item_from_list(self):
+        """
+        Remove the selected item from the shopping list.
+        """
+        selected_item = self.shopping_list.currentItem()
+        if selected_item:
+            self.shopping_list.takeItem(self.shopping_list.row(selected_item))
+            self.update_total()
+
+    def update_shopping_list_prices(self):
+        """
+        Update the prices of items in the shopping list when the charisma level is changed.
+        """
+        charisma_level = self.charisma_dropdown.currentText()
+
+        if charisma_level == "No Charisma":
+            price_column = "base_price"
+        elif charisma_level == "Charisma 1":
+            price_column = "charisma_level_1"
+        elif charisma_level == "Charisma 2":
+            price_column = "charisma_level_2"
+        elif charisma_level == "Charisma 3":
+            price_column = "charisma_level_3"
+        else:
+            price_column = "base_price"  # Default to base_price
+
+        for index in range(self.shopping_list.count()):
+            item_name = self.shopping_list.item(index).text().split(" - ")[0]
+
+            query = f"""
+            SELECT {price_column}
+            FROM shop_items
+            WHERE shop_name = %s AND item_name = %s
+            """
+            self.cursor.execute(query, (self.shop_dropdown.currentText(), item_name))
+            price = self.cursor.fetchone()[0]
+
+            self.shopping_list.item(index).setText(f"{item_name} - {price} Coins")
+
+        self.update_total()
+
+    def update_total(self):
+        """
+        Calculate and update the total cost of items in the shopping list.
+        """
+        total = 0
+        for index in range(self.shopping_list.count()):
+            item_text = self.shopping_list.item(index).text()
+            price = int(item_text.split("-")[1].strip().split()[0])  # Extract the price
+            total += price
+
+        self.total_label.setText(f"List Total: {total} Coins")
+
+    def closeEvent(self, event):
+        """
+        Ensure the database connection is closed when the application is closed.
+        """
+        self.cursor.close()
+        self.connection.close()
+        event.accept()
+
 
 def main():
     """
