@@ -1766,34 +1766,18 @@ class CityMapApp(QMainWindow):
 
         credits_dialog.exec()
 
-
-
     def open_database_viewer(self):
         """
         Open the database viewer.
         """
-        # Initialize tables data
-        connection = connect_to_database()
-        if not connection:
+        # Get the database connection from the global connection dictionary
+        db_connection = connect_to_database()
+        if not db_connection:
             QMessageBox.critical(self, "Error", "Failed to connect to the database.")
             return
 
-        cursor = connection.cursor()
-
-        # Specify the tables to fetch
-        tables_to_fetch = ['columns', 'rows', 'banks', 'taverns', 'transits', 'userbuildings', 'shops', 'guilds',
-                           'placesofinterest']
-        tables_data = {}
-
-        for table_name in tables_to_fetch:
-            column_names, data = self.fetch_table_data(cursor, table_name)
-            tables_data[table_name] = (column_names, data)
-
-        cursor.close()
-        connection.close()
-
-        # Show the database viewer
-        self.database_viewer = DatabaseViewer(tables_data)
+        # Initialize the DatabaseViewer with the database connection
+        self.database_viewer = DatabaseViewer(db_connection)
         self.database_viewer.show()
 
     def fetch_table_data(self, cursor, table_name):
@@ -1825,9 +1809,9 @@ class DatabaseViewer(QMainWindow):
     Main application class for viewing database tables.
     """
 
-    def __init__(self, tables_data):
+    def __init__(self, db_connection):
         """
-        Initialize the DatabaseViewer with table data.
+        Initialize the DatabaseViewer by querying the database for tables.
         """
         super().__init__()
         self.setWindowTitle('MySQL Database Viewer')
@@ -1836,8 +1820,33 @@ class DatabaseViewer(QMainWindow):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
-        for table_name, (column_names, data) in tables_data.items():
+        self.db_connection = db_connection
+        self.cursor = self.db_connection.cursor()
+
+        # Query to get all table names
+        self.cursor.execute("SHOW TABLES")
+        tables = self.cursor.fetchall()
+
+        for (table_name,) in tables:
+            column_names, data = self.get_table_data(table_name)
             self.add_table_tab(table_name, column_names, data)
+
+    def get_table_data(self, table_name):
+        """
+        Fetch the column names and data for a given table.
+
+        Args:
+            table_name: The name of the table to fetch data from.
+
+        Returns:
+            A tuple containing a list of column names and the data.
+        """
+        # Use backticks to handle reserved keywords or special characters in table names
+        self.cursor.execute(f"SELECT * FROM `{table_name}`")
+        data = self.cursor.fetchall()
+
+        column_names = [i[0] for i in self.cursor.description]
+        return column_names, data
 
     def add_table_tab(self, table_name, column_names, data):
         """
@@ -1858,6 +1867,14 @@ class DatabaseViewer(QMainWindow):
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(col_data)))
 
         self.tab_widget.addTab(table_widget, table_name)
+
+    def closeEvent(self, event):
+        """
+        Ensure the database connection is closed when the application is closed.
+        """
+        self.cursor.close()
+        self.db_connection.close()
+        event.accept()
 
 # -----------------------
 # Character Dialog Class
