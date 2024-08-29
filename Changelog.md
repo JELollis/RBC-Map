@@ -109,3 +109,10 @@
 - **Intersection Naming**: Updated the intersection naming logic to handle cases where locations are at the edge of the map, ensuring consistent and accurate labels.
 - **SQLite Cookie Storage**: Implemented an SQLite-based cookie storage system for managing session cookies within the application.
 - **User Interface Updates**: Enhanced various UI components, including a more dynamic and responsive map view, improved character management, and additional customization options.
+
+### Version 0.7.3
+- **Scraping and Data Updates**: Added automated scraping and data updates for guilds and shops when the "Update Data" button is clicked.
+	-The scraping process now runs before updating comboboxes with the latest data.
+	-Improved logic to handle missing or outdated data during the scraping process.
+-	**Bug Fixes**: Addressed various bugs related to data handling and UI updates.
+- **Perormance Improvements**: Optimized data loading and scraping processes for faster updates.
