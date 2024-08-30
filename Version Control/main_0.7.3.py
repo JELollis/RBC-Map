@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.7.2
+# Filename: main_0.7.3
 
 """
 =========================
@@ -29,7 +29,7 @@ Classes:
 - DatabaseViewer: A utility class that displays the contents of database tables in a tabbed view.
 - CharacterDialog: A dialog class for adding or modifying user characters.
 - ThemeCustomizationDialog: A dialog class for customizing the application theme.
-- set_destination_dialog: A dialog class for setting a destination on the map.
+- SetDestinationDialog: A dialog class for setting a destination on the map.
 - AVITDScraper: A scraper class that fetches data from 'A View in the Dark' to update guilds
   and shops data in the database.
 
@@ -74,7 +74,6 @@ required_modules = [
     'PySide6.QtWebChannel', 'PySide6.QtNetwork'
 ]
 
-
 def check_required_modules(modules):
     """
     Check if all required modules are installed.
@@ -95,10 +94,9 @@ def check_required_modules(modules):
         for mod in missing_modules:
             print(f"- {mod}")
         print("\nYou can install them with:")
-        print("pip install {mod}")
+        print("pip install pymysql requests bs4 PySide6 PySide6-WebEngine")
         return False
     return True
-
 
 # Check for required modules
 if not check_required_modules(required_modules):
@@ -135,7 +133,7 @@ def ensure_directories_exist():
     """
     Ensure that the required directories exist. If they don't, create them.
     """
-    required_dirs = ['logs', 'sessions', 'settings']
+    required_dirs = ['logs', 'sessions', 'settings', 'images']
     for directory in required_dirs:
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -152,7 +150,7 @@ def setup_logging():
     """
     Setup logging configuration to save logs in the 'logs' directory with the filename 'rbc_{date}.log'.
     """
-    log_filename = datetime.now().strftime('logs/rbc_%Y-%m-%d.log')
+    log_filename = datetime.now().strftime('./logs/rbc_%Y-%m-%d.log')
     logging.basicConfig(
         level=logging.DEBUG,
         format='%(asctime)s - %(levelname)s - %(message)s',
@@ -412,8 +410,9 @@ class CityMapApp(QMainWindow):
         super().__init__()
 
         self.scraper = AVITDScraper()
+        self.scraper.scrape_guilds_and_shops()
 
-        self.setWindowIcon(QIcon('favicon.ico'))
+        self.setWindowIcon(QIcon('../images/favicon.ico'))
         self.setWindowTitle('RBC City Map')
         self.setGeometry(100, 100, 1200, 800)
 
@@ -1000,7 +999,8 @@ class CityMapApp(QMainWindow):
             logging.warning("Characters file not found. No characters loaded.")
             self.characters = []
         except Exception as e:
-            logging.error(f"Failed to load characters: {e}")
+            logging.error(f"An unexpected error occurred while loading characters: {e}")
+            QMessageBox.critical(self, "Error", f"Unexpected error: {e}")
             self.characters = []
 
     def save_characters(self):
@@ -1120,7 +1120,7 @@ class CityMapApp(QMainWindow):
         Save the last active character to a file.
         """
         try:
-            with open('../sessions/last_active_character.pkl', 'wb') as f:
+            with open('./sessions/last_active_character.pkl', 'wb') as f:
                 pickle.dump(self.selected_character, f)
                 logging.debug("Last active character saved successfully.")
         except Exception as e:
@@ -1131,7 +1131,7 @@ class CityMapApp(QMainWindow):
         Load the last active character from a file and log in automatically.
         """
         try:
-            with open('../sessions/last_active_character.pkl', 'rb') as f:
+            with open('./sessions/last_active_character.pkl', 'rb') as f:
                 self.selected_character = pickle.load(f)
                 logging.debug(f"Last active character loaded: {self.selected_character['name']}")
                 self.login_selected_character()
@@ -1234,6 +1234,11 @@ class CityMapApp(QMainWindow):
                 color (QColor): Color to fill the location.
                 label_text (str, optional): Label text to draw at the location. Defaults to None.
             """
+            # Adjust coordinates for WCL (column 0) and NCL (row 0)
+            if column_index != 0 and row_index != 0:
+                column_index += 1
+                row_index += 1
+
             x0 = (column_index - self.column_start) * block_size
             y0 = (row_index - self.row_start) * block_size
 
@@ -1248,6 +1253,16 @@ class CityMapApp(QMainWindow):
                 text_y = y0 + (block_size + text_rect.height()) // 2 - font_metrics.descent()
                 painter.setPen(QColor('white'))
                 painter.drawText(text_x, text_y, label_text)
+
+        # Update the part where banks and other locations are drawn
+        for (col_name, row_name, _, _) in self.banks_coordinates:
+            column_index = self.columns.get(col_name)
+            row_index = self.rows.get(row_name)
+            if column_index is not None and row_index is not None:
+                logging.debug(f"Drawing bank at {col_name} & {row_name} with coordinates ({column_index}, {row_index})")
+                draw_location(column_index, row_index, self.color_mappings["bank"], "Bank")
+            else:
+                logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
         # Draw the grid
         for i in range(self.zoom_level):
@@ -1291,14 +1306,17 @@ class CityMapApp(QMainWindow):
             column_index = self.columns.get(col_name)
             row_index = self.rows.get(row_name)
             if column_index is not None and row_index is not None:
-                # Adjust bank coordinates by +1 to match the tavern and transit coordinate system
-                adjusted_column_index = column_index + 1
+                # Only adjust for positive columns
+                if column_index > 0:
+                    adjusted_column_index = column_index + 1
+                else:
+                    adjusted_column_index = column_index  # No adjustment for column = 0 (WCL)
+
                 adjusted_row_index = row_index + 1
                 logging.debug(
-                    f"Drawing bank at {col_name} & {row_name} with coordinates ({adjusted_column_index}, {adjusted_row_index})")
+                    f"Drawing bank at {col_name} & {row_name} with coordinates ({adjusted_column_index}, {adjusted_row_index})"
+                )
                 draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
-            else:
-                logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
         # Draw other locations as before
         for name, (column_index, row_index) in self.taverns_coordinates.items():
@@ -1351,40 +1369,49 @@ class CityMapApp(QMainWindow):
         nearest_bank = self.find_nearest_bank(current_x, current_y)
         nearest_transit = self.find_nearest_transit(current_x, current_y)
 
+        # Draw nearest tavern line
         if nearest_tavern:
             nearest_tavern_coords = nearest_tavern[0][1]
             logging.debug(
                 f"Drawing line to nearest tavern at coordinates ({nearest_tavern_coords[0]}, {nearest_tavern_coords[1]})")
+            tavern_x = nearest_tavern_coords[0] if nearest_tavern_coords[0] == 0 else nearest_tavern_coords[0] + 1
+            tavern_y = nearest_tavern_coords[1] if nearest_tavern_coords[1] == 0 else nearest_tavern_coords[1] + 1
             painter.setPen(QPen(QColor('orange'), 3))  # Set pen color to orange and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
+                (tavern_x - self.column_start) * block_size + block_size // 2,
+                (tavern_y - self.row_start) * block_size + block_size // 2
             )
 
+        # Draw nearest bank line
         if nearest_bank:
             nearest_bank_coords = nearest_bank[0][1]
             logging.debug(
-                f"Drawing line to nearest bank at coordinates ({nearest_bank_coords[0] + 1}, {nearest_bank_coords[1] + 1})")
+                f"Drawing line to nearest bank at coordinates ({nearest_bank_coords[0]}, {nearest_bank_coords[1]})")
+            bank_x = nearest_bank_coords[0] if nearest_bank_coords[0] == 0 else nearest_bank_coords[0] + 1
+            bank_y = nearest_bank_coords[1] if nearest_bank_coords[1] == 0 else nearest_bank_coords[1] + 1
             painter.setPen(QPen(QColor('blue'), 3))  # Set pen color to blue and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
-                (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
+                (bank_x - self.column_start) * block_size + block_size // 2,
+                (bank_y - self.row_start) * block_size + block_size // 2
             )
 
+        # Draw nearest transit line
         if nearest_transit:
             nearest_transit_coords = nearest_transit[0][1]
             logging.debug(
                 f"Drawing line to nearest transit at coordinates ({nearest_transit_coords[0]}, {nearest_transit_coords[1]})")
+            transit_x = nearest_transit_coords[0] if nearest_transit_coords[0] == 0 else nearest_transit_coords[0] + 1
+            transit_y = nearest_transit_coords[1] if nearest_transit_coords[1] == 0 else nearest_transit_coords[1] + 1
             painter.setPen(QPen(QColor('red'), 3))  # Set pen color to red and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
+                (transit_x - self.column_start) * block_size + block_size // 2,
+                (transit_y - self.row_start) * block_size + block_size // 2
             )
 
         # Draw destination line
@@ -1499,7 +1526,7 @@ class CityMapApp(QMainWindow):
         """
         Save the destination to a file.
         """
-        with open('../sessions/destination.pkl', 'wb') as f:
+        with open('./sessions/destination.pkl', 'wb') as f:
             pickle.dump(self.destination, f)
             pickle.dump(datetime.now(), f)
 
@@ -1508,13 +1535,17 @@ class CityMapApp(QMainWindow):
         Load the destination from a file.
         """
         try:
-            with open('../sessions/destination.pkl', 'rb') as f:
+            with open('./sessions/destination.pkl', 'rb') as f:
                 self.destination = pickle.load(f)
                 self.scrape_timestamp = pickle.load(f)
         except (FileNotFoundError, EOFError):
             logging.warning("Destination file not found or is empty. Setting defaults.")
             self.destination = None
             self.scrape_timestamp = datetime.min
+
+    # -----------------------
+    # Minimap Controls
+    # -----------------------
 
     def zoom_in(self):
         """
@@ -1574,6 +1605,10 @@ class CityMapApp(QMainWindow):
                 self.row_start = new_row_start
 
             self.update_minimap()
+
+    # -----------------------
+    # Infobar Management
+    # -----------------------
 
     def calculate_ap_cost(self, start, end):
         """
@@ -1682,7 +1717,7 @@ class CityMapApp(QMainWindow):
         """
         QMessageBox.about(self, "About RBC City Map",
                           "RBC City Map Application\n\n"
-                          "Version 0.7.2\n\n"
+                          "Version 0.7.3\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
                           "Development team shown in credits.\n\n")
@@ -1731,34 +1766,18 @@ class CityMapApp(QMainWindow):
 
         credits_dialog.exec()
 
-
-
     def open_database_viewer(self):
         """
         Open the database viewer.
         """
-        # Initialize tables data
-        connection = connect_to_database()
-        if not connection:
+        # Get the database connection from the global connection dictionary
+        db_connection = connect_to_database()
+        if not db_connection:
             QMessageBox.critical(self, "Error", "Failed to connect to the database.")
             return
 
-        cursor = connection.cursor()
-
-        # Specify the tables to fetch
-        tables_to_fetch = ['columns', 'rows', 'banks', 'taverns', 'transits', 'userbuildings', 'shops', 'guilds',
-                           'placesofinterest']
-        tables_data = {}
-
-        for table_name in tables_to_fetch:
-            column_names, data = self.fetch_table_data(cursor, table_name)
-            tables_data[table_name] = (column_names, data)
-
-        cursor.close()
-        connection.close()
-
-        # Show the database viewer
-        self.database_viewer = DatabaseViewer(tables_data)
+        # Initialize the DatabaseViewer with the database connection
+        self.database_viewer = DatabaseViewer(db_connection)
         self.database_viewer.show()
 
     def fetch_table_data(self, cursor, table_name):
@@ -1790,9 +1809,9 @@ class DatabaseViewer(QMainWindow):
     Main application class for viewing database tables.
     """
 
-    def __init__(self, tables_data):
+    def __init__(self, db_connection):
         """
-        Initialize the DatabaseViewer with table data.
+        Initialize the DatabaseViewer by querying the database for tables.
         """
         super().__init__()
         self.setWindowTitle('MySQL Database Viewer')
@@ -1801,8 +1820,33 @@ class DatabaseViewer(QMainWindow):
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
-        for table_name, (column_names, data) in tables_data.items():
+        self.db_connection = db_connection
+        self.cursor = self.db_connection.cursor()
+
+        # Query to get all table names
+        self.cursor.execute("SHOW TABLES")
+        tables = self.cursor.fetchall()
+
+        for (table_name,) in tables:
+            column_names, data = self.get_table_data(table_name)
             self.add_table_tab(table_name, column_names, data)
+
+    def get_table_data(self, table_name):
+        """
+        Fetch the column names and data for a given table.
+
+        Args:
+            table_name: The name of the table to fetch data from.
+
+        Returns:
+            A tuple containing a list of column names and the data.
+        """
+        # Use backticks to handle reserved keywords or special characters in table names
+        self.cursor.execute(f"SELECT * FROM `{table_name}`")
+        data = self.cursor.fetchall()
+
+        column_names = [i[0] for i in self.cursor.description]
+        return column_names, data
 
     def add_table_tab(self, table_name, column_names, data):
         """
@@ -1823,6 +1867,14 @@ class DatabaseViewer(QMainWindow):
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(col_data)))
 
         self.tab_widget.addTab(table_widget, table_name)
+
+    def closeEvent(self, event):
+        """
+        Ensure the database connection is closed when the application is closed.
+        """
+        self.cursor.close()
+        self.db_connection.close()
+        event.accept()
 
 # -----------------------
 # Character Dialog Class
@@ -2089,10 +2141,15 @@ class set_destination_dialog(QDialog):
         dropdown.addItems(items)
 
     def update_comboboxes(self):
+        # Run the scraper before updating comboboxes
+        self.parent.scraper.scrape_guilds_and_shops()
+
+        # Now update the comboboxes with the new data
         self.parent.columns, self.parent.rows, self.parent.banks_coordinates, self.parent.taverns_coordinates, self.parent.transits_coordinates, self.parent.user_buildings_coordinates, self.parent.color_mappings, self.parent.shops_coordinates, self.parent.guilds_coordinates, self.parent.places_of_interest_coordinates = load_data()
 
         self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
+        self.populate_dropdown(self.bank_dropdown,
+                               [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
         self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
         self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
         self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
@@ -2109,7 +2166,7 @@ class set_destination_dialog(QDialog):
         self.parent.destination = None
 
         # Save the cleared destination to the file to ensure persistence
-        with open('../sessions/destination.pkl', 'wb') as f:
+        with open('./sessions/destination.pkl', 'wb') as f:
             pickle.dump(self.parent.destination, f)
             pickle.dump(datetime.now(), f)
         self.parent.update_minimap()
@@ -2185,209 +2242,139 @@ class AVITDScraper:
 
     def __init__(self):
         """
-        Initialize the scraper with required headers.
+        Initialize the scraper with required headers and database connection.
         """
+        self.url = "https://aviewinthedark.net/"
+        self.connection = connect_to_database()  # Using the global connect_to_database method
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
 
-    def scrape_guilds(self):
+        # Set up logging
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.info("AVITDScraper initialized.")
+
+    def scrape_guilds_and_shops(self):
         """
-        Scrape guilds data from 'A View in the Dark' and update the database.
+        Scrape the guilds and shops data from the website and update the database.
         """
-        url = 'https://quiz.ravenblack.net/guilds'
-        try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
+        logging.info("Starting to scrape guilds and shops.")
+        response = requests.get(self.url, headers=self.headers)
+        logging.debug(f"Received response: {response.status_code}")
 
-            guilds = []
-            guild_rows = soup.find_all('tr', class_='guild')
-            for row in guild_rows:
-                columns = row.find_all('td')
-                name = columns[0].text.strip()
-                coordinates = re.search(r'\((\d+), (\d+)\)', columns[1].text.strip())
-                if coordinates:
-                    x = int(coordinates.group(1))
-                    y = int(coordinates.group(2))
-                    next_update = self.extract_next_update_time(columns[3].text.strip())
+        soup = BeautifulSoup(response.text, 'html.parser')
 
-                    guilds.append((name, x, y, next_update))
+        guilds = self.scrape_section(soup, "the guilds")
+        shops = self.scrape_section(soup, "the shops")
+        guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
+        shops_next_update = self.extract_next_update_time(soup, 'Shops')
 
-            self.update_guilds(guilds)
+        # Display results in the console (for debugging purposes)
+        self.display_results(guilds, shops, guilds_next_update, shops_next_update)
 
-        except requests.RequestException as e:
-            logging.error(f"Failed to scrape guilds: {e}")
+        # Update the database with scraped data
+        self.update_database(guilds, "guilds", guilds_next_update)
+        self.update_database(shops, "shops", shops_next_update)
+        logging.info("Finished scraping and updating the database.")
 
-    def scrape_shops(self):
+    def scrape_section(self, soup, section_image_alt):
         """
-        Scrape shops data from 'A View in the Dark' and update the database.
+        Scrape a specific section (guilds or shops) from the website.
         """
-        url = 'https://quiz.ravenblack.net/shops'
-        try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
+        logging.debug(f"Scraping section: {section_image_alt}")
+        data = []
+        section_image = soup.find('img', alt=section_image_alt)
+        if not section_image:
+            logging.warning(f"No data found for {section_image_alt}.")
+            return data
 
-            shops = []
-            shop_rows = soup.find_all('tr', class_='shop')
-            for row in shop_rows:
-                columns = row.find_all('td')
-                name = columns[0].text.strip()
-                coordinates = re.search(r'\((\d+), (\d+)\)', columns[1].text.strip())
-                if coordinates:
-                    x = int(coordinates.group(1))
-                    y = int(coordinates.group(2))
-                    next_update = self.extract_next_update_time(columns[3].text.strip())
+        table = section_image.find_next('table')
+        rows = table.find_all('tr', class_=['odd', 'even'])
 
-                    shops.append((name, x, y, next_update))
+        for row in rows:
+            columns = row.find_all('td')
+            if len(columns) < 2:
+                logging.debug(f"Skipping row due to insufficient columns: {row}")
+                continue
 
-            self.update_shops(shops)
+            name = columns[0].text.strip()
+            location = columns[1].text.strip().replace("SE of ", "").strip()
 
-        except requests.RequestException as e:
-            logging.error(f"Failed to scrape shops: {e}")
+            try:
+                column, row = location.split(" and ")
+                data.append((name, column, row))
+                logging.debug(f"Extracted data - Name: {name}, Column: {column}, Row: {row}")
+            except ValueError:
+                logging.warning(f"Location format unexpected for {name}: {location}")
 
-    def extract_next_update_time(self, text):
+        logging.info(f"Scraped {len(data)} entries from {section_image_alt}.")
+        return data
+
+    def extract_next_update_time(self, soup, section_name):
         """
-        Extract the next update time from the text.
-
-        Args:
-            text (str): Text containing the update time.
-
-        Returns:
-            str: Formatted next update time string.
+        Extract the next update time for a specific section (guilds or shops).
         """
-        match = re.search(r'(\d+)\s+days?\s+(\d+):(\d+)', text)
-        if match:
-            days = int(match.group(1))
-            hours = int(match.group(2))
-            minutes = int(match.group(3))
-            next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes)
-            return next_update.strftime('%Y-%m-%d %H:%M:%S')
+        logging.debug(f"Extracting next update time for section: {section_name}")
+        section_divs = soup.find_all('div', class_='next_change')
+        for div in section_divs:
+            if section_name in div.text:
+                match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
+                if match:
+                    days = int(match.group(1))
+                    hours = int(match.group(2))
+                    minutes = int(match.group(3))
+                    seconds = int(match.group(4))
+                    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+                    logging.debug(f"Next update time for {section_name}: {next_update}")
+                    return next_update.strftime('%Y-%m-%d %H:%M:%S')
+        logging.warning(f"No next update time found for {section_name}.")
         return 'NA'
 
-    def update_guild(self, cursor, name, x, y, next_update):
+    def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
         """
-        Update a single guild in the database.
+        Display the results of the scraping in the console for debugging purposes.
+        """
+        logging.info(f"Guilds Next Update: {guilds_next_update}")
+        logging.info(f"Shops Next Update: {shops_next_update}")
 
-        Args:
-            cursor (pymysql.cursors.Cursor): Database cursor.
-            name (str): Guild name.
-            x (int): X coordinate.
-            y (int): Y coordinate.
-            next_update (str): Next update time.
-        """
-        cursor.execute(
-            """
-            INSERT INTO guilds (`Name`, `Column`, `Row`, `Next_Update`)
-            VALUES (%s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE `Next_Update` = VALUES(`Next_Update`)
-            """, (name, x, y, next_update)
-        )
+        logging.info("Guilds Data:")
+        for guild in guilds:
+            logging.info(f"Name: {guild[0]}, Column: {guild[1]}, Row: {guild[2]}")
 
-    def update_shop(self, cursor, name, x, y, next_update):
-        """
-        Update a single shop in the database.
+        logging.info("Shops Data:")
+        for shop in shops:
+            logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
 
-        Args:
-            cursor (pymysql.cursors.Cursor): Database cursor.
-            name (str): Shop name.
-            x (int): X coordinate.
-            y (int): Y coordinate.
-            next_update (str): Next update time.
+    def update_database(self, data, table, next_update):
         """
-        cursor.execute(
-            """
-            INSERT INTO shops (`Name`, `Column`, `Row`, `Next_Update`)
-            VALUES (%s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE `Next_Update` = VALUES(`Next_Update`)
-            """, (name, x, y, next_update)
-        )
-
-    def update_guilds(self, guilds):
+        Update the database with the scraped data.
         """
-        Update the guilds data in the database.
-
-        Args:
-            guilds (list): List of guild data tuples (name, x, y, next_update).
-        """
-        connection = connect_to_database()
-        if not connection:
+        if not self.connection:
             logging.error("Failed to connect to the database.")
             return
 
-        try:
-            cursor = connection.cursor()
-            for guild in guilds:
-                self.update_guild(cursor, guild[0], guild[1], guild[2], guild[3])
-            connection.commit()
-            logging.info("Guilds updated successfully.")
-        except pymysql.MySQLError as e:
-            logging.error(f"Failed to update guilds: {e}")
-        finally:
-            connection.close()
+        cursor = self.connection.cursor()
+        for name, column, row in data:
+            try:
+                logging.debug(f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
+                cursor.execute(
+                    f"UPDATE {table} SET `Column`=%s, `Row`=%s, `next_update`=%s WHERE `Name`=%s",
+                    (column, row, next_update, name)
+                )
+            except pymysql.MySQLError as e:
+                logging.error(f"Failed to update {table} entry '{name}': {e}")
 
-    def update_shops(self, shops):
+        self.connection.commit()
+        cursor.close()
+        logging.info(f"Database updated for {table}.")
+
+    def close_connection(self):
         """
-        Update the shops data in the database.
-
-        Args:
-            shops (list): List of shop data tuples (name, x, y, next_update).
+        Close the database connection.
         """
-        connection = connect_to_database()
-        if not connection:
-            logging.error("Failed to connect to the database.")
-            return
-
-        try:
-            cursor = connection.cursor()
-            for shop in shops:
-                self.update_shop(cursor, shop[0], shop[1], shop[2], shop[3])
-            connection.commit()
-            logging.info("Shops updated successfully.")
-        except pymysql.MySQLError as e:
-            logging.error(f"Failed to update shops: {e}")
-        finally:
-            connection.close()
-
-    def get_next_update_times(self):
-        """
-        Retrieve the next update times for guilds and shops from the database.
-
-        Returns:
-            dict: Dictionary containing the next update times.
-        """
-        connection = connect_to_database()
-        if not connection:
-            logging.error("Failed to connect to the database.")
-            return {}
-
-        try:
-            cursor = connection.cursor()
-
-            cursor.execute("SELECT MIN(Next_Update) FROM guilds WHERE Next_Update != 'NA'")
-            next_guild_update = cursor.fetchone()[0]
-
-            cursor.execute("SELECT MIN(Next_Update) FROM shops WHERE Next_Update != 'NA'")
-            next_shop_update = cursor.fetchone()[0]
-
-            return {
-                'guilds': next_guild_update,
-                'shops': next_shop_update
-            }
-        except pymysql.MySQLError as e:
-            logging.error(f"Failed to retrieve next update times: {e}")
-            return {}
-        finally:
-            connection.close()
-
-    def scrape_avitd_data(self):
-        """
-        Scrape data from 'A View in the Dark' and update the database.
-        """
-        self.scrape_guilds()
-        self.scrape_shops()
-
+        if self.connection:
+            self.connection.close()
+            logging.info("Database connection closed.")
 
 def main():
     """

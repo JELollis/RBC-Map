@@ -15,3 +15,4 @@ qodana.yaml
 /.idea
 /Version Control/__pycache__
 /settings
+/testing/settings
