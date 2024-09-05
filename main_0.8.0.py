@@ -2558,9 +2558,19 @@ class AVITDScraper:
             return
 
         cursor = self.connection.cursor()
+
+        # Step 1: Set all entries' Row and Column to 'NA' initially
+        try:
+            logging.debug(f"Setting all {table} entries' Row and Column to 'NA'.")
+            cursor.execute(f"UPDATE {table} SET `Column`='NA', `Row`='NA', `next_update`=%s", (next_update,))
+        except pymysql.MySQLError as e:
+            logging.error(f"Failed to reset {table} entries to 'NA': {e}")
+
+        # Step 2: Update with the correct data from the scraped results
         for name, column, row in data:
             try:
-                logging.debug(f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
+                logging.debug(
+                    f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
                 cursor.execute(
                     f"UPDATE {table} SET `Column`=%s, `Row`=%s, `next_update`=%s WHERE `Name`=%s",
                     (column, row, next_update, name)
