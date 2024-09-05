@@ -1,0 +1,67 @@
+"""
+=========================
+RBC City Map Application
+=========================
+This application provides a comprehensive graphical interface for viewing and navigating
+the city map of RavenBlack City. It includes features such as zooming in and out, setting
+and saving destinations, viewing the closest points of interest, managing user characters,
+and generating shopping lists based on in-game shops and character conditions. The map data
+is dynamically fetched from a MySQL database, with support for refreshing data from the
+'A View in the Dark' website.
+
+Modules:
+- sys: Provides access to system-specific parameters and functions.
+- os: Used for interacting with the operating system (e.g., directory management).
+- pickle: Facilitates the serialization and deserialization of Python objects.
+- pymysql: Interface for connecting to and interacting with a MySQL database.
+- requests: Allows sending HTTP requests to interact with external websites.
+- re: Provides regular expression matching operations.
+- datetime: Supplies classes for manipulating dates and times.
+- bs4 (BeautifulSoup): Used for parsing HTML and XML documents.
+- PySide6: Provides a set of Python bindings for the Qt application framework.
+- sqlite3: Interface for SQLite database management.
+- webbrowser: Enables the opening of URLs in the default web browser.
+- math: Provides mathematical functions used in damage calculations.
+
+Classes:
+- RBCCommunityMap: The main application class that initializes and manages the user interface,
+  character management, web scraping, shopping list generation, and map functionalities.
+- DatabaseViewer: A utility class that displays the contents of database tables in a tabbed view.
+- CharacterDialog: A dialog class for adding or modifying user characters.
+- ThemeCustomizationDialog: A dialog class for customizing the application theme.
+- SetDestinationDialog: A dialog class for setting a destination on the map.
+- AVITDScraper: A scraper class that fetches data from 'A View in the Dark' to update guilds
+  and shops data in the database.
+- ShoppingListTool: A tool for generating shopping lists, including calculating total costs
+  based on selected items and character conditions.
+- CoinScraper: A class responsible for scraping the current coin count from the character's
+  webpage and updating the ShoppingListTool with the available coins.
+- DamageCalculator: A class for calculating damage dealt to characters based on their blood points (BP).
+- DamageCalculatorUI: A user interface for the DamageCalculator, allowing users to calculate
+  and analyze damage and optionally add required items to the shopping list.
+
+Functions:
+- connect_to_database: Establishes a connection to the MySQL database and handles connection errors.
+- load_data: Loads various map data from the database, including coordinates for banks, taverns, transits,
+  user buildings, shops, guilds, and places of interest.
+- initialize_cookie_db: Sets up an SQLite database for storing cookies.
+- save_cookie_to_db: Saves individual cookies to the SQLite database.
+- load_cookies_from_db: Loads cookies from the SQLite database into the web engine.
+- clear_cookie_db: Clears all cookies from the SQLite database.
+- fetch_table_data: Retrieves and returns the column names and data from a specified database table.
+- extract_coordinates_from_html: Extracts map coordinates from the loaded HTML content.
+- find_nearest_location: Finds the nearest point of interest based on a given set of coordinates.
+- calculate_ap_cost: Calculates the Action Point (AP) cost between two map coordinates.
+- update_guilds: Updates the guilds data in the MySQL database using scraped data.
+- update_shops: Updates the shops data in the MySQL database using scraped data.
+- get_next_update_times: Retrieves the next update times for guilds and shops from the MySQL database.
+- inject_console_logging: Injects JavaScript into the web page to capture and log console messages.
+- apply_theme: Applies the currently selected theme to the application UI.
+- save_theme_settings: Saves the customized theme settings to a file.
+- load_theme_settings: Loads the saved theme settings from a file or database.
+- show_about_dialog: Displays the 'About' dialog with information about the application.
+- show_credits_dialog: Displays the 'Credits' dialog with information about contributors.
+
+To install all required modules, run the following command:
+ pip install pymysql requests bs4 PySide6 PySide6-WebEngine
+"""

@@ -1351,6 +1351,7 @@ class CityMapApp(QMainWindow):
         nearest_bank = self.find_nearest_bank(current_x, current_y)
         nearest_transit = self.find_nearest_transit(current_x, current_y)
 
+        # Draw nearest tavern line
         if nearest_tavern:
             nearest_tavern_coords = nearest_tavern[0][1]
             logging.debug(
@@ -1363,6 +1364,7 @@ class CityMapApp(QMainWindow):
                 (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
             )
 
+        # Draw nearest bank line
         if nearest_bank:
             nearest_bank_coords = nearest_bank[0][1]
             logging.debug(
@@ -1375,6 +1377,7 @@ class CityMapApp(QMainWindow):
                 (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
             )
 
+        # Draw nearest transit line
         if nearest_transit:
             nearest_transit_coords = nearest_transit[0][1]
             logging.debug(

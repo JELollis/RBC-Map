@@ -1,59 +1,67 @@
 #!/usr/bin/env python3
-# Filename: main_0.8.0
+# Filename: main_0.8.1
+
 
 """
 =========================
-RBC City Map Application
+RBC Community Map Application
 =========================
-This application provides a comprehensive graphical interface for viewing and navigating
-the city map of RavenBlack City. It includes features such as zooming in and out, setting
-and saving destinations, viewing the closest points of interest, and managing user characters.
-The map data is dynamically fetched from a MySQL database, with support for refreshing data
-from the 'A View in the Dark' website.
+The RBC Community Map Application provides a comprehensive graphical interface for navigating
+the city map of RavenBlack City. It offers features such as zooming, setting and saving destinations,
+viewing points of interest (such as banks, taverns, and guilds), and managing user characters.
+Map data is dynamically fetched from a MySQL database, and the app also supports refreshing
+data from the 'A View in the Dark' website via web scraping.
+
+Features include:
+- Zooming in and out of the map.
+- Setting, saving, and loading destinations.
+- Viewing closest points of interest, such as banks and taverns.
+- Managing multiple user characters, including automatic login for the last active character.
+- Handling cookies and persistent sessions for web scraping.
+- Coin and bank balance tracking with automatic updates from in-game actions.
 
 Modules:
 - sys: Provides access to system-specific parameters and functions.
-- os: Used for interacting with the operating system (e.g., directory management).
+- os: Used for interacting with the operating system (e.g., directory and file management).
 - pickle: Facilitates the serialization and deserialization of Python objects.
 - pymysql: Interface for connecting to and interacting with a MySQL database.
+- sqlite3: Interface for SQLite database management, used for cookies and coins.
 - requests: Allows sending HTTP requests to interact with external websites.
-- re: Provides regular expression matching operations.
+- re: Provides regular expression matching operations, useful for HTML parsing.
 - datetime: Supplies classes for manipulating dates and times.
 - bs4 (BeautifulSoup): Used for parsing HTML and XML documents.
-- PySide6: Provides a set of Python bindings for the Qt application framework.
-- sqlite3: Interface for SQLite database management.
+- PySide6: Provides Python bindings for the Qt application framework, including UI components.
+- PySide6.QtWebEngineWidgets: Provides web view functionality to render in-game pages.
 
 Classes:
-- CityMapApp: The main application class that initializes and manages the user interface,
-  character management, web scraping, and map functionalities.
-- DatabaseViewer: A utility class that displays the contents of database tables in a tabbed view.
-- CharacterDialog: A dialog class for adding or modifying user characters.
-- ThemeCustomizationDialog: A dialog class for customizing the application theme.
-- SetDestinationDialog: A dialog class for setting a destination on the map.
-- AVITDScraper: A scraper class that fetches data from 'A View in the Dark' to update guilds
-  and shops data in the database.
+- RBCCommunityMap: The main application class, responsible for initializing and managing the user interface,
+  web scraping, character management, and map functionalities.
+- DatabaseViewer: Displays the contents of MySQL database tables in a tabbed view for inspection.
+- CharacterDialog: A dialog class for adding, modifying, or deleting user characters.
+- ThemeCustomizationDialog: A dialog class that allows users to customize the application's theme.
+- SetDestinationDialog: A dialog class for setting destinations on the map.
+- AVITDScraper: A web scraper class for fetching and updating data for guilds and shops from 'A View in the Dark'.
 
 Functions:
-- connect_to_database: Establishes a connection to the MySQL database and handles connection errors.
-- load_data: Loads various map data from the database, including coordinates for banks, taverns, transits,
-  user buildings, shops, guilds, and places of interest.
-- initialize_cookie_db: Sets up an SQLite database for storing cookies.
-- save_cookie_to_db: Saves individual cookies to the SQLite database.
-- load_cookies_from_db: Loads cookies from the SQLite database into the web engine.
+- connect_to_database: Establishes a connection to the MySQL database and handles any connection errors.
+- load_data: Loads map data from the MySQL database, including coordinates for banks, taverns, transits, shops, and guilds.
+- initialize_cookie_db: Sets up an SQLite database for managing cookies.
+- save_cookie_to_db: Saves individual cookies from web sessions to the SQLite database.
+- load_cookies_from_db: Loads cookies from the SQLite database into the web engine for persistent sessions.
 - clear_cookie_db: Clears all cookies from the SQLite database.
-- fetch_table_data: Retrieves and returns the column names and data from a specified database table.
-- extract_coordinates_from_html: Extracts map coordinates from the loaded HTML content.
-- find_nearest_location: Finds the nearest point of interest based on a given set of coordinates.
-- calculate_ap_cost: Calculates the Action Point (AP) cost between two map coordinates.
-- update_guilds: Updates the guilds data in the MySQL database using scraped data.
-- update_shops: Updates the shops data in the MySQL database using scraped data.
-- get_next_update_times: Retrieves the next update times for guilds and shops from the MySQL database.
-- inject_console_logging: Injects JavaScript into the web page to capture and log console messages.
-- apply_theme: Applies the currently selected theme to the application UI.
-- save_theme_settings: Saves the customized theme settings to a file.
-- load_theme_settings: Loads the saved theme settings from a file or database.
-- show_about_dialog: Displays the 'About' dialog with information about the application.
-- show_credits_dialog: Displays the 'Credits' dialog with information about contributors.
+- fetch_table_data: Retrieves column names and data from a specified MySQL database table.
+- extract_coordinates_from_html: Extracts in-game map coordinates from loaded HTML content.
+- find_nearest_location: Finds the nearest point of interest based on a set of coordinates.
+- calculate_ap_cost: Calculates the Action Point (AP) cost between two locations on the map.
+- update_guilds: Scrapes and updates the guilds data in the MySQL database.
+- update_shops: Scrapes and updates the shops data in the MySQL database.
+- get_next_update_times: Retrieves the next update times for guilds and shops from the database.
+- inject_console_logging: Injects JavaScript into web pages to capture and log console messages.
+- apply_theme: Applies the selected theme to the application UI components.
+- save_theme_settings: Saves customized theme settings to a file for persistence.
+- load_theme_settings: Loads saved theme settings from a file or the MySQL database.
+- show_about_dialog: Displays an 'About' dialog with details about the application and its version.
+- show_credits_dialog: Displays a scrolling 'Credits' dialog with contributors to the project.
 
 To install all required modules, run the following command:
  pip install pymysql requests bs4 PySide6 PySide6-WebEngine
@@ -114,7 +122,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
@@ -123,6 +131,7 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
+import math
 import sqlite3
 
 # -----------------------
@@ -355,17 +364,17 @@ def load_data():
     # Close the database connection after fetching all data
     connection.close()
 
-    return (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates,
-            user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates)
+    return columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
 
 # Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 # -----------------------
-# SQLite Cookie Storage Setup
+# SQLite Storage Setup
 # -----------------------
 
 COOKIE_DB_PATH = './sessions/cookies.db'  # Path to the SQLite database for storing cookies
+COINS_DB_PATH = './sessions/coins.db' # Path to the SQLite Database for storing coin information
 
 def initialize_cookie_db():
     """
@@ -474,9 +483,11 @@ class RBCCommunityMap(QMainWindow):
         """
         super().__init__()
 
+        # Early initialization of the scraper
         self.scraper = AVITDScraper()
         self.scraper.scrape_guilds_and_shops()
 
+        # Set up the main window properties
         self.setWindowIcon(QIcon('./images/favicon.ico'))
         self.setWindowTitle('RBC Community Map')
         self.setGeometry(100, 100, 1200, 800)
@@ -522,13 +533,14 @@ class RBCCommunityMap(QMainWindow):
                 # Exit if no characters are added
                 sys.exit("No characters added. Exiting the application.")
 
-        self.load_last_active_character()  # Load the last active character
 
         self.load_destination()
         self.setup_ui()
         self.setup_console_logging()
         self.show()
         self.update_minimap()
+        self.load_last_active_character()
+
 
     # -----------------------
     # Load and apply customized UI Theme
@@ -923,7 +935,7 @@ class RBCCommunityMap(QMainWindow):
         map_layout.addWidget(webview_container, stretch=1)
 
         # Make sure the webview expands to fill the remaining space
-        self.website_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.website_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self.show()
         self.update_minimap()
@@ -996,6 +1008,10 @@ class RBCCommunityMap(QMainWindow):
         shopping_list_action = QAction('Shopping List Generator', self)
         shopping_list_action.triggered.connect(self.open_shopping_list_tool)
         tools_menu.addAction(shopping_list_action)
+
+        damage_calculator_action = QAction('Damage Calculator', self)
+        damage_calculator_action.triggered.connect(self.open_damage_calculator)
+        tools_menu.addAction(damage_calculator_action)
 
         # Help menu
         help_menu = menu_bar.addMenu('Help')
@@ -1098,11 +1114,21 @@ class RBCCommunityMap(QMainWindow):
 
     def open_shopping_list_tool(self):
         """
-        Open the Shopping List Tool window.
-
-        Instantiates the ShoppingListTool class and displays the tool's window.
+        Opens the ShoppingListTool, using the currently selected character from character_list.
+        If no character is selected, it displays an error message.
         """
-        self.shopping_list_tool = ShoppingListTool()
+        # Get the currently selected character from the QListWidget (character_list)
+        current_item = self.character_list.currentItem()
+
+        if current_item:
+            character_name = current_item.text()  # Extract the selected character's name
+        else:
+            # Show an error message if no character is selected
+            QMessageBox.warning(self, "No Character Selected", "Please select a character from the list.")
+            return
+
+        # Open the ShoppingListTool with the selected character and COINS_DB_PATH
+        self.shopping_list_tool = ShoppingListTool(character_name, COINS_DB_PATH)
         self.shopping_list_tool.show()
 
     # -----------------------
@@ -1117,7 +1143,7 @@ class RBCCommunityMap(QMainWindow):
         If the file is not found, an empty character list is initialized.
         """
         try:
-            with open('sessions/characters.pkl', 'rb') as f:
+            with open('./sessions/characters.pkl', 'rb') as f:
                 self.characters = pickle.load(f)
                 self.character_list.clear()
                 for character in self.characters:
@@ -1267,6 +1293,7 @@ class RBCCommunityMap(QMainWindow):
         Writes the currently selected character to a pickle file.
         """
         try:
+            logging.debug(f"Saving last active character: {self.selected_character}")
             with open('./sessions/last_active_character.pkl', 'wb') as f:
                 pickle.dump(self.selected_character, f)
                 logging.debug("Last active character saved successfully.")
@@ -1275,17 +1302,18 @@ class RBCCommunityMap(QMainWindow):
 
     def load_last_active_character(self):
         """
-        Load the last active character from a file and log in automatically.
-
-        Retrieves the last active character from the pickle file and attempts to log them in.
+        Load the last active character from a file and set a flag to log in automatically after the page is loaded.
         """
         try:
             with open('./sessions/last_active_character.pkl', 'rb') as f:
                 self.selected_character = pickle.load(f)
-                logging.debug(f"Last active character loaded: {self.selected_character['name']}")
-                self.login_selected_character()
+                logging.debug(f"Last active character loaded: {self.selected_character}")
+                self.login_needed = True  # Set the flag to indicate login is needed
+                self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))  # Load the login page
         except FileNotFoundError:
             logging.warning("Last active character file not found. No character loaded.")
+        except (pickle.UnpicklingError, EOFError) as e:
+            logging.error(f"Failed to load last active character due to corruption: {e}")
         except Exception as e:
             logging.error(f"Failed to load last active character: {e}")
 
@@ -1309,6 +1337,11 @@ class RBCCommunityMap(QMainWindow):
             # Process the HTML if needed
             self.website_frame.page().toHtml(self.process_html)
 
+            # If login is needed, trigger the login process
+            if self.login_needed:
+                logging.debug("Logging in last active character.")
+                self.login_selected_character()
+                self.login_needed = False
     def process_html(self, html):
         """
         Process the HTML content of the webview to extract coordinates and update the minimap.
@@ -1316,13 +1349,17 @@ class RBCCommunityMap(QMainWindow):
         Args:
             html (str): HTML content as a string.
 
-        Extracts x and y coordinates from the HTML and updates the minimap if coordinates are found.
+        This method calls both the extract_coordinates_from_html and extract_coins_from_html methods.
         """
+        # Extract coordinates for the minimap
         x_coord, y_coord = self.extract_coordinates_from_html(html)
         if x_coord is not None and y_coord is not None:
             self.column_start = x_coord
             self.row_start = y_coord
             self.update_minimap()
+
+        # Call the method to extract bank coins and pocket changes from the HTML
+        self.extract_coins_from_html(html)
 
     def extract_coordinates_from_html(self, html):
         """
@@ -1353,6 +1390,121 @@ class RBCCommunityMap(QMainWindow):
                 return x_value, y_value
 
         return None, None
+
+    def extract_coins_from_html(self, html):
+        """
+        Extract bank coins, pocket coins, and handle coin-related actions such as deposits,
+        withdrawals, transit handling, and coins gained from hunting or stealing.
+
+        Args:
+            html (str): The HTML content as a string.
+
+        This method searches for bank balance, deposits, withdrawals, hunting, robbing, receiving,
+        and transit coin actions in the HTML content, updating both bank and pocket coins in the
+        SQLite database.
+        """
+        connection = sqlite3.connect(COINS_DB_PATH)
+        cursor = connection.cursor()
+
+        # Search for the bank balance line
+        bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
+
+        # Search for a deposit action
+        deposit_match = re.search(r"You deposit (\d+) coins.", html)
+
+        # Search for a withdrawal action
+        withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
+
+        # Search for transit pocket coin update
+        transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
+
+        # Additional coin-related actions
+        actions = {
+            'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
+            'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
+            'human': r'You drink the human\'s blood.*You also found (\d+) coins',
+            'bag_of_coins': r'The bag contained (\d+) coins',
+            'robbing': r'You stole (\d+) coins from (\w+)',
+            'silver_suitcase': r'The suitcase contained (\d+) coins',
+            'given_coins': r'(\w+) gave you (\d+) coins',
+            'getting_robbed': r'(\w+) stole (\d+) coins from you'
+        }
+
+        # Handle bank balance update
+        if bank_match:
+            bank_coins = int(bank_match.group(1))
+            logging.info(f"Bank coins found: {bank_coins}")
+
+            # Update the bank coins in the SQLite database
+            cursor.execute('''
+                UPDATE coins
+                SET bank = ?
+                WHERE character = ?
+            ''', (bank_coins, self.selected_character['name']))
+
+        # Handle deposit action
+        if deposit_match:
+            deposit_coins = int(deposit_match.group(1))
+            logging.info(f"Deposit found: {deposit_coins} coins")
+
+            # Reduce the pocket coins by the deposited amount
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = pocket - ?
+                WHERE character = ?
+            ''', (deposit_coins, self.selected_character['name']))
+
+        # Handle withdrawal action
+        if withdraw_match:
+            withdraw_coins = int(withdraw_match.group(1))
+            logging.info(f"Withdrawal found: {withdraw_coins} coins")
+
+            # Increase the pocket coins by the withdrawn amount
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = pocket + ?
+                WHERE character = ?
+            ''', (withdraw_coins, self.selected_character['name']))
+
+        # Handle transit coin update
+        if transit_match:
+            coins_in_pocket = int(transit_match.group(1))
+            logging.info(f"Transit found: Pocket coins updated to {coins_in_pocket}")
+
+            # Explicitly set the pocket coin count after transit
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = ?
+                WHERE character = ?
+            ''', (coins_in_pocket, self.selected_character['name']))
+
+        # Handle other coin-related actions (hunting, robbing, etc.)
+        for action, pattern in actions.items():
+            match = re.search(pattern, html)
+            if match:
+                coin_count = int(match.group(1))
+                if action == 'getting_robbed':
+                    # Losing coins when robbed
+                    vamp_name = match.group(2)
+                    cursor.execute('''
+                        UPDATE coins
+                        SET pocket = pocket - ?
+                        WHERE character = ?
+                    ''', (coin_count, self.selected_character['name']))
+                    logging.info(f"Lost {coin_count} coins to {vamp_name}.")
+                else:
+                    # Gaining coins from hunting, robbing, etc.
+                    cursor.execute('''
+                        UPDATE coins
+                        SET pocket = pocket + ?
+                        WHERE character = ?
+                    ''', (coin_count, self.selected_character['name']))
+                    logging.info(f"Gained {coin_count} coins from {action}.")
+                break  # Exit loop after first match
+
+        connection.commit()
+        connection.close()
+        logging.info(f"Updated coins for {self.selected_character['name']}.")
 
     def refresh_webview(self):
         """
@@ -1393,11 +1545,6 @@ class RBCCommunityMap(QMainWindow):
                 color (QColor): Color to fill the location.
                 label_text (str, optional): Label text to draw at the location. Defaults to None.
             """
-            # Adjust coordinates for WCL (column 0) and NCL (row 0)
-            if column_index != 0 and row_index != 0:
-                column_index += 1
-                row_index += 1
-
             x0 = (column_index - self.column_start) * block_size
             y0 = (row_index - self.row_start) * block_size
 
@@ -1412,16 +1559,6 @@ class RBCCommunityMap(QMainWindow):
                 text_y = y0 + (block_size + text_rect.height()) // 2 - font_metrics.descent()
                 painter.setPen(QColor('white'))
                 painter.drawText(text_x, text_y, label_text)
-
-        # Update the part where banks and other locations are drawn
-        for (col_name, row_name, _, _) in self.banks_coordinates:
-            column_index = self.columns.get(col_name)
-            row_index = self.rows.get(row_name)
-            if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing bank at {col_name} & {row_name} with coordinates ({column_index}, {row_index})")
-                draw_location(column_index, row_index, self.color_mappings["bank"], "Bank")
-            else:
-                logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
         # Draw the grid
         for i in range(self.zoom_level):
@@ -1441,7 +1578,7 @@ class RBCCommunityMap(QMainWindow):
                 # Draw cell background color
                 if column_index < min(self.columns.values()) or column_index > max(
                         self.columns.values()) or row_index < min(
-                    self.rows.values()) or row_index > max(self.rows.values()):
+                        self.rows.values()) or row_index > max(self.rows.values()):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -1465,17 +1602,14 @@ class RBCCommunityMap(QMainWindow):
             column_index = self.columns.get(col_name)
             row_index = self.rows.get(row_name)
             if column_index is not None and row_index is not None:
-                # Only adjust for positive columns
-                if column_index > 0:
-                    adjusted_column_index = column_index + 1
-                else:
-                    adjusted_column_index = column_index  # No adjustment for column = 0 (WCL)
-
+                # Adjust bank coordinates by +1 to match the tavern and transit coordinate system
+                adjusted_column_index = column_index + 1
                 adjusted_row_index = row_index + 1
                 logging.debug(
-                    f"Drawing bank at {col_name} & {row_name} with coordinates ({adjusted_column_index}, {adjusted_row_index})"
-                )
+                    f"Drawing bank at {col_name} & {row_name} with coordinates ({adjusted_column_index}, {adjusted_row_index})")
                 draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
+            else:
+                logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
         # Draw other locations as before
         for name, (column_index, row_index) in self.taverns_coordinates.items():
@@ -1533,29 +1667,25 @@ class RBCCommunityMap(QMainWindow):
             nearest_tavern_coords = nearest_tavern[0][1]
             logging.debug(
                 f"Drawing line to nearest tavern at coordinates ({nearest_tavern_coords[0]}, {nearest_tavern_coords[1]})")
-            tavern_x = nearest_tavern_coords[0] if nearest_tavern_coords[0] == 0 else nearest_tavern_coords[0] + 1
-            tavern_y = nearest_tavern_coords[1] if nearest_tavern_coords[1] == 0 else nearest_tavern_coords[1] + 1
             painter.setPen(QPen(QColor('orange'), 3))  # Set pen color to orange and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (tavern_x - self.column_start) * block_size + block_size // 2,
-                (tavern_y - self.row_start) * block_size + block_size // 2
+                (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
+                (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
             )
 
         # Draw nearest bank line
         if nearest_bank:
             nearest_bank_coords = nearest_bank[0][1]
             logging.debug(
-                f"Drawing line to nearest bank at coordinates ({nearest_bank_coords[0]}, {nearest_bank_coords[1]})")
-            bank_x = nearest_bank_coords[0] if nearest_bank_coords[0] == 0 else nearest_bank_coords[0] + 1
-            bank_y = nearest_bank_coords[1] if nearest_bank_coords[1] == 0 else nearest_bank_coords[1] + 1
+                f"Drawing line to nearest bank at coordinates ({nearest_bank_coords[0] + 1}, {nearest_bank_coords[1] + 1})")
             painter.setPen(QPen(QColor('blue'), 3))  # Set pen color to blue and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (bank_x - self.column_start) * block_size + block_size // 2,
-                (bank_y - self.row_start) * block_size + block_size // 2
+                (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
+                (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
             )
 
         # Draw nearest transit line
@@ -1563,14 +1693,12 @@ class RBCCommunityMap(QMainWindow):
             nearest_transit_coords = nearest_transit[0][1]
             logging.debug(
                 f"Drawing line to nearest transit at coordinates ({nearest_transit_coords[0]}, {nearest_transit_coords[1]})")
-            transit_x = nearest_transit_coords[0] if nearest_transit_coords[0] == 0 else nearest_transit_coords[0] + 1
-            transit_y = nearest_transit_coords[1] if nearest_transit_coords[1] == 0 else nearest_transit_coords[1] + 1
             painter.setPen(QPen(QColor('red'), 3))  # Set pen color to red and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
                 (current_y - self.row_start) * block_size + block_size // 2,
-                (transit_x - self.column_start) * block_size + block_size // 2,
-                (transit_y - self.row_start) * block_size + block_size // 2
+                (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
+                (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
             )
 
         # Draw destination line
@@ -1906,7 +2034,7 @@ class RBCCommunityMap(QMainWindow):
         """
         QMessageBox.about(self, "About RBC City Map",
                           "RBC City Map Application\n\n"
-                          "Version 0.8.0\n\n"
+                          "Version 0.8.1\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
                           "Development team shown in credits.\n\n")
@@ -1959,20 +2087,59 @@ class RBCCommunityMap(QMainWindow):
 
         credits_dialog.exec()
 
+    def open_damage_calculator(self):
+        """
+        Open the Damage Calculator for the currently selected character.
+        """
+        print("Damage Calculator menu item clicked")
+
+        # Retrieve the currently selected character from the character list
+        selected_character_item = self.character_list.currentItem()
+
+        if not selected_character_item:
+            QMessageBox.warning(self, "No Character Selected",
+                                "Please select a character from the list before opening the damage calculator.")
+            return
+
+        # Get the character name from the selected item
+        character_name = selected_character_item.text()
+
+        # Open the shopping list tool if it's not initialized
+        if not hasattr(self, 'shopping_list_tool') or self.shopping_list_tool is None:
+            # Pass the correct path to the SQLite database (COINS_DB_PATH)
+            self.shopping_list_tool = ShoppingListTool(character_name, COINS_DB_PATH)
+
+        # Initialize DamageCalculator with the shopping list tool
+        self.damage_calculator = DamageCalculator(self.shopping_list_tool)
+
+        # Now show the damage calculator window
+        self.damage_calculator.show()
+
+# -----------------------
+# Database Viewer Class
+# -----------------------
     def open_database_viewer(self):
         """
         Open the database viewer to browse and inspect data from the RBC City Map database.
 
         This method connects to the database, fetches the data from specified tables,
-        and displays it in a new DatabaseViewer window.
+        and displays it in a new DatabaseViewer window. Ensures a fresh connection each time.
         """
-        if not database_connection:
-            QMessageBox.critical(self, "Error", "Failed to connect to the database.")
-            return
+        try:
+            # Create a new database connection every time the viewer is opened
+            database_connection = connect_to_database()
 
-        # Show the database viewer, passing the already established connection
-        self.database_viewer = DatabaseViewer(database_connection)
-        self.database_viewer.show()
+            if not database_connection:
+                QMessageBox.critical(self, "Error", "Failed to connect to the database.")
+                return
+
+            # Show the database viewer, passing the new connection
+            self.database_viewer = DatabaseViewer(database_connection)
+            self.database_viewer.show()
+
+        except Exception as e:
+            logging.error(f"Error opening Database Viewer: {e}")
+            QMessageBox.critical(self, "Error", f"Error opening Database Viewer: {e}")
 
     def fetch_table_data(self, cursor, table_name):
         """
@@ -1993,11 +2160,9 @@ class RBCCommunityMap(QMainWindow):
 
         return column_names, data
 
-
 # -----------------------
-# Database Viewer Class
+# Tools
 # -----------------------
-
 class DatabaseViewer(QMainWindow):
     """
     Main application class for viewing database tables.
@@ -2134,6 +2299,7 @@ class CharacterDialog(QDialog):
         # Connect the buttons to the dialog's accept and reject methods
         ok_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
+
 # -----------------------
 # Theme Customization Dialog
 # -----------------------
@@ -2447,7 +2613,7 @@ class AVITDScraper:
             logging.info("Database connection closed.")
 
 # -----------------------
-# Tools
+# Set Destination
 # -----------------------
 
 class set_destination_dialog(QDialog):
@@ -2638,100 +2804,331 @@ class set_destination_dialog(QDialog):
         else:
             logging.warning("No valid destination selected or incorrect coordinates provided.")
 
+# -----------------------
+# Shopping list Tools
+# -----------------------
+
+class DamageCalculator(QMainWindow):
+    def __init__(self, parent=None):
+        """
+        Initialize the DamageCalculator window and set up the UI components.
+        Args:
+            parent (QWidget): The parent widget (in this case, RBCCommunityMap).
+        """
+        super().__init__(parent)
+        self.parent_window = parent  # Store the reference to the parent (RBCCommunityMap)
+        self.setWindowTitle("Damage Calculator")
+        self.setGeometry(100, 100, 400, 300)
+
+        # Create the input field for initial BP
+        self.input_label = QLabel("Enter Initial BP:", self)
+        self.input_field = QLineEdit(self)
+
+        # Create the calculate button
+        self.calculate_button = QPushButton("Calculate", self)
+        self.calculate_button.clicked.connect(self.calculate_hits_to_zero)
+
+        # Create the output text area
+        self.output_area = QTextEdit(self)
+        self.output_area.setReadOnly(True)
+
+        # Create the send to shopping list button
+        self.send_button = QPushButton("Send to Shopping List", self)
+        self.send_button.clicked.connect(self.send_to_shopping_list)
+        self.send_button.setEnabled(False)  # Disable until calculation is done
+
+        # Layout setup
+        layout = QVBoxLayout()
+        layout.addWidget(self.input_label)
+        layout.addWidget(self.input_field)
+        layout.addWidget(self.calculate_button)
+        layout.addWidget(self.output_area)
+        layout.addWidget(self.send_button)
+
+        central_widget = QWidget(self)
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        self.hw_hits = 0  # Store the count of Holy Water hits
+        self.gs_hits = 0  # Store the count of Garlic Spray hits
+
+    def calculate_damage(self, bp):
+        """
+        Calculate the damage dealt by a hit based on current blood points (BP).
+        Args:
+            bp (int): Current blood points (BP).
+        Returns:
+            int: Calculated damage for the hit.
+        """
+        return math.floor(bp ** 0.6)
+
+    def calculate_hits_to_zero(self):
+        """
+        Calculate the number of hits required to reduce the initial BP to zero.
+        Uses Holy Water (HW) when BP >= 1275, and Garlic Spray (GS) otherwise.
+        """
+        try:
+            current_bp = int(self.input_field.text())  # Get the BP from input
+        except ValueError:
+            QMessageBox.critical(self, "Input Error", "Please enter a valid integer for BP.")
+            return
+
+        hits = 0
+        self.hw_hits = 0
+        self.gs_hits = 0
+        log = []
+
+        while current_bp > 0:
+            if current_bp >= 1275:
+                damage = self.calculate_damage(current_bp)
+                self.hw_hits += 1
+                hit_type = "HW"  # Holy Water
+            else:
+                damage = self.calculate_damage(current_bp)
+                self.gs_hits += 1
+                hit_type = "GS"  # Garlic Spray
+            current_bp -= damage
+            hits += 1
+
+            # Log the hit information
+            log.append(f"Hit {hits}: {hit_type} | Damage = {damage}, BP after hit = {current_bp}")
+
+            # Ensure BP doesn't go negative
+            if current_bp <= 0:
+                current_bp = 0
+                break
+
+        # Output the log and enable the send button
+        self.output_area.setPlainText("\n".join(log))
+        self.send_button.setEnabled(True)
+
+    def send_to_shopping_list(self):
+        """
+        Send the calculated HW and GS hits to the ShoppingListTool.
+        Defaults the shop to 'Discount Potions'.
+        """
+        if self.hw_hits > 0 or self.gs_hits > 0:
+            # Initialize ShoppingListTool if it's not already initialized
+            if not hasattr(self, 'shopping_list_tool') or self.shopping_list_tool is None:
+                coins_db_path = "./sessions/coins.db"  # Use the correct path
+                self.shopping_list_tool = ShoppingListTool(self.parent_window.character_name, coins_db_path)
+
+            # Add the calculated HW and GS hits to the shopping list
+            self.shopping_list_tool.add_from_damage_calculator(hw_count=self.hw_hits, gs_count=self.gs_hits)
+
+            # Show the shopping list window
+            self.shopping_list_tool.show()
+
+            # Debugging message
+            print("Holy Water and Garlic Spray added to the shopping list.")
+        else:
+            # Debugging message
+            print("No hits to send to shopping list.")
+
 class ShoppingListTool(QMainWindow):
-    def __init__(self):
+    def __init__(self, character_name, coins_db_path):
         super().__init__()
         self.setWindowTitle("Shopping List Tool")
         self.setGeometry(100, 100, 600, 400)
+        self.character_name = character_name
+        self.coins_db_path = coins_db_path  # Use the passed coins DB path
+        self.mysql_connection = connect_to_database()  # Use MySQL connection for shop items
 
-        self.connection = connect_to_database()
-        if not self.connection:
-            print("Failed to connect to the database.")
+        if not self.mysql_connection:
+            print("Failed to connect to the MySQL database.")
             sys.exit(1)
 
-        self.cursor = self.connection.cursor()
+        # Initialize the MySQL cursor
+        self.cursor = self.mysql_connection.cursor()
 
+        # Initialize shopping list total
+        self.list_total = 0
+
+        # Setting up UI
         self.setup_ui()
 
-    def setup_ui(self):
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-
-        # Create dropdowns for selecting shop and charisma level
-        form_layout = QFormLayout()
-
-        self.shop_dropdown = QComboBox()
+        # Load data from MySQL
         self.populate_shop_dropdown()
-        form_layout.addRow("Select Shop:", self.shop_dropdown)
 
-        self.charisma_dropdown = QComboBox()
-        self.charisma_dropdown.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
-        form_layout.addRow("Select Charisma Level:", self.charisma_dropdown)
+        # Load coin information from SQLite
+        self.load_coin_info()
 
-        main_layout.addLayout(form_layout)
+    def setup_ui(self):
+        # Initialize UI elements
+        self.shop_combobox = QComboBox(self)
+        self.charisma_combobox = QComboBox(self)
+        self.available_items_list = QListWidget(self)
+        self.shopping_list = QListWidget(self)
 
-        # Create list widgets for shopping list
-        self.item_list = QListWidget()
-        self.shopping_list = QListWidget()
+        # Add options to charisma combobox
+        self.charisma_combobox.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
 
-        main_layout.addWidget(QLabel("Available Items"))
-        main_layout.addWidget(self.item_list)
+        # Buttons
+        self.add_item_button = QPushButton("Add Item", self)
+        self.remove_item_button = QPushButton("Remove Item", self)
 
-        # Add buttons for adding/removing items
-        button_layout = QVBoxLayout()
+        # Layout setup
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Select Shop:"))
+        layout.addWidget(self.shop_combobox)
+        layout.addWidget(QLabel("Select Charisma Level:"))
+        layout.addWidget(self.charisma_combobox)
+        layout.addWidget(QLabel("Available Items:"))
+        layout.addWidget(self.available_items_list)
+        layout.addWidget(self.add_item_button)
+        layout.addWidget(QLabel("Shopping List:"))
+        layout.addWidget(self.shopping_list)
+        layout.addWidget(self.remove_item_button)
 
-        add_button = QPushButton("Add Item")
-        add_button.clicked.connect(self.add_item_to_list)
-        button_layout.addWidget(add_button)
+        # Create a label to display the total of the shopping list, coins in pocket, and bank balance
+        self.total_label = QLabel(
+            f"List total: 0 Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
+        layout.addWidget(self.total_label)
 
-        remove_button = QPushButton("Remove Item")
-        remove_button.clicked.connect(self.remove_item_from_list)
-        button_layout.addWidget(remove_button)
+        central_widget = QWidget(self)
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
 
-        main_layout.addLayout(button_layout)
-        main_layout.addWidget(QLabel("Shopping List"))
-        main_layout.addWidget(self.shopping_list)
+        self.add_item_button.clicked.connect(self.add_item)
+        self.remove_item_button.clicked.connect(self.remove_item)
 
-        # Create a label to display the total of the shopping list
-        self.total_label = QLabel("List Total: 0 Coins")
-        main_layout.addWidget(self.total_label)
-
-        # Load the items when the shop or charisma level changes
-        self.shop_dropdown.currentIndexChanged.connect(self.load_items)
-        self.charisma_dropdown.currentIndexChanged.connect(self.update_shopping_list_prices)
+        # Load items when shop or charisma level changes
+        self.shop_combobox.currentIndexChanged.connect(self.load_items)
+        self.charisma_combobox.currentIndexChanged.connect(self.load_items)
 
         # Load items initially
         self.load_items()
 
+    def add_item(self):
+        """
+        Add the selected item from the available items list to the shopping list.
+        """
+        selected_item = self.available_items_list.currentItem()
+        if selected_item:
+            item_text = selected_item.text()
+            item_name, item_price = item_text.split(" - ")
+            quantity = 1  # Default quantity is 1
+
+            # Check if the item is already in the shopping list
+            for i in range(self.shopping_list.count()):
+                existing_item_text = self.shopping_list.item(i).text()
+                existing_item_name = existing_item_text.split(" - ")[0]
+                if existing_item_name == item_name:
+                    # Update the quantity if the item is already present
+                    existing_quantity = int(existing_item_text.split(" - ")[2].split("x")[0])
+                    self.shopping_list.item(i).setText(f"{item_name} - {item_price} Coins - {existing_quantity + 1}x")
+                    self.update_total()
+                    return
+
+            # If the item is not in the list, add it with quantity 1
+            self.shopping_list.addItem(f"{item_name} - {item_price} Coins - {quantity}x")
+            self.update_total()
+
+    def remove_item(self):
+        """
+        Remove the selected item from the shopping list or decrease its quantity.
+        """
+        selected_item = self.shopping_list.currentItem()
+        if selected_item:
+            item_text = selected_item.text()
+            item_name, item_price, item_quantity = item_text.split(" - ")
+            item_quantity = int(item_quantity.split("x")[0])
+
+            if item_quantity > 1:
+                # Decrease the quantity if more than 1
+                self.shopping_list.currentItem().setText(f"{item_name} - {item_price} Coins - {item_quantity - 1}x")
+            else:
+                # Remove the item from the list if quantity is 1
+                self.shopping_list.takeItem(self.shopping_list.row(selected_item))
+
+            self.update_total()
+
+    def add_from_damage_calculator(self, hw_count, gs_count):
+        """
+        Add Holy Water and Garlic Spray to the shopping list based on the damage calculator results.
+
+        Args:
+            hw_count (int): The number of Holy Water items to add.
+            gs_count (int): The number of Garlic Spray items to add.
+        """
+        shop_name = "Discount Potions"
+
+        try:
+            # Fetch the price for Vial of Holy Water
+            query_hw = """
+            SELECT charisma_level_1 FROM shop_items
+            WHERE shop_name = %s AND item_name = 'Vial of Holy Water'
+            """
+            self.cursor.execute(query_hw, (shop_name,))
+            hw_price = self.cursor.fetchone()
+
+            if hw_price:
+                hw_price = hw_price[0]
+            else:
+                print("Vial of Holy Water not found.")
+                return
+
+            # Fetch the price for Garlic Spray
+            query_gs = """
+            SELECT charisma_level_1 FROM shop_items
+            WHERE shop_name = %s AND item_name = 'Garlic Spray'
+            """
+            self.cursor.execute(query_gs, (shop_name,))
+            gs_price = self.cursor.fetchone()
+
+            if gs_price:
+                gs_price = gs_price[0]
+            else:
+                print("Garlic Spray not found.")
+                return
+
+            # Add Vial of Holy Water to the shopping list if hw_count > 0
+            if hw_count > 0:
+                self.shopping_list.addItem(f"Vial of Holy Water - {hw_price} Coins - {hw_count}x")
+
+            # Add Garlic Spray to the shopping list if gs_count > 0
+            if gs_count > 0:
+                self.shopping_list.addItem(f"Garlic Spray - {gs_price} Coins - {gs_count}x")
+
+            # Update the total price after adding the items
+            self.update_total()
+
+            # Ensure the shopping list window stays visible
+            self.show()
+
+        except pymysql.MySQLError as err:
+            print(f"Error fetching prices from Discount Potions: {err}")
+
     def populate_shop_dropdown(self):
         """
-        Populate the shop dropdown with available shops from the database.
+        Populate the shop dropdown with available shops from the MySQL database.
         """
-        self.cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
-        shops = self.cursor.fetchall()
-        for shop in shops:
-            self.shop_dropdown.addItem(shop[0])
+        try:
+            self.cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
+            shops = self.cursor.fetchall()
+            for shop in shops:
+                self.shop_combobox.addItem(shop[0])
+        except pymysql.MySQLError as err:
+            print(f"Error fetching shop names: {err}")
 
     def load_items(self):
         """
-        Load items from the selected shop and charisma level into the item list.
+        Load items from the selected shop and charisma level into the available items list.
+        Update the shopping list prices based on the selected charisma level.
         """
-        self.item_list.clear()
-        shop_name = self.shop_dropdown.currentText()
-        charisma_level = self.charisma_dropdown.currentText()
+        self.available_items_list.clear()
+        shop_name = self.shop_combobox.currentText()
+        charisma_level = self.charisma_combobox.currentText()
 
-        if charisma_level == "No Charisma":
-            price_column = "base_price"
-        elif charisma_level == "Charisma 1":
-            price_column = "charisma_level_1"
-        elif charisma_level == "Charisma 2":
-            price_column = "charisma_level_2"
-        elif charisma_level == "Charisma 3":
-            price_column = "charisma_level_3"
-        else:
-            price_column = "base_price"  # Default to base_price
+        # Determine the price column based on charisma level
+        price_column = {
+            "No Charisma": "base_price",
+            "Charisma 1": "charisma_level_1",
+            "Charisma 2": "charisma_level_2",
+            "Charisma 3": "charisma_level_3"
+        }.get(charisma_level, "base_price")
 
+        # Load items for the selected shop and charisma level
         query = f"""
         SELECT item_name, {price_column}
         FROM shop_items
@@ -2743,85 +3140,182 @@ class ShoppingListTool(QMainWindow):
         for item in items:
             item_name = item[0]
             price = item[1]
-            self.item_list.addItem(f"{item_name} - {price} Coins")
+            self.available_items_list.addItem(f"{item_name} - {price} Coins")
 
-    def add_item_to_list(self):
-        """
-        Add the selected item to the shopping list.
-        """
-        selected_item = self.item_list.currentItem()
-        if selected_item:
-            item_name = selected_item.text().split(" - ")[0]
-            price = int(selected_item.text().split(" - ")[1].split()[0])
-            self.shopping_list.addItem(f"{item_name} - {price} Coins")
-            self.update_total()
-
-    def remove_item_from_list(self):
-        """
-        Remove the selected item from the shopping list.
-        """
-        selected_item = self.shopping_list.currentItem()
-        if selected_item:
-            self.shopping_list.takeItem(self.shopping_list.row(selected_item))
-            self.update_total()
-
-    def update_shopping_list_prices(self):
-        """
-        Update the prices of items in the shopping list when the charisma level is changed.
-        """
-        charisma_level = self.charisma_dropdown.currentText()
-
-        if charisma_level == "No Charisma":
-            price_column = "base_price"
-        elif charisma_level == "Charisma 1":
-            price_column = "charisma_level_1"
-        elif charisma_level == "Charisma 2":
-            price_column = "charisma_level_2"
-        elif charisma_level == "Charisma 3":
-            price_column = "charisma_level_3"
-        else:
-            price_column = "base_price"  # Default to base_price
-
+        # Now update the prices of items in the shopping list based on the charisma level
         for index in range(self.shopping_list.count()):
-            item_name = self.shopping_list.item(index).text().split(" - ")[0]
+            item_text = self.shopping_list.item(index).text()
+            item_name = item_text.split(" - ")[0]
+            quantity = int(item_text.split(" - ")[2].split("x")[0])
 
+            # Query for the updated price
             query = f"""
             SELECT {price_column}
             FROM shop_items
-            WHERE shop_name = %s AND item_name = %s
+            WHERE item_name = %s
             """
-            self.cursor.execute(query, (self.shop_dropdown.currentText(), item_name))
+            self.cursor.execute(query, (item_name,))
             price = self.cursor.fetchone()[0]
 
-            self.shopping_list.item(index).setText(f"{item_name} - {price} Coins")
+            # Update the shopping list item with the new price
+            self.shopping_list.item(index).setText(f"{item_name} - {price} Coins - {quantity}x")
 
+        # Update the total cost after all prices are updated
         self.update_total()
 
     def update_total(self):
         """
-        Calculate and update the total cost of items in the shopping list.
+        Calculate the total cost of items in the shopping list based on the quantity and item prices.
+        Update the total label with the new total.
         """
         total = 0
         for index in range(self.shopping_list.count()):
             item_text = self.shopping_list.item(index).text()
-            price = int(item_text.split("-")[1].strip().split()[0])  # Extract the price
-            total += price
+            price = int(item_text.split(" - ")[1].split(" ")[0])  # Extract the price
+            quantity = int(item_text.split(" - ")[2].split("x")[0])  # Extract the quantity
+            total += price * quantity
 
-        self.total_label.setText(f"List Total: {total} Coins")
+        self.list_total = total
+        self.total_label.setText(
+            f"List Total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
 
-    def closeEvent(self, event):
+    def load_coin_info(self):
         """
-        Ensure the database connection is closed when the application is closed.
+        Load coin information (pocket and bank) from the SQLite database.
         """
-        self.cursor.close()
-        self.connection.close()
-        event.accept()
+        pocket_coins = self.coins_in_pocket()
+        bank_coins = self.coins_in_bank()
+
+        print(f"Coins in pocket: {pocket_coins}")
+        print(f"Coins in bank: {bank_coins}")
+
+        # Update the combined total label with pocket and bank information
+        self.total_label.setText(
+            f"List total: {self.list_total} Coins | Coins in Pocket: {pocket_coins} | Bank: {bank_coins}")
+
+    def coins_in_pocket(self):
+        """
+        Retrieve the number of coins in the pocket for the given character from the SQLite DB.
+        """
+        connection = sqlite3.connect(self.coins_db_path)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT pocket FROM coins WHERE character = ?", (self.character_name,))
+        result = cursor.fetchone()
+
+        connection.close()
+
+        return result[0] if result else 0
+
+    def coins_in_bank(self):
+        """
+        Retrieve the number of coins in the bank for the given character from the SQLite DB.
+        """
+        connection = sqlite3.connect(self.coins_db_path)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT bank FROM coins WHERE character = ?", (self.character_name,))
+        result = cursor.fetchone()
+
+        connection.close()
+
+        return result[0] if result else 0
+
+class CoinScraper:
+    def __init__(self, character_name, web_profile):
+        """
+        Initialize the CoinScraper with the given character name and web profile.
+
+        Args:
+            character_name (str): The name of the character for whom to scrape the coin count.
+            web_profile (QWebEngineProfile): The web profile to use for maintaining session data.
+        """
+        logging.debug("Initializing CoinScraper.")
+        self.character_name = character_name
+        self.web_profile = web_profile
+        self.website_frame = QWebEngineView(self.web_profile)
+
+        # Start the scraping process
+        QTimer.singleShot(1000, self.scrape_coin_count)
+
+    def scrape_coin_count(self):
+        """
+        Scrape the page for the coin count.
+        """
+        logging.debug("Navigating to coin page.")
+        coin_url = "https://quiz.ravenblack.net/blood.pl?action=viewvamp"
+        self.website_frame.setUrl(QUrl(coin_url))
+        self.website_frame.loadFinished.connect(self.on_page_loaded)
+
+    def on_page_loaded(self):
+        """
+        Handle the page load completion and scrape for coin count.
+        """
+        logging.debug("Page loaded. Scraping the page for coin count.")
+        self.website_frame.page().toHtml(self.process_html)
+
+    def process_html(self, html):
+        """
+        Process the HTML content of the page to find the coin count and vampire name.
+
+        Args:
+            html (str): The HTML content of the page.
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+
+        # Find the coin count
+        money_line = soup.find(string=lambda text: text and "Money:" in text)
+        if money_line:
+            coins = money_line.split("Money: ")[1].split(" ")[0]
+            logging.debug(f"Found coin count: {coins}")
+
+        # Find the vampire name
+        vampire_name_line = soup.find(string=lambda text: text and "You are the vampire" in text)
+        if vampire_name_line:
+            vampire_name = vampire_name_line.split("You are the vampire ")[1].strip()
+            logging.debug(f"Found vampire name: {vampire_name}")
+
+        # Save both coin count and vampire name to the database
+        self.save_coin_count_to_db(coins, vampire_name)
+
+    def save_coin_count_to_db(self, coins, vampire_name):
+        """
+        Save the coin count and vampire name to the SQLite database.
+
+        Args:
+            coins (str): The number of coins to save.
+            vampire_name (str): The name of the vampire character.
+        """
+        logging.debug(f"Saving {coins} coins and name '{vampire_name}' to database for character {self.character_name}.")
+        connection = sqlite3.connect(COINS_DB_PATH)
+        cursor = connection.cursor()
+
+        # Ensure the table exists
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS coins (
+                character TEXT PRIMARY KEY,
+                pocket INTEGER,
+                bank INTEGER,
+                name TEXT
+            )
+        ''')
+
+        # Insert or update both coin count and vampire name
+        cursor.execute('''
+            INSERT INTO coins (character, pocket, name) VALUES (?, ?, ?)
+            ON CONFLICT(character) DO UPDATE SET pocket = excluded.pocket, name = excluded.name
+        ''', (self.character_name, coins, vampire_name))
+
+        connection.commit()
+        connection.close()
+        logging.info(f"Coin count and vampire name for {self.character_name} saved to database.")
 
 def main():
     """
     Main function to run the RBC City Map Application.
     """
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon('./images/favicon.ico'))  # Set the global favicon
     window = RBCCommunityMap()
     sys.exit(app.exec())
 

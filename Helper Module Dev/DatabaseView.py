@@ -34,45 +34,62 @@ def connect_to_database():
         sys.exit(f"Connection failed: {err}")
 
 
-def fetch_table_data(cursor, table_name):
-    """
-    Fetch data from the specified table and return it as a list of tuples,
-    including column names.
-
-    Args:
-        cursor: MySQL cursor object.
-        table_name: Name of the table to fetch data from.
-
-    Returns:
-        List of tuples containing column names and table data.
-    """
-    cursor.execute(f"DESCRIBE `{table_name}`")
-    column_names = [col[0] for col in cursor.fetchall()]
-
-    cursor.execute(f"SELECT * FROM `{table_name}`")
-    data = cursor.fetchall()
-
-    return column_names, data
-
-
 class DatabaseViewer(QMainWindow):
     """
     Main application class for viewing database tables.
     """
 
-    def __init__(self, tables_data):
+    def __init__(self):
         """
-        Initialize the DatabaseViewer with table data.
+        Initialize the DatabaseViewer and load table data.
         """
         super().__init__()
         self.setWindowTitle('MySQL Database Viewer')
         self.setGeometry(100, 100, 800, 600)
 
+        self.connection = connect_to_database()
+        self.cursor = self.connection.cursor()
+
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
-        for table_name, (column_names, data) in tables_data.items():
-            self.add_table_tab(table_name, column_names, data)
+        self.load_all_tables()
+
+    def load_all_tables(self):
+        """
+        Load all tables from the database and create tabs for each table.
+        """
+        try:
+            self.cursor.execute("SHOW TABLES")
+            tables = self.cursor.fetchall()
+
+            for (table_name,) in tables:
+                column_names, data = self.fetch_table_data(self.cursor, table_name)
+                self.add_table_tab(table_name, column_names, data)
+
+        except pymysql.MySQLError as e:
+            logging.error(f"Failed to load tables: {e}")
+            sys.exit(f"Failed to load tables: {e}")
+
+    def fetch_table_data(sefl, cursor, table_name):
+        """
+        Fetch data from the specified table and return it as a list of tuples,
+        including column names.
+
+        Args:
+            cursor: MySQL cursor object.
+            table_name: Name of the table to fetch data from.
+
+        Returns:
+            List of tuples containing column names and table data.
+        """
+        cursor.execute(f"DESCRIBE `{table_name}`")
+        column_names = [col[0] for col in cursor.fetchall()]
+
+        cursor.execute(f"SELECT * FROM `{table_name}`")
+        data = cursor.fetchall()
+
+        return column_names, data
 
     def add_table_tab(self, table_name, column_names, data):
         """
@@ -94,26 +111,21 @@ class DatabaseViewer(QMainWindow):
 
         self.tab_widget.addTab(table_widget, table_name)
 
+    def closeEvent(self, event):
+        """
+        Ensure the database connection is closed when the application is closed.
+        """
+        self.cursor.close()
+        self.connection.close()
+        event.accept()
+
+
 def main():
     """
     Main function to run the application.
     """
-    connection = connect_to_database()
-    cursor = connection.cursor()
-
-    tables_to_fetch = ['columns', 'rows', 'banks', 'taverns', 'transits', 'userbuildings', 'shops', 'guilds',
-                       'placesofinterest']
-    tables_data = {}
-
-    for table_name in tables_to_fetch:
-        column_names, data = fetch_table_data(cursor, table_name)
-        tables_data[table_name] = (column_names, data)
-
-    cursor.close()
-    connection.close()
-
     app = QApplication(sys.argv)
-    viewer = DatabaseViewer(tables_data)
+    viewer = DatabaseViewer()
     viewer.show()
     sys.exit(app.exec())
 

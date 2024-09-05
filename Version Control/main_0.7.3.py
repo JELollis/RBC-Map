@@ -1431,6 +1431,8 @@ class CityMapApp(QMainWindow):
     def update_minimap(self):
         """
         Update the minimap.
+
+        Calls draw_minimap and then updates the info frame with any relevant information.
         """
         self.draw_minimap()
         self.update_info_frame()
@@ -1799,7 +1801,6 @@ class CityMapApp(QMainWindow):
 
         return column_names, data
 
-
 # -----------------------
 # Database Viewer Class
 # -----------------------
@@ -1939,7 +1940,6 @@ class ThemeCustomizationDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle('Theme Customization')
-
         self.setMinimumSize(400, 300)
         self.color_mappings = color_mappings if color_mappings else {}
 
@@ -1950,7 +1950,6 @@ class ThemeCustomizationDialog(QDialog):
 
         self.ui_tab = QWidget()
         self.minimap_tab = QWidget()
-
         self.tabs.addTab(self.ui_tab, "UI, Buttons, and Text")
         self.tabs.addTab(self.minimap_tab, "Minimap Content")
 
@@ -1958,7 +1957,6 @@ class ThemeCustomizationDialog(QDialog):
         self.setup_minimap_tab()
 
         button_layout = QHBoxLayout()
-
         save_button = QPushButton('Save', self)
         save_button.clicked.connect(self.accept)
         button_layout.addWidget(save_button)
@@ -2383,7 +2381,6 @@ def main():
     app = QApplication(sys.argv)
     window = CityMapApp()
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()
