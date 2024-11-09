@@ -312,7 +312,7 @@ columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, use
 # SQLite Cookie Storage Setup
 # -----------------------
 
-COOKIE_DB_PATH = '../sessions/cookies.db'
+COOKIE_DB_PATH = '../Testing/sessions/cookies.db'
 
 def initialize_cookie_db():
     """
@@ -474,7 +474,7 @@ class CityMapApp(QMainWindow):
         """
         Load the theme settings from a file or default to the color_mappings database entry.
         """
-        settings_file = '../settings/theme_settings.pkl'
+        settings_file = '../Testing/settings/theme_settings.pkl'
 
         if os.path.exists(settings_file):
             try:
@@ -504,7 +504,7 @@ class CityMapApp(QMainWindow):
         """
         Save the theme settings to a file.
         """
-        settings_file = '../settings/theme_settings.pkl'
+        settings_file = '../Testing/settings/theme_settings.pkl'
         with open(settings_file, 'wb') as f:
             pickle.dump(self.color_mappings, f)
 
@@ -990,7 +990,7 @@ class CityMapApp(QMainWindow):
         Load characters from a pickle file in the 'sessions' directory.
         """
         try:
-            with open('../sessions/characters.pkl', 'rb') as f:
+            with open('../Testing/sessions/characters.pkl', 'rb') as f:
                 self.characters = pickle.load(f)
                 self.character_list.clear()
                 for character in self.characters:
@@ -1008,8 +1008,8 @@ class CityMapApp(QMainWindow):
         Save characters to a pickle file in the 'sessions' directory.
         """
         try:
-            os.makedirs('../sessions', exist_ok=True)
-            with open('../sessions/characters.pkl', 'wb') as f:
+            os.makedirs('../Testing/sessions', exist_ok=True)
+            with open('../Testing/sessions/characters.pkl', 'wb') as f:
                 pickle.dump(self.characters, f)
                 logging.debug("Characters saved successfully to file.")
         except Exception as e:
@@ -1120,7 +1120,7 @@ class CityMapApp(QMainWindow):
         Save the last active character to a file.
         """
         try:
-            with open('../sessions/last_active_character.pkl', 'wb') as f:
+            with open('../Testing/sessions/last_active_character.pkl', 'wb') as f:
                 pickle.dump(self.selected_character, f)
                 logging.debug("Last active character saved successfully.")
         except Exception as e:
@@ -1131,7 +1131,7 @@ class CityMapApp(QMainWindow):
         Load the last active character from a file and log in automatically.
         """
         try:
-            with open('../sessions/last_active_character.pkl', 'rb') as f:
+            with open('../Testing/sessions/last_active_character.pkl', 'rb') as f:
                 self.selected_character = pickle.load(f)
                 logging.debug(f"Last active character loaded: {self.selected_character['name']}")
                 self.login_selected_character()
@@ -1502,7 +1502,7 @@ class CityMapApp(QMainWindow):
         """
         Save the destination to a file.
         """
-        with open('../sessions/destination.pkl', 'wb') as f:
+        with open('../Testing/sessions/destination.pkl', 'wb') as f:
             pickle.dump(self.destination, f)
             pickle.dump(datetime.now(), f)
 
@@ -1511,7 +1511,7 @@ class CityMapApp(QMainWindow):
         Load the destination from a file.
         """
         try:
-            with open('../sessions/destination.pkl', 'rb') as f:
+            with open('../Testing/sessions/destination.pkl', 'rb') as f:
                 self.destination = pickle.load(f)
                 self.scrape_timestamp = pickle.load(f)
         except (FileNotFoundError, EOFError):
@@ -2112,7 +2112,7 @@ class set_destination_dialog(QDialog):
         self.parent.destination = None
 
         # Save the cleared destination to the file to ensure persistence
-        with open('../sessions/destination.pkl', 'wb') as f:
+        with open('../Testing/sessions/destination.pkl', 'wb') as f:
             pickle.dump(self.parent.destination, f)
             pickle.dump(datetime.now(), f)
         self.parent.update_minimap()

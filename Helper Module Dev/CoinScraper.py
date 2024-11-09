@@ -54,7 +54,7 @@ from PySide6.QtNetwork import QNetworkCookie
 import sqlite3
 
 # Constants
-COOKIE_DB_PATH = '../sessions/cookies.db'
+COOKIE_DB_PATH = './sessions/cookies.db'
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 

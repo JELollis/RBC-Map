@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.8.0
+# Filename: main_0.8.1
 
 """
 =========================
@@ -78,7 +78,7 @@ required_modules = [
     'pickle', 'pymysql', 'requests', 're', 'time', 'sqlite3',
     'webbrowser', 'datetime', 'bs4', 'PySide6.QtWidgets',
     'PySide6.QtGui', 'PySide6.QtCore', 'PySide6.QtWebEngineWidgets',
-    'PySide6.QtWebChannel', 'PySide6.QtNetwork'
+    'PySide6.QtWebChannel', 'PySide6.QtNetwork','cryptography', 'hashlib'
 ]
 
 def check_required_modules(modules):
@@ -121,7 +121,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
@@ -130,8 +130,13 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
-import math
 import sqlite3
+from hashlib import sha256
+from cryptography.fernet import Fernet
+
+# Initialize Fernet encryption using the loaded key
+key = b'Kslt2S6mlIeMRsRhfnZ2k2PjFjI98rOUpNE9H8bLywE='  # Replace with your actual key
+cipher_suite = Fernet(key)
 
 # -----------------------
 # Directory Setup
@@ -152,7 +157,7 @@ def ensure_directories_exist():
 
     If any of these directories do not exist, they are created in the current working directory.
     """
-    required_dirs = ['logs', 'sessions', 'settings', 'images']
+    required_dirs = ['logs', 'sessions', 'images']
     for directory in required_dirs:
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -198,11 +203,91 @@ def setup_logging():
 setup_logging()
 
 # -----------------------
-# Database Connection
+# SQLite Setup
 # -----------------------
 
-# Server information
-REMOTE_HOST = "lollis-home.ddns.net"
+# Local Database path
+DB_PATH = 'sessions/rbc_map_data.db'
+
+def initialize_database():
+    """
+    Initialize the consolidated database for all data storage.
+    Only creates the database and tables if the file does not exist.
+    """
+    if not os.path.exists(DB_PATH):
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        # Create the characters table with a primary key on id
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS characters (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                password TEXT
+            )
+        ''')
+
+        # Create the last_active_character table with a foreign key on character_id
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS last_active_character (
+                character_id INTEGER,
+                FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Create the settings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+                setting_name TEXT PRIMARY KEY,
+                setting_value BLOB
+            )
+        ''')
+
+        # Create the coins table with a foreign key on character_id
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS coins (
+                character_id INTEGER,
+                pocket INTEGER DEFAULT 0,
+                bank INTEGER DEFAULT 0,
+                FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+            )
+        ''')
+
+        # Create the cookies table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS cookies (
+                name TEXT,
+                domain TEXT,
+                path TEXT,
+                value TEXT,
+                expiration INTEGER,
+                UNIQUE(name, domain, path) ON CONFLICT REPLACE
+            )
+        ''')
+
+        # Create the color_mappings table for theme settings
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS color_mappings (
+                Type TEXT PRIMARY KEY,
+                Color TEXT
+            )
+        ''')
+
+        connection.commit()
+        connection.close()
+        print(f"Database {DB_PATH} created with required tables.")
+    else:
+        print(f"Database {DB_PATH} already exists. Initialization skipped.")
+
+# Call database initialization
+initialize_database()
+
+# -----------------------
+# MySQL Connection Setup
+# -----------------------
+
+# MySQL Server information
+REMOTE_HOST = "completeelectronics.net"
 LOCAL_HOST = "127.0.0.1"
 USER = "rbc_maps"
 PASSWORD = "RBC_Community_Map"
@@ -211,15 +296,8 @@ DATABASE = "city_map"
 def connect_to_database():
     """
     Attempt to connect to the MySQL database, starting with the remote server.
-
-    The function tries to establish a connection to a remote MySQL database first.
-    If the remote connection fails, it will then attempt to connect to a local MySQL database.
-
-    Returns:
-        pymysql.Connection: Database connection object if successful, None otherwise.
     """
     try:
-        # Attempt to connect to the remote MySQL server
         connection = pymysql.connect(
             host=REMOTE_HOST,
             user=USER,
@@ -229,10 +307,7 @@ def connect_to_database():
         logging.info("Connected to remote MySQL instance")
         return connection
     except pymysql.MySQLError as err:
-        # Log the error if the remote connection fails
         logging.error("Connection to remote MySQL instance failed: %s", err)
-
-        # Attempt to connect to the local MySQL server as a fallback
         try:
             connection = pymysql.connect(
                 host=LOCAL_HOST,
@@ -243,14 +318,10 @@ def connect_to_database():
             logging.info("Connected to local MySQL instance")
             return connection
         except pymysql.MySQLError as err:
-            # Log the error if the local connection also fails
             logging.error("Connection to local MySQL instance failed: %s", err)
             return None
 
-
-# Call the function to connect to the database
 database_connection = connect_to_database()
-
 
 # -----------------------
 # Load Data from Database
@@ -369,34 +440,8 @@ def load_data():
 columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data()
 
 # -----------------------
-# SQLite Storage Setup
+# Webview Cookie Database
 # -----------------------
-
-COOKIE_DB_PATH = 'sessions/cookies.db'  # Path to the SQLite database for storing cookies
-COINS_DB_PATH = 'sessions/coins.db'  # Path to the SQLite Database for storing coin information
-
-def initialize_cookie_db():
-    """
-    Initialize the SQLite database for storing cookies.
-
-    This function creates a table named 'cookies' in the SQLite database if it doesn't already exist.
-    The table is used to store cookie details such as name, value, domain, path, expiry, secure, and httponly flags.
-    """
-    connection = sqlite3.connect(COOKIE_DB_PATH)
-    cursor = connection.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS cookies (
-            name TEXT,
-            value TEXT,
-            domain TEXT,
-            path TEXT,
-            expiry TEXT,
-            secure INTEGER,
-            httponly INTEGER
-        )
-    ''')
-    connection.commit()
-    connection.close()
 
 def save_cookie_to_db(cookie):
     """
@@ -407,7 +452,7 @@ def save_cookie_to_db(cookie):
 
     This function inserts the cookie's details into the 'cookies' table in the SQLite database.
     """
-    connection = sqlite3.connect(COOKIE_DB_PATH)
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute('''
         INSERT INTO cookies (name, value, domain, path, expiry, secure, httponly)
@@ -434,7 +479,7 @@ def load_cookies_from_db():
     This function retrieves all cookies from the 'cookies' table in the SQLite database
     and converts them into QNetworkCookie objects.
     """
-    connection = sqlite3.connect(COOKIE_DB_PATH)
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute('SELECT name, value, domain, path, expiry, secure, httponly FROM cookies')
     rows = cursor.fetchall()
@@ -461,58 +506,15 @@ def clear_cookie_db():
 
     This function deletes all records from the 'cookies' table, effectively clearing all stored cookies.
     """
-    connection = sqlite3.connect(COOKIE_DB_PATH)
+    connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
     cursor.execute('DELETE FROM cookies')
     connection.commit()
     connection.close()
 
-def initialize_coins_db():
-    """
-    Initialize the coins database and ensure the 'coins' table exists.
-    This method checks if the coins database file exists, and if not, creates it and sets up the 'coins' table
-    to store character coin information.
-
-    The table contains the following columns:
-    - character (TEXT): The character's name (Primary Key)
-    - pocket (INTEGER): The number of coins in the character's pocket
-    - bank (INTEGER): The number of coins in the character's bank
-    """
-    # Check if the database file exists
-    db_exists = os.path.exists(COINS_DB_PATH)
-
-    # Connect to the database (it will create the file if it doesn't exist)
-    conn = sqlite3.connect(COINS_DB_PATH)
-    cursor = conn.cursor()
-
-    # Check if the "coins" table exists
-    cursor.execute('''
-        SELECT name FROM sqlite_master WHERE type='table' AND name='coins';
-    ''')
-    table_exists = cursor.fetchone()
-
-    # If the database didn't exist or the "coins" table doesn't exist, create it
-    if not db_exists or not table_exists:
-        print("Creating or updating coins.db and the coins table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS coins (
-                character TEXT PRIMARY KEY,
-                pocket INTEGER,
-                bank INTEGER
-            )
-        ''')
-        conn.commit()
-
-    conn.close()
-    print("Done.")
-
-initialize_cookie_db()
-initialize_coins_db()
-
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
-
 class RBCCommunityMap(QMainWindow):
     """
     Main application class for the RBC Community Map.
@@ -572,10 +574,7 @@ class RBCCommunityMap(QMainWindow):
         self.load_characters()
 
         if not self.characters:
-            self.add_new_character()
-            if not self.characters:
-                # Exit if no characters are added
-                sys.exit("No characters added. Exiting the application.")
+                self.firstrun_character_creation()
 
         self.load_destination()
         self.setup_ui()
@@ -590,46 +589,65 @@ class RBCCommunityMap(QMainWindow):
 
     def load_theme_settings(self):
         """
-        Load the theme settings from a file or default to the color_mappings database entry.
+        Load the theme settings from the SQLite database.
 
-        This method loads the user's customized theme settings from a pickle file. If the file does not exist,
-        it falls back to loading the theme settings from the database.
+        This method checks if theme settings exist in the `color_mappings` table of the unified database.
+        If not found, it initializes `color_mappings` with default values.
         """
-        settings_file = './settings/theme_settings.pkl'
+        try:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
 
-        if os.path.exists(settings_file):
-            try:
-                with open(settings_file, 'rb') as f:
-                    self.color_mappings = pickle.load(f)
-            except (EOFError, pickle.UnpicklingError) as e:
-                logging.error(f"Failed to load theme settings from file: {e}")
-                self.color_mappings = {}
-        else:
-            # Fallback to the database color_mappings
-            connection = connect_to_database()
-            if connection:
-                try:
-                    cursor = connection.cursor()
-                    cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
-                    color_mappings_data = cursor.fetchall()
-                    self.color_mappings = {type_: QColor(color) for type_, color in color_mappings_data}
-                except pymysql.MySQLError as e:
-                    logging.error(f"Failed to load color mappings from database: {e}")
-                    self.color_mappings = {}
-                finally:
-                    connection.close()
-            else:
-                self.color_mappings = {}  # Default to an empty dict if no database entry is found
+            # Fetch the theme settings from the color_mappings table
+            cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
+            color_mappings_data = cursor.fetchall()
+
+            # Populate color_mappings with QColor objects
+            self.color_mappings = {type_: QColor(color) for type_, color in color_mappings_data}
+            logging.debug("Theme settings loaded from database.")
+
+            # Set default color if no entries are found
+            if not self.color_mappings:
+                self.color_mappings = {"background": QColor("white"), "text_color": QColor("black"),
+                                       "button_color": QColor("lightgrey")}
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load theme settings from database: {e}")
+            self.color_mappings = {"background": QColor("white"), "text_color": QColor("black"),
+                                   "button_color": QColor("lightgrey")}
+        finally:
+            connection.close()
 
     def save_theme_settings(self):
         """
-        Save the theme settings to a file.
-
-        This method saves the user's customized theme settings to a pickle file, ensuring persistence across sessions.
+        Save the current theme settings to the SQLite database, updating or inserting each setting.
         """
-        settings_file = './settings/theme_settings.pkl'
-        with open(settings_file, 'wb') as f:
-            pickle.dump(self.color_mappings, f)
+        try:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Ensure the color_mappings table exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS color_mappings (
+                    Type TEXT PRIMARY KEY,
+                    Color TEXT
+                )
+            ''')
+
+            # Insert or update each color setting
+            for type_, color in self.color_mappings.items():
+                cursor.execute('''
+                    INSERT INTO color_mappings (Type, Color) VALUES (?, ?)
+                    ON CONFLICT(Type) DO UPDATE SET Color = excluded.Color
+                ''', (type_, color.name()))  # QColor to hex string
+
+            connection.commit()
+            logging.info("Theme settings saved to database.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save theme settings to database: {e}")
+        finally:
+            connection.close()
 
     def apply_theme(self):
         """
@@ -695,62 +713,91 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # Cookie Handling
     # -----------------------
-
     def setup_cookie_handling(self):
         """
-        Set up cookie handling, including loading and saving cookies.
-
-        This method initializes the SQLite database for cookies, connects the QWebEngineProfile's cookie store
-        to the application, and loads previously saved cookies from the database.
+        Set up cookie handling, including loading and saving cookies from the 'cookies' table in rbc_map_data.db.
         """
-        initialize_cookie_db()
+        # Ensure the cookies table exists in the unified database
+        self.initialize_cookie_db()
+
+        # Connect the QWebEngineProfile's cookie store to the application
         self.cookie_store = self.web_profile.cookieStore()
         self.cookie_store.cookieAdded.connect(self.on_cookie_added)
+
+        # Load previously saved cookies from the database
         self.load_cookies()
 
-    def load_cookies(self):
+    def initialize_cookie_db(self):
         """
-        Load cookies from the SQLite database.
-
-        This method retrieves cookies from the SQLite database and injects them into the web engine's cookie store.
+        Create the 'cookies' table in rbc_map_data.db if it does not already exist.
         """
-        cookies = load_cookies_from_db()
-        for cookie in cookies:
-            self.cookie_store.setCookie(cookie, QUrl("https://quiz.ravenblack.net"))
-        logging.info("Cookies loaded from SQLite database.")
-
-    def on_cookie_added(self, cookie):
-        """
-        Handle the event when a new cookie is added, ensuring no duplicates are stored.
-
-        Args:
-            cookie (QNetworkCookie): The newly added cookie.
-
-        This method checks if the cookie already exists in the database and saves it if it's new.
-        """
-        # Prevent adding duplicate cookies
-        connection = sqlite3.connect(COOKIE_DB_PATH)
+        connection = sqlite3.connect(DB_PATH)
         cursor = connection.cursor()
 
         cursor.execute('''
-            SELECT COUNT(*) FROM cookies 
-            WHERE name = ? AND domain = ? AND path = ?
-        ''', (
-            cookie.name().data().decode('utf-8'),
-            cookie.domain(),
-            cookie.path()
-        ))
-        result = cursor.fetchone()
+            CREATE TABLE IF NOT EXISTS cookies (
+                name TEXT,
+                domain TEXT,
+                path TEXT,
+                value TEXT,
+                expiration INTEGER,
+                UNIQUE(name, domain, path) ON CONFLICT REPLACE
+            )
+        ''')
 
-        if result[0] == 0:
-            save_cookie_to_db(cookie)
-            logging.debug(
-                f"Cookie added: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
-        else:
-            logging.debug(
-                f"Duplicate cookie ignored: {cookie.name().data().decode('utf-8')} = {cookie.value().data().decode('utf-8')}")
+        connection.commit()
+        connection.close()
+
+    def load_cookies(self):
+        """
+        Load cookies from the 'cookies' table in rbc_map_data.db and inject them into the QWebEngineProfile.
+        """
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT name, domain, path, value, expiration FROM cookies")
+        cookies = cursor.fetchall()
+
+        for name, domain, path, value, expiration in cookies:
+            cookie = QNetworkCookie()
+            cookie.setName(name.encode())
+            cookie.setDomain(domain)
+            cookie.setPath(path)
+            cookie.setValue(value.encode())
+            cookie.setExpirationDate(QDateTime.fromSecsSinceEpoch(expiration))
+            self.cookie_store.setCookie(cookie, QUrl(f"https://{domain}"))
 
         connection.close()
+        logging.info("Cookies loaded from rbc_map_data.db.")
+
+    def on_cookie_added(self, cookie):
+        """
+        Save a newly added cookie to the 'cookies' table in rbc_map_data.db.
+        """
+        try:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Convert expiration date to a timestamp if it’s not a session cookie
+            expiration = cookie.expirationDate().toSecsSinceEpoch() if not cookie.isSessionCookie() else None
+
+            cursor.execute('''
+                INSERT INTO cookies (name, domain, path, value, expiration)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                bytes(cookie.name()).decode('utf-8'),  # Convert QByteArray to string
+                cookie.domain(),
+                cookie.path(),
+                bytes(cookie.value()).decode('utf-8'),  # Convert QByteArray to string
+                expiration
+            ))
+
+            connection.commit()
+            logging.debug(f"Cookie added to rbc_map_data.db: {cookie.name().data().decode('utf-8')}")
+        except Exception as e:
+            logging.error(f"Failed to add cookie to database: {e}")
+        finally:
+            connection.close()
 
     # -----------------------
     # UI Setup
@@ -979,8 +1026,29 @@ class RBCCommunityMap(QMainWindow):
         # Make sure the webview expands to fill the remaining space
         self.website_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self.show()
-        self.update_minimap()
+        if self.selected_character:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+            try:
+                cursor.execute("SELECT id FROM characters WHERE name = ?", (self.selected_character['name'],))
+                character_row = cursor.fetchone()
+                if character_row:
+                    character_id = character_row[0]
+                    self.coin_scraper = CoinScraper(
+                        character_name=self.selected_character['name'],
+                        character_id=character_id,
+                        web_profile=self.web_profile
+                    )
+                    logging.info(f"CoinScraper initialized for {self.selected_character['name']} with ID {character_id}.")
+                else:
+                    logging.error(f"Character '{self.selected_character['name']}' not found in the database.")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to retrieve character ID: {e}")
+            finally:
+                connection.close()
+
+            self.show()
+            self.update_minimap()
 
     # -----------------------
     # Browser Controls Setup
@@ -1165,8 +1233,8 @@ class RBCCommunityMap(QMainWindow):
             QMessageBox.warning(self, "No Character Selected", "Please select a character from the list.")
             return
 
-        # Open the ShoppingListTool with the selected character and COINS_DB_PATH
-        self.shopping_list_tool = ShoppingListTool(character_name, COINS_DB_PATH)
+        # Open the ShoppingListTool with the selected character and unified database path
+        self.shopping_list_tool = ShoppingListTool(character_name, DB_PATH)
         self.shopping_list_tool.show()
 
     # -----------------------
@@ -1175,80 +1243,120 @@ class RBCCommunityMap(QMainWindow):
 
     def load_characters(self):
         """
-        Load characters from a pickle file in the 'sessions' directory.
-
-        Clears the character list widget and repopulates it with the loaded characters.
-        If the file is not found, an empty character list is initialized.
+        Load characters from the SQLite database, including IDs for reference.
         """
         try:
-            with open('./sessions/characters.pkl', 'rb') as f:
-                self.characters = pickle.load(f)
-                self.character_list.clear()
-                for character in self.characters:
-                    self.character_list.addItem(QListWidgetItem(character['name']))
-                logging.debug("Characters loaded successfully from file.")
-        except FileNotFoundError:
-            logging.warning("Characters file not found. No characters loaded.")
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Ensure the characters table exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS characters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    password TEXT
+                )
+            ''')
+
+            # Fetch characters from the database including id
+            cursor.execute("SELECT id, name, password FROM characters")
+            character_data = cursor.fetchall()
+            self.characters = [
+                {'id': char_id, 'name': name, 'password': password}
+                for char_id, name, password in character_data
+            ]
+
+            # Populate characters list and UI element
+            self.character_list.clear()
+            for character in self.characters:
+                self.character_list.addItem(QListWidgetItem(character['name']))
+            logging.debug("Characters loaded successfully from the database.")
+
+            # Automatically select the first character if any exist
+            if self.characters:
+                self.character_list.setCurrentRow(0)
+                self.selected_character = self.characters[0]
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load characters from database: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to load characters: {e}")
             self.characters = []
-        except Exception as e:
-            logging.error(f"An unexpected error occurred while loading characters: {e}")
-            QMessageBox.critical(self, "Error", f"Unexpected error: {e}")
-            self.characters = []
-        # Automatically select the first character if there are any characters loaded
-        if self.characters:
-            self.character_list.setCurrentRow(0)
-            self.selected_character = self.characters[0]
+        finally:
+            connection.close()
 
     def save_characters(self):
         """
-        Save characters to a pickle file in the 'sessions' directory.
-
-        Creates the 'sessions' directory if it doesn't exist, then writes the character list to a file.
+        Save characters to the SQLite database in plaintext.
         """
         try:
-            os.makedirs('sessions', exist_ok=True)
-            with open('sessions/characters.pkl', 'wb') as f:
-                pickle.dump(self.characters, f)
-                logging.debug("Characters saved successfully to file.")
-        except Exception as e:
-            logging.error(f"Failed to save characters: {e}")
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Ensure the characters table exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS characters (
+                    name TEXT PRIMARY KEY,
+                    password TEXT
+                )
+            ''')
+
+            # Insert or update each character without encrypting the password
+            for character in self.characters:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO characters (name, password) VALUES (?, ?)
+                ''', (character['name'], character['password']))
+
+            connection.commit()
+            logging.debug("Characters saved successfully to the database in plaintext.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save characters to database: {e}")
+        finally:
+            connection.close()
 
     def on_character_selected(self, item):
         """
         Handle character selection from the list.
-
-        Args:
-            item (QListWidgetItem): The selected item in the list.
-
-        Logs the selected character, saves the last active character,
-        logs out the current character, and then logs in the selected one.
         """
         character_name = item.text()
         selected_character = next((char for char in self.characters if char['name'] == character_name), None)
+
         if selected_character:
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
-            self.save_last_active_character()
+
+            # Retrieve character_id from the database
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            try:
+                cursor.execute("SELECT id FROM characters WHERE name = ?", (character_name,))
+                character_row = cursor.fetchone()
+                if character_row:
+                    character_id = character_row[0]
+                    self.save_last_active_character(character_id)  # Pass character_id to save_last_active_character
+                else:
+                    logging.error(f"Character '{character_name}' not found in characters table.")
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to retrieve character_id for '{character_name}': {e}")
+            finally:
+                connection.close()
+
             self.logout_current_character()
             QTimer.singleShot(1000, self.login_selected_character)
 
     def logout_current_character(self):
         """
         Logout the current character by navigating to the logout URL.
-
-        Triggers a delayed login for the selected character to ensure the logout completes first.
         """
         logging.debug("Logging out current character.")
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
-
-        # Delay login to allow logout to complete
         QTimer.singleShot(1000, self.login_selected_character)
 
     def login_selected_character(self):
         """
-        Log in the selected character after logging out the current one.
-
-        Executes a JavaScript script within the web page to fill in and submit the login form.
+        Log in the selected character using the plaintext password.
         """
         if not self.selected_character:
             logging.warning("No character selected for login.")
@@ -1256,7 +1364,7 @@ class RBCCommunityMap(QMainWindow):
 
         logging.debug(f"Logging in character: {self.selected_character['name']}")
         name = self.selected_character['name']
-        password = self.selected_character['password']
+        password = self.selected_character['password']  # Plaintext password
 
         # JavaScript code to fill in the login form
         login_script = f"""
@@ -1271,29 +1379,102 @@ class RBCCommunityMap(QMainWindow):
                 """
         self.website_frame.page().runJavaScript(login_script)
 
-    def add_new_character(self):
+    def firstrun_character_creation(self):
         """
-        Add a new character to the list.
-
-        Opens a dialog to input the character's name and password,
-        adds the character to the list, saves the updated list, and refreshes the UI.
+        Handles the first-run character creation, saving the character in plaintext,
+        initializing default coin values in the coins table, and setting this character as the last active.
         """
-        logging.debug("Adding a new character.")
+        logging.debug("First-run character creation.")
         dialog = CharacterDialog(self)
+
         if dialog.exec():
             name = dialog.name_edit.text()
             password = dialog.password_edit.text()
-            self.characters.append({'name': name, 'password': password})
-            self.save_characters()
-            self.character_list.addItem(QListWidgetItem(name))
-            logging.debug(f"Character {name} added.")
+
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            try:
+                # Insert the new character into the characters table
+                cursor.execute('''
+                    INSERT INTO characters (name, password) VALUES (?, ?)
+                ''', (name, password))
+                connection.commit()
+
+                # Retrieve the id of the newly inserted character
+                character_id = cursor.lastrowid
+
+                # Insert default coin values for the new character in the coins table
+                cursor.execute('''
+                    INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)
+                ''', (character_id,))
+                connection.commit()
+
+                # Set the new character as the last active character
+                self.save_last_active_character(character_id)
+
+                # Update the character list in the UI
+                self.characters.append({'name': name, 'password': password})
+                self.character_list.addItem(QListWidgetItem(name))
+
+                logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to create character '{name}': {e}")
+            finally:
+                connection.close()
+
+        else:
+            sys.exit("No characters added. Exiting the application.")
+
+    def add_new_character(self):
+        """
+        Add a new character to the list, saving the password in plaintext,
+        initializing default coin values in the coins table, and setting this character as the last active.
+        """
+        logging.debug("Adding a new character.")
+        dialog = CharacterDialog(self)
+
+        if dialog.exec():
+            name = dialog.name_edit.text()
+            password = dialog.password_edit.text()
+
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            try:
+                # Insert the new character into the characters table
+                cursor.execute('''
+                    INSERT INTO characters (name, password) VALUES (?, ?)
+                ''', (name, password))
+                connection.commit()
+
+                # Retrieve the id of the newly inserted character
+                character_id = cursor.lastrowid
+
+                # Insert default coin values for the new character in the coins table
+                cursor.execute('''
+                    INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)
+                ''', (character_id,))
+                connection.commit()
+
+                # Set the new character as the last active character
+                self.save_last_active_character(character_id)
+
+                # Update the character list in the UI
+                self.characters.append({'name': name, 'password': password})
+                self.character_list.addItem(QListWidgetItem(name))
+
+                logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to add character '{name}': {e}")
+            finally:
+                connection.close()
 
     def modify_character(self):
         """
-        Modify the selected character's details.
-
-        Opens a dialog to edit the character's name and password, updates the character list,
-        and saves the changes to the file.
+        Modify the selected character's details, saving the new password in plaintext.
         """
         current_item = self.character_list.currentItem()
         if current_item is None:
@@ -1315,8 +1496,6 @@ class RBCCommunityMap(QMainWindow):
     def delete_character(self):
         """
         Delete the selected character from the list.
-
-        Removes the character from the character list and updates the file.
         """
         current_item = self.character_list.currentItem()
         if current_item is None:
@@ -1329,36 +1508,61 @@ class RBCCommunityMap(QMainWindow):
         self.character_list.takeItem(self.character_list.row(current_item))
         logging.debug(f"Character {name} deleted.")
 
-    def save_last_active_character(self):
+    def save_last_active_character(self, character_id):
         """
-        Save the last active character to a file.
+        Save the last active character's ID to the last_active_character table.
+        Ensures that only one entry exists, replacing any previous entry.
+        """
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
 
-        Writes the currently selected character to a pickle file.
-        """
         try:
-            logging.debug(f"Saving last active character: {self.selected_character}")
-            with open('sessions/last_active_character.pkl', 'wb') as f:
-                pickle.dump(self.selected_character, f)
-                logging.debug("Last active character saved successfully.")
-        except Exception as e:
+            # Use REPLACE INTO to ensure there's only one entry for the last active character
+            cursor.execute('''
+                REPLACE INTO last_active_character (character_id) VALUES (?)
+            ''', (character_id,))
+
+            connection.commit()
+            logging.debug(f"Last active character set to character_id: {character_id}")
+
+        except sqlite3.Error as e:
             logging.error(f"Failed to save last active character: {e}")
+        finally:
+            connection.close()
 
     def load_last_active_character(self):
         """
-        Load the last active character from a file and set a flag to log in automatically after the page is loaded.
+        Load the last active character from the database by character_id and set the selected character for auto-login.
         """
         try:
-            with open('sessions/last_active_character.pkl', 'rb') as f:
-                self.selected_character = pickle.load(f)
-                logging.debug(f"Last active character loaded: {self.selected_character}")
-                self.login_needed = True  # Set the flag to indicate login is needed
-                self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))  # Load the login page
-        except FileNotFoundError:
-            logging.warning("Last active character file not found. No character loaded.")
-        except (pickle.UnpicklingError, EOFError) as e:
-            logging.error(f"Failed to load last active character due to corruption: {e}")
-        except Exception as e:
-            logging.error(f"Failed to load last active character: {e}")
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Retrieve the last active character's ID from the last_active_character table
+            cursor.execute("SELECT character_id FROM last_active_character")
+            result = cursor.fetchone()
+
+            if result:
+                character_id = result[0]
+
+                # Find the character in self.characters by matching 'id'
+                self.selected_character = next((char for char in self.characters if char.get('id') == character_id),
+                                               None)
+
+                if self.selected_character:
+                    logging.debug(f"Last active character loaded: {self.selected_character['name']}")
+                    self.login_needed = True  # Set the flag to indicate login is needed
+                    self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))  # Load the login page
+                else:
+                    logging.warning(f"Last active character ID '{character_id}' not found in character list.")
+
+            else:
+                logging.warning("No last active character found in the database.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load last active character from database: {e}")
+        finally:
+            connection.close()
 
     # -----------------------
     # Web View Handling
@@ -1388,22 +1592,27 @@ class RBCCommunityMap(QMainWindow):
 
     def process_html(self, html):
         """
-        Process the HTML content of the webview to extract coordinates and update the minimap.
+        Process the HTML content of the webview to extract coordinates and coin information.
 
         Args:
-            html (str): HTML content as a string.
+            html (str): The HTML content of the page as a string.
 
         This method calls both the extract_coordinates_from_html and extract_coins_from_html methods.
         """
-        # Extract coordinates for the minimap
-        x_coord, y_coord = self.extract_coordinates_from_html(html)
-        if x_coord is not None and y_coord is not None:
-            self.column_start = x_coord
-            self.row_start = y_coord
-            self.update_minimap()
+        try:
+            # Extract coordinates for the minimap
+            x_coord, y_coord = self.extract_coordinates_from_html(html)
+            if x_coord is not None and y_coord is not None:
+                self.column_start = x_coord
+                self.row_start = y_coord
+                self.update_minimap()
 
-        # Call the method to extract bank coins and pocket changes from the HTML
-        self.extract_coins_from_html(html)
+            # Call the method to extract bank coins and pocket changes from the HTML
+            self.coin_scraper.extract_coins_from_html(html)
+            logging.debug("HTML processed successfully for coordinates and coin count.")
+
+        except Exception as e:
+            logging.error(f"Unexpected error in process_html: {e}")
 
     def extract_coordinates_from_html(self, html):
         """
@@ -1434,121 +1643,6 @@ class RBCCommunityMap(QMainWindow):
                 return x_value, y_value
 
         return None, None
-
-    def extract_coins_from_html(self, html):
-        """
-        Extract bank coins, pocket coins, and handle coin-related actions such as deposits,
-        withdrawals, transit handling, and coins gained from hunting or stealing.
-
-        Args:
-            html (str): The HTML content as a string.
-
-        This method searches for bank balance, deposits, withdrawals, hunting, robbing, receiving,
-        and transit coin actions in the HTML content, updating both bank and pocket coins in the
-        SQLite database.
-        """
-        connection = sqlite3.connect(COINS_DB_PATH)
-        cursor = connection.cursor()
-
-        # Search for the bank balance line
-        bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
-
-        # Search for a deposit action
-        deposit_match = re.search(r"You deposit (\d+) coins.", html)
-
-        # Search for a withdrawal action
-        withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
-
-        # Search for transit pocket coin update
-        transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
-
-        # Additional coin-related actions
-        actions = {
-            'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
-            'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
-            'human': r'You drink the human\'s blood.*You also found (\d+) coins',
-            'bag_of_coins': r'The bag contained (\d+) coins',
-            'robbing': r'You stole (\d+) coins from (\w+)',
-            'silver_suitcase': r'The suitcase contained (\d+) coins',
-            'given_coins': r'(\w+) gave you (\d+) coins',
-            'getting_robbed': r'(\w+) stole (\d+) coins from you'
-        }
-
-        # Handle bank balance update
-        if bank_match:
-            bank_coins = int(bank_match.group(1))
-            logging.info(f"Bank coins found: {bank_coins}")
-
-            # Update the bank coins in the SQLite database
-            cursor.execute('''
-                UPDATE coins
-                SET bank = ?
-                WHERE character = ?
-            ''', (bank_coins, self.selected_character['name']))
-
-        # Handle deposit action
-        if deposit_match:
-            deposit_coins = int(deposit_match.group(1))
-            logging.info(f"Deposit found: {deposit_coins} coins")
-
-            # Reduce the pocket coins by the deposited amount
-            cursor.execute('''
-                UPDATE coins
-                SET pocket = pocket - ?
-                WHERE character = ?
-            ''', (deposit_coins, self.selected_character['name']))
-
-        # Handle withdrawal action
-        if withdraw_match:
-            withdraw_coins = int(withdraw_match.group(1))
-            logging.info(f"Withdrawal found: {withdraw_coins} coins")
-
-            # Increase the pocket coins by the withdrawn amount
-            cursor.execute('''
-                UPDATE coins
-                SET pocket = pocket + ?
-                WHERE character = ?
-            ''', (withdraw_coins, self.selected_character['name']))
-
-        # Handle transit coin update
-        if transit_match:
-            coins_in_pocket = int(transit_match.group(1))
-            logging.info(f"Transit found: Pocket coins updated to {coins_in_pocket}")
-
-            # Explicitly set the pocket coin count after transit
-            cursor.execute('''
-                UPDATE coins
-                SET pocket = ?
-                WHERE character = ?
-            ''', (coins_in_pocket, self.selected_character['name']))
-
-        # Handle other coin-related actions (hunting, robbing, etc.)
-        for action, pattern in actions.items():
-            match = re.search(pattern, html)
-            if match:
-                coin_count = int(match.group(1))
-                if action == 'getting_robbed':
-                    # Losing coins when robbed
-                    vamp_name = match.group(2)
-                    cursor.execute('''
-                        UPDATE coins
-                        SET pocket = pocket - ?
-                        WHERE character = ?
-                    ''', (coin_count, self.selected_character['name']))
-                    logging.info(f"Lost {coin_count} coins to {vamp_name}.")
-                else:
-                    # Gaining coins from hunting, robbing, etc.
-                    cursor.execute('''
-                        UPDATE coins
-                        SET pocket = pocket + ?
-                        WHERE character = ?
-                    ''', (coin_count, self.selected_character['name']))
-                    logging.info(f"Gained {coin_count} coins from {action}.")
-                break  # Exit loop after first match
-
-        connection.commit()
-        connection.close()
-        logging.info(f"Updated coins for {self.selected_character['name']}.")
 
     def refresh_webview(self):
         """
@@ -2067,7 +2161,7 @@ class RBCCommunityMap(QMainWindow):
         """
         Open the RBC Website in the system's default web browser.
         """
-        webbrowser.open('https://lollis-home.ddns.net/viewpage.php?page_id=1')
+        webbrowser.open('https://completeelectronics.net/viewpage.php?page_id=1')
 
     def show_about_dialog(self):
         """
@@ -2265,7 +2359,6 @@ class DatabaseViewer(QMainWindow):
 # -----------------------
 # Character Dialog Class
 # -----------------------
-
 class CharacterDialog(QDialog):
     """
     A dialog for adding or modifying a character.
@@ -2320,7 +2413,6 @@ class CharacterDialog(QDialog):
 # -----------------------
 # Theme Customization Dialog
 # -----------------------
-
 class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing the application's theme colors.
@@ -2459,10 +2551,10 @@ class ThemeCustomizationDialog(QDialog):
             f"QPushButton {{ background-color: {button_color}; color: {text_color}; }}"
             f"QLabel {{ color: {text_color}; }}"
         )
+
 # -----------------------
 # AVITD Scraper Class
 # -----------------------
-
 class AVITDScraper:
     """
     A scraper class for 'A View in the Dark' to update guilds and shops data in the database.
@@ -2642,7 +2734,6 @@ class AVITDScraper:
 # -----------------------
 # Set Destination
 # -----------------------
-
 class set_destination_dialog(QDialog):
     """
     A dialog for setting a destination on the map.
@@ -3130,94 +3221,149 @@ class ShoppingListTool(QMainWindow):
 
         return result[0] if result else 0
 
+
 class CoinScraper:
-    def __init__(self, character_name, web_profile):
+    def __init__(self, character_name, character_id, web_profile):
         """
-        Initialize the CoinScraper with the given character name and web profile.
+        Initialize the CoinScraper with the given character name, character ID, and web profile.
 
         Args:
             character_name (str): The name of the character for whom to scrape the coin count.
+            character_id (int): The unique ID of the character for database updates.
             web_profile (QWebEngineProfile): The web profile to use for maintaining session data.
         """
         logging.debug("Initializing CoinScraper.")
         self.character_name = character_name
+        self.character_id = character_id
         self.web_profile = web_profile
         self.website_frame = QWebEngineView(self.web_profile)
 
-        # Start the scraping process
-        QTimer.singleShot(1000, self.scrape_coin_count)
+        # Start scraping process with periodic checks
+        self.check_coin_count()
 
-    def scrape_coin_count(self):
+    def check_coin_count(self):
         """
-        Scrape the page for the coin count.
+        Periodically scrape the page for the coin count by loading the relevant page.
         """
-        logging.debug("Navigating to coin page.")
         coin_url = "https://quiz.ravenblack.net/blood.pl?action=viewvamp"
         self.website_frame.setUrl(QUrl(coin_url))
         self.website_frame.loadFinished.connect(self.on_page_loaded)
 
     def on_page_loaded(self):
         """
-        Handle the page load completion and scrape for coin count.
+        Handle page load completion and trigger HTML processing.
         """
-        logging.debug("Page loaded. Scraping the page for coin count.")
-        self.website_frame.page().toHtml(self.process_html)
+        logging.debug("Page loaded. Processing HTML for coin count.")
+        self.website_frame.page().toHtml(self.extract_coins_from_html)
 
-    def process_html(self, html):
+    def extract_coins_from_html(self, html):
         """
-        Process the HTML content of the page to find the coin count and vampire name.
-
-        Args:
-            html (str): The HTML content of the page.
+        Extract bank coins, pocket coins, and handle coin-related actions from the HTML content.
+        Updates both bank and pocket coins in the database for the current character.
         """
-        soup = BeautifulSoup(html, 'html.parser')
-
-        # Find the coin count
-        money_line = soup.find(string=lambda text: text and "Money:" in text)
-        if money_line:
-            coins = money_line.split("Money: ")[1].split(" ")[0]
-            logging.debug(f"Found coin count: {coins}")
-
-        # Find the vampire name
-        vampire_name_line = soup.find(string=lambda text: text and "You are the vampire" in text)
-        if vampire_name_line:
-            vampire_name = vampire_name_line.split("You are the vampire ")[1].strip()
-            logging.debug(f"Found vampire name: {vampire_name}")
-
-        # Save both coin count and vampire name to the database
-        self.save_coin_count_to_db(coins, vampire_name)
-
-    def save_coin_count_to_db(self, coins, vampire_name):
-        """
-        Save the coin count and vampire name to the SQLite database.
-
-        Args:
-            coins (str): The number of coins to save.
-            vampire_name (str): The name of the vampire character.
-        """
-        logging.debug(f"Saving {coins} coins and name '{vampire_name}' to database for character {self.character_name}.")
-        connection = sqlite3.connect(COINS_DB_PATH)
+        connection = sqlite3.connect(DB_PATH)
         cursor = connection.cursor()
 
-        # Ensure the table exists
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS coins (
-                character TEXT PRIMARY KEY,
-                pocket INTEGER,
-                bank INTEGER,
-                name TEXT
-            )
-        ''')
+        try:
+            # Search for the bank balance line
+            bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
+            if bank_match:
+                bank_coins = int(bank_match.group(1))
+                logging.info(f"Bank coins found: {bank_coins}")
+                cursor.execute('''
+                    UPDATE coins
+                    SET bank = ?
+                    WHERE character_id = ?
+                ''', (bank_coins, self.character_id))
 
-        # Insert or update both coin count and vampire name
-        cursor.execute('''
-            INSERT INTO coins (character, pocket, name) VALUES (?, ?, ?)
-            ON CONFLICT(character) DO UPDATE SET pocket = excluded.pocket, name = excluded.name
-        ''', (self.character_name, coins, vampire_name))
+            # Search for pocket coin amounts
+            pocket_match = re.search(r"Money: (one|\d+) coins|You have (one|\d+) coins", html, re.IGNORECASE)
+            if pocket_match:
+                pocket_coins_text = pocket_match.group(1) or pocket_match.group(2)
+                pocket_coins = 1 if pocket_coins_text.lower() == "one" else int(pocket_coins_text)
+                logging.info(f"Pocket coins found: {pocket_coins}")
+                cursor.execute('''
+                    UPDATE coins
+                    SET pocket = ?
+                    WHERE character_id = ?
+                ''', (pocket_coins, self.character_id))
 
-        connection.commit()
-        connection.close()
-        logging.info(f"Coin count and vampire name for {self.character_name} saved to database.")
+            # Define actions for additional coin changes
+            actions = {
+                'deposit': r"You deposit (\d+) coins.",
+                'withdraw': r"You withdraw (\d+) coins.",
+                'transit': r"It costs 5 coins to ride. You have (\d+).",
+                'hunter': r"You drink the hunter\'s blood.*You also found (\d+) coins",
+                'paladin': r"You drink the paladin\'s blood.*You also found (\d+) coins",
+                'human': r"You drink the human\'s blood.*You also found (\d+) coins",
+                'bag_of_coins': r'The bag contained (\d+) coins',
+                'robbing': r'You stole (\d+) coins from (\w+)',
+                'silver_suitcase': r'The suitcase contained (\d+) coins',
+                'given_coins': r'(\w+) gave you (\d+) coins',
+                'getting_robbed': r'(\w+) stole (\d+) coins from you'
+            }
+
+            # Process each action pattern and update coins as needed
+            for action, pattern in actions.items():
+                match = re.search(pattern, html)
+                if match:
+                    coin_count = int(match.group(1))
+
+                    if action == 'deposit':
+                        # Deposit reduces pocket coins
+                        cursor.execute('''
+                            UPDATE coins
+                            SET pocket = pocket - ?
+                            WHERE character_id = ?
+                        ''', (coin_count, self.character_id))
+                        logging.info(f"Deposit action: -{coin_count} coins to pocket.")
+
+                    elif action == 'withdraw':
+                        # Withdraw increases pocket coins
+                        cursor.execute('''
+                            UPDATE coins
+                            SET pocket = pocket + ?
+                            WHERE character_id = ?
+                        ''', (coin_count, self.character_id))
+                        logging.info(f"Withdraw action: +{coin_count} coins to pocket.")
+
+                    elif action == 'transit':
+                        # Set pocket coins after transit
+                        coins_in_pocket = int(match.group(1))
+                        cursor.execute('''
+                            UPDATE coins
+                            SET pocket = ?
+                            WHERE character_id = ?
+                        ''', (coins_in_pocket, self.character_id))
+                        logging.info(f"Transit action: Pocket coins set to {coins_in_pocket}.")
+
+                    elif action == 'getting_robbed':
+                        # Losing coins when robbed
+                        cursor.execute('''
+                            UPDATE coins
+                            SET pocket = pocket - ?
+                            WHERE character_id = ?
+                        ''', (coin_count, self.character_id))
+                        logging.info(f"Getting robbed: -{coin_count} coins from pocket.")
+
+                    else:
+                        # Gaining coins (from hunting, robbing, receiving, etc.)
+                        cursor.execute('''
+                            UPDATE coins
+                            SET pocket = pocket + ?
+                            WHERE character_id = ?
+                        ''', (coin_count, self.character_id))
+                        logging.info(f"Gained {coin_count} coins from action: {action}.")
+                    break  # Exit loop after first match to avoid multiple updates from one HTML pass
+
+            connection.commit()
+            logging.info(f"Updated coins for character ID {self.character_id}.")
+
+        except Exception as e:
+            logging.error(f"Failed to update coins from HTML: {e}")
+
+        finally:
+            connection.close()
 
 def main():
     """
