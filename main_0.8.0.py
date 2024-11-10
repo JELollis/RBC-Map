@@ -1561,7 +1561,6 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # Minimap Drawing and Update
     # -----------------------
-
     def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations.

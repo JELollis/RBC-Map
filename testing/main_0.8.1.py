@@ -273,6 +273,16 @@ def initialize_database():
             )
         ''')
 
+        # Create the destinations table to store recent destinations with a limit of the last 10
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS destinations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                col INTEGER,
+                row INTEGER,
+                timestamp TEXT
+            )
+        ''')
+
         connection.commit()
         connection.close()
         print(f"Database {DB_PATH} created with required tables.")
@@ -525,6 +535,8 @@ class RBCCommunityMap(QMainWindow):
         Initialize the RBCCommunityMap and its components.
         """
         super().__init__()
+
+        self.is_updating_minimap = False
 
         # Early initialization of the scraper
         self.AVITD_scraper = AVITDScraper()
@@ -1655,7 +1667,6 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # Minimap Drawing and Update
     # -----------------------
-
     def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations.
@@ -1749,7 +1760,6 @@ class RBCCommunityMap(QMainWindow):
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
-        # Draw other locations as before
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
                 logging.debug(f"Drawing tavern '{name}' at coordinates ({column_index}, {row_index})")
@@ -1855,12 +1865,31 @@ class RBCCommunityMap(QMainWindow):
 
     def update_minimap(self):
         """
-        Update the minimap.
-
-        Calls draw_minimap and then updates the info frame with any relevant information.
+        Update the minimap with dynamic text scaling, word wrapping, and re-centering after zoom.
         """
-        self.draw_minimap()
-        self.update_info_frame()
+        if not hasattr(self, 'is_updating_minimap') or not self.is_updating_minimap:
+            self.is_updating_minimap = True
+
+            # 1. Draw the minimap with updated cell and font settings
+            self.draw_minimap()
+
+            # 2. Update font size based on cell dimensions
+            cell_width = self.calculate_cell_width()  # Get cell width after any zoom adjustments
+            font_size = max(8, cell_width // 3)  # Scale font to cell width, with a minimum size for readability
+            self.set_font_size(font_size)
+
+            # 3. Apply word wrapping to keep labels within cell boundaries
+            self.apply_word_wrap(cell_width)
+
+            # 4. Recenter minimap if the zoom level has changed
+            if self.zoom_changed():  # Only recenter if there was a zoom change
+                self.recenter_minimap()
+
+            # 5. Update the info frame with the latest information
+            self.update_info_frame()
+
+            # 6. Reset updating status
+            self.is_updating_minimap = False
 
     def find_nearest_location(self, x, y, locations):
         """
@@ -1938,67 +1967,77 @@ class RBCCommunityMap(QMainWindow):
 
     def set_destination(self):
         """
-        Set the destination to the current location.
-
-        Toggles the destination between the current location and none.
+        Open the set destination dialog to select a new destination.
         """
-        current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
-        if self.destination == (current_x, current_y):
-            self.destination = None
-        else:
-            self.destination = (current_x, current_y)
-        self.save_destination()
-        self.update_minimap()
-        self.refresh_webview()
+        dialog = set_destination_dialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            self.update_minimap()
 
-    def save_destination(self):
+    def get_current_destination(self):
         """
-        Save the destination to a file.
-
-        Saves the destination coordinates and the current timestamp to a pickle file.
+        Retrieve the latest destination from the SQLite database.
         """
-        with open('./sessions/destination.pkl', 'wb') as f:
-            pickle.dump(self.destination, f)
-            pickle.dump(datetime.now(), f)
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+        cursor.execute("SELECT col, row FROM destinations ORDER BY timestamp DESC LIMIT 1")
+        result = cursor.fetchone()
+        connection.close()
+        return (result[0], result[1]) if result else None
 
     def load_destination(self):
         """
-        Load the destination from a file.
+        Load the destination from the SQLite database.
 
-        Loads the destination coordinates and the timestamp from a pickle file.
+        Loads the last set destination coordinates and updates the minimap if available.
         """
-        try:
-            with open('./sessions/destination.pkl', 'rb') as f:
-                self.destination = pickle.load(f)
-                self.scrape_timestamp = pickle.load(f)
-        except (FileNotFoundError, EOFError):
-            logging.warning("Destination file not found or is empty. Setting defaults.")
+        destination_coords = self.get_current_destination()
+        if destination_coords:
+            self.destination = destination_coords
+            logging.info(f"Loaded destination from database: {self.destination}")
+        else:
             self.destination = None
-            self.scrape_timestamp = datetime.min
+            logging.info("No destination found in database. Starting with no destination.")
 
     # -----------------------
     # Minimap Controls
     # -----------------------
-
     def zoom_in(self):
         """
-        Zoom in the minimap.
+        Zoom in the minimap, ensuring the character stays centered.
 
-        Decreases the zoom level by 1 (down to a minimum of 3) and updates the minimap accordingly.
+        Decreases the zoom level (down to a minimum of 3) and recalibrates the minimap center.
         """
         if self.zoom_level > 3:
-            self.zoom_level -= 1
-            self.update_minimap()
+            self.zoom_level -= 2  # Reduce by 2 to keep zoom levels odd-numbered
+            self.recenter_minimap()
 
     def zoom_out(self):
         """
-        Zoom out the minimap.
+        Zoom out the minimap, ensuring the character stays centered.
 
-        Increases the zoom level by 1 (up to a maximum of 10) and updates the minimap accordingly.
+        Increases the zoom level (up to a maximum of 9) and recalibrates the minimap center.
         """
-        if self.zoom_level < 10:
-            self.zoom_level += 1
-            self.update_minimap()
+        if self.zoom_level < 9:
+            self.zoom_level += 2  # Increase by 2 to keep zoom levels odd-numbered
+            self.recenter_minimap()
+
+    def recenter_minimap(self):
+        """
+        Recenter the minimap so that the character's location is at the center cell.
+        """
+        # Calculate the center offset based on the current zoom level
+        center_offset = (self.zoom_level - 1) // 2
+
+        # Calculate the current character position in the grid
+        character_x = self.column_start + center_offset
+        character_y = self.row_start + center_offset
+
+        # Set `column_start` and `row_start` to ensure the character remains centered
+        self.column_start = max(character_x - center_offset, 0)
+        self.row_start = max(character_y - center_offset, 0)
+
+        # Update the minimap display
+        self.update_minimap()
 
     def go_to_location(self):
         """
@@ -2161,7 +2200,7 @@ class RBCCommunityMap(QMainWindow):
         """
         Open the RBC Website in the system's default web browser.
         """
-        webbrowser.open('https://completeelectronics.net/viewpage.php?page_id=1')
+        webbrowser.open('http://lollis-home.tailbf7f28.ts.net/viewpage.php?page_id=1')
 
     def show_about_dialog(self):
         """
@@ -2748,13 +2787,17 @@ class set_destination_dialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle("Set Destination")
-        self.resize(200, 200)
+        self.resize(200, 250)
 
         # Store the parent reference to access its methods
         self.parent = parent
 
         # Set up the main layout for the dialog
         main_layout = QVBoxLayout(self)
+
+        # Dropdown for recent destinations
+        self.recent_destinations_dropdown = QComboBox()
+        self.populate_recent_destinations()
 
         # Comboboxes to select destinations
         dropdown_layout = QFormLayout()
@@ -2766,7 +2809,7 @@ class set_destination_dialog(QDialog):
         self.poi_dropdown = QComboBox()
         self.user_building_dropdown = QComboBox()
 
-        # Populate dropdowns with values from the database
+        # Populate dropdowns with values from the MySQL database
         self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
         self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
         self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
@@ -2775,6 +2818,7 @@ class set_destination_dialog(QDialog):
         self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
         self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
 
+        dropdown_layout.addRow("Recent Destinations:", self.recent_destinations_dropdown)
         dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
         dropdown_layout.addRow("Bank:", self.bank_dropdown)
         dropdown_layout.addRow("Transit:", self.transit_dropdown)
@@ -2783,6 +2827,7 @@ class set_destination_dialog(QDialog):
         dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
         dropdown_layout.addRow("User Building:", self.user_building_dropdown)
 
+        # Custom location entry
         custom_location_layout = QHBoxLayout()
         self.columns_dropdown = QComboBox()
         self.rows_dropdown = QComboBox()
@@ -2803,7 +2848,7 @@ class set_destination_dialog(QDialog):
         main_layout.addLayout(custom_location_layout)
 
         # Add control buttons
-        button_layout = QGridLayout()  # Change to QGridLayout to accommodate (widget, row, column) syntax
+        button_layout = QGridLayout()
 
         set_button = QPushButton("Set Destination")
         set_button.clicked.connect(self.set_destination)
@@ -2814,13 +2859,37 @@ class set_destination_dialog(QDialog):
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
 
-        # Add buttons to the layout using the correct syntax for QGridLayout
         button_layout.addWidget(set_button, 0, 0)
         button_layout.addWidget(clear_button, 0, 1)
         button_layout.addWidget(update_button, 1, 0)
         button_layout.addWidget(cancel_button, 1, 1)
 
         main_layout.addLayout(button_layout)
+
+    def populate_recent_destinations(self):
+        """
+        Populate the recent destinations dropdown with a human-readable street format.
+        """
+        self.recent_destinations_dropdown.clear()
+        self.recent_destinations_dropdown.addItem("Select a recent destination")
+
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        # Retrieve recent destinations from the database
+        cursor.execute("SELECT col, row FROM destinations ORDER BY timestamp DESC LIMIT 10")
+        recent_destinations = cursor.fetchall()
+
+        # Map each destination's grid coordinates to street names
+        for col, row in recent_destinations:
+            col_name = self.parent.columns.get(col, f"Column {col}")
+            row_name = self.parent.rows.get(row, f"Row {row}")
+
+            # Format as "ABC Street & 123 Street"
+            destination_name = f"{col_name} & {row_name}"
+            self.recent_destinations_dropdown.addItem(destination_name, (col, row))  # Store (col, row) as data
+
+        connection.close()
 
     def populate_dropdown(self, dropdown, items):
         dropdown.clear()
@@ -2831,14 +2900,23 @@ class set_destination_dialog(QDialog):
         """
         Update the comboboxes with the latest data after scraping.
         """
-        # Run the scraper before updating comboboxes
-        self.parent.scraper.scrape_guilds_and_shops()
+        self.show_notification("Updating Shop and Guild Data. Please wait...")
 
-        # Now update the comboboxes with the new data
-        self.parent.columns, self.parent.rows, self.parent.banks_coordinates, self.parent.taverns_coordinates, self.parent.transits_coordinates, self.parent.user_buildings_coordinates, self.parent.color_mappings, self.parent.shops_coordinates, self.parent.guilds_coordinates, self.parent.places_of_interest_coordinates = load_data()
+        if hasattr(self.parent, 'AVITD_scraper') and self.parent.AVITD_scraper:
+            self.parent.AVITD_scraper.scrape_guilds_and_shops()
+            logging.info("AVITD Scraper used to update guilds and shops.")
+        else:
+            logging.error("AVITD Scraper is not initialized or accessible in the parent class.")
+
+        self.parent.columns, self.parent.rows, self.parent.banks_coordinates, \
+            self.parent.taverns_coordinates, self.parent.transits_coordinates, \
+            self.parent.user_buildings_coordinates, self.parent.color_mappings, \
+            self.parent.shops_coordinates, self.parent.guilds_coordinates, \
+            self.parent.places_of_interest_coordinates = load_data()
 
         self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
+        self.populate_dropdown(self.bank_dropdown,
+                               [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
         self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
         self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
         self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
@@ -2847,17 +2925,39 @@ class set_destination_dialog(QDialog):
         self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys())
         self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys())
 
+    def show_notification(self, message):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Notification")
+        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+
+        layout = QVBoxLayout()
+        message_label = QLabel(message)
+        layout.addWidget(message_label)
+        dialog.setLayout(layout)
+
+        QTimer.singleShot(5000, dialog.accept)
+        dialog.setFixedSize(300, 100)
+        dialog.exec()
+
     def clear_destination(self):
         """
         Clear the currently set destination and update the minimap.
         """
-        # Clear the destination in the parent application
         self.parent.destination = None
 
-        # Save the cleared destination to the file to ensure persistence
-        with open('./sessions/destination.pkl', 'wb') as f:
-            pickle.dump(self.parent.destination, f)
-            pickle.dump(datetime.now(), f)
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+        try:
+            cursor.execute('DELETE FROM destinations')
+            connection.commit()
+            logging.info("All destinations cleared from database.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to clear destinations in database: {e}")
+
+        finally:
+            connection.close()
+
         self.parent.update_minimap()
         self.accept()
 
@@ -2873,15 +2973,15 @@ class set_destination_dialog(QDialog):
         selected_poi = self.poi_dropdown.currentText()
         selected_user_building = self.user_building_dropdown.currentText()
 
-        col, row = None, None  # Initialize col and row to None
-        direction = None  # Initialize direction to None
+        col, row = None, None
+        direction = None
 
         if selected_tavern != "Select a destination":
             col, row = self.parent.taverns_coordinates[selected_tavern]
         elif selected_bank != "Select a destination":
             col_name, row_name = selected_bank.split(" & ")
             col, row = self.parent.columns[col_name], self.parent.rows[row_name]
-            col += 1  # Adjust bank coordinates by +1
+            col += 1
             row += 1
         elif selected_transit != "Select a destination":
             col, row = self.parent.transits_coordinates[selected_transit]
@@ -2903,22 +3003,41 @@ class set_destination_dialog(QDialog):
                 row = self.parent.rows.get(row_name)
 
                 if col is not None and row is not None:
-                    # Apply direction
                     if direction == "East":
-                        col += 1  # Only move to the East
+                        col += 1
                     elif direction == "South":
-                        row += 1  # Only move to the South
+                        row += 1
                     elif direction == "South East":
-                        col += 1  # Move to the East
-                        row += 1  # Move to the South
+                        col += 1
+                        row += 1
 
-        # If col and row are set, update the destination
         if col is not None and row is not None:
             self.parent.destination = (col, row)
-            self.parent.save_destination()
+
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+            try:
+                cursor.execute('''
+                    INSERT INTO destinations (col, row, timestamp)
+                    VALUES (?, ?, ?)
+                ''', (col, row, datetime.now().isoformat()))
+
+                cursor.execute('''
+                    DELETE FROM destinations
+                    WHERE id NOT IN (SELECT id FROM destinations ORDER BY timestamp DESC LIMIT 10)
+                ''')
+
+                connection.commit()
+                logging.info(f"Destination set to col={col}, row={row} with direction={direction} and saved to database.")
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to set destination in database: {e}")
+
+            finally:
+                connection.close()
+
             self.parent.update_minimap()
             self.accept()
-            logging.debug(f"Setting destination to col={col}, row={row} for direction={direction}")
         else:
             logging.warning("No valid destination selected or incorrect coordinates provided.")
 
@@ -3220,7 +3339,6 @@ class ShoppingListTool(QMainWindow):
         connection.close()
 
         return result[0] if result else 0
-
 
 class CoinScraper:
     def __init__(self, character_name, character_id, web_profile):
