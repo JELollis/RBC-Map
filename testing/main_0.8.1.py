@@ -120,7 +120,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
@@ -2192,36 +2192,6 @@ class RBCCommunityMap(QMainWindow):
             # Update the minimap with the new destination
             self.update_minimap()
 
-    def mousePressEvent(self, event):
-        """
-        Handle mouse press event to update the minimap location.
-
-        Updates the starting column and row of the minimap based on where the user clicked on the minimap.
-
-        Args:
-            event (QMouseEvent): The mouse event containing the position of the click.
-        """
-        if event.position().x() < self.minimap_label.width() and event.position().y() < self.minimap_label.height():
-            x = event.position().x()
-            y = event.position().y()
-
-            # Calculate the cell size based on the current zoom level
-            block_size = self.minimap_size // self.zoom_level
-            col_clicked = int(x // block_size)
-            row_clicked = int(y // block_size)
-
-            # Adjust the starting position based on click
-            new_column_start = self.column_start + col_clicked - self.zoom_level // 2
-            new_row_start = self.row_start + row_clicked - self.zoom_level // 2
-
-            # Set bounds for the minimap view to prevent going out of the defined area
-            max_bound = 200 - self.zoom_level + 1
-            self.column_start = max(0, min(new_column_start, max_bound))
-            self.row_start = max(0, min(new_row_start, max_bound))
-
-            # Update the minimap to reflect the new center position
-            self.update_minimap()
-
     # -----------------------
     # Infobar Management
     # -----------------------
@@ -3174,20 +3144,24 @@ class set_destination_dialog(QDialog):
 # Shopping list Tools
 # -----------------------
 class ShoppingListTool(QMainWindow):
-    def __init__(self, character_name, coins_db_path):
+    def __init__(self, character_name, db_path):
         super().__init__()
         self.setWindowTitle("Shopping List Tool")
         self.setGeometry(100, 100, 600, 400)
         self.character_name = character_name
-        self.coins_db_path = coins_db_path  # Use the passed coins DB path
-        self.mysql_connection = connect_to_database()  # Use MySQL connection for shop items
+        self.db_path = db_path  # Central SQLite DB path
 
+        # Initialize MySQL connection for shop data
+        self.mysql_connection = connect_to_database()  # MySQL connection for shop items
         if not self.mysql_connection:
             print("Failed to connect to the MySQL database.")
             sys.exit(1)
 
-        # Initialize the MySQL cursor
         self.cursor = self.mysql_connection.cursor()
+
+        # Initialize SQLite connection for coin data
+        self.sqlite_connection = sqlite3.connect(self.db_path)  # Central SQLite DB connection
+        self.sqlite_cursor = self.sqlite_connection.cursor()
 
         # Initialize shopping list total
         self.list_total = 0
@@ -3195,7 +3169,7 @@ class ShoppingListTool(QMainWindow):
         # Setting up UI
         self.setup_ui()
 
-        # Load data from MySQL
+        # Load data from MySQL (shop info)
         self.populate_shop_dropdown()
 
         # Load coin information from SQLite
@@ -3294,15 +3268,11 @@ class ShoppingListTool(QMainWindow):
     def add_from_damage_calculator(self, hw_count, gs_count):
         """
         Add Holy Water and Garlic Spray to the shopping list based on the damage calculator results.
-
-        Args:
-            hw_count (int): The number of Holy Water items to add.
-            gs_count (int): The number of Garlic Spray items to add.
         """
         shop_name = "Discount Potions"
 
         try:
-            # Fetch the price for Vial of Holy Water
+            # Fetch the price for Vial of Holy Water from MySQL
             query_hw = """
             SELECT charisma_level_1 FROM shop_items
             WHERE shop_name = %s AND item_name = 'Vial of Holy Water'
@@ -3316,7 +3286,7 @@ class ShoppingListTool(QMainWindow):
                 print("Vial of Holy Water not found.")
                 return
 
-            # Fetch the price for Garlic Spray
+            # Fetch the price for Garlic Spray from MySQL
             query_gs = """
             SELECT charisma_level_1 FROM shop_items
             WHERE shop_name = %s AND item_name = 'Garlic Spray'
@@ -3376,7 +3346,7 @@ class ShoppingListTool(QMainWindow):
             "Charisma 3": "charisma_level_3"
         }.get(charisma_level, "base_price")
 
-        # Load items for the selected shop and charisma level
+        # Load items for the selected shop and charisma level from MySQL
         query = f"""
         SELECT item_name, {price_column}
         FROM shop_items
@@ -3396,78 +3366,66 @@ class ShoppingListTool(QMainWindow):
             item_name = item_text.split(" - ")[0]
             quantity = int(item_text.split(" - ")[2].split("x")[0])
 
-            # Query for the updated price
+            # Query for the updated price from MySQL
             query = f"""
             SELECT {price_column}
             FROM shop_items
-            WHERE item_name = %s
+            WHERE item_name = %s AND shop_name = %s
             """
-            self.cursor.execute(query, (item_name,))
-            price = self.cursor.fetchone()[0]
+            self.cursor.execute(query, (item_name, shop_name))
+            result = self.cursor.fetchone()
 
-            # Update the shopping list item with the new price
-            self.shopping_list.item(index).setText(f"{item_name} - {price} Coins - {quantity}x")
+            if result:
+                updated_price = result[0]
+                self.shopping_list.item(index).setText(f"{item_name} - {updated_price} Coins - {quantity}x")
 
-        # Update the total cost after all prices are updated
         self.update_total()
 
     def update_total(self):
         """
-        Calculate the total cost of items in the shopping list based on the quantity and item prices.
-        Update the total label with the new total.
+        Update the total price of the shopping list and display it.
         """
-        total = 0
+        self.list_total = 0
         for index in range(self.shopping_list.count()):
             item_text = self.shopping_list.item(index).text()
-            price = int(item_text.split(" - ")[1].split(" ")[0])  # Extract the price
-            quantity = int(item_text.split(" - ")[2].split("x")[0])  # Extract the quantity
-            total += price * quantity
+            item_price = int(item_text.split(" - ")[1].split(" Coins")[0])
+            quantity = int(item_text.split(" - ")[2].split("x")[0])
+            self.list_total += item_price * quantity
 
-        self.list_total = total
-        self.total_label.setText(
-            f"List Total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
+        self.total_label.setText(f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
 
     def load_coin_info(self):
         """
-        Load coin information (pocket and bank) from the SQLite database.
+        Load the character's coin information from the SQLite database.
         """
-        pocket_coins = self.coins_in_pocket()
-        bank_coins = self.coins_in_bank()
+        try:
+            # Query to get coins in pocket and in bank for the character
+            self.sqlite_cursor.execute("""
+            SELECT coins_in_pocket, coins_in_bank
+            FROM characters
+            WHERE character_name = ?
+            """, (self.character_name,))
+            result = self.sqlite_cursor.fetchone()
 
-        print(f"Coins in pocket: {pocket_coins}")
-        print(f"Coins in bank: {bank_coins}")
+            if result:
+                self.coins_in_pocket = result[0]
+                self.coins_in_bank = result[1]
+            else:
+                print(f"Character {self.character_name} not found in the database.")
+                self.coins_in_pocket = 0
+                self.coins_in_bank = 0
 
-        # Update the combined total label with pocket and bank information
-        self.total_label.setText(
-            f"List total: {self.list_total} Coins | Coins in Pocket: {pocket_coins} | Bank: {bank_coins}")
+        except sqlite3.DatabaseError as err:
+            print(f"Error fetching coin info: {err}")
+            self.coins_in_pocket = 0
+            self.coins_in_bank = 0
 
     def coins_in_pocket(self):
-        """
-        Retrieve the number of coins in the pocket for the given character from the SQLite DB.
-        """
-        connection = sqlite3.connect(self.coins_db_path)
-        cursor = connection.cursor()
-
-        cursor.execute("SELECT pocket FROM coins WHERE character = ?", (self.character_name,))
-        result = cursor.fetchone()
-
-        connection.close()
-
-        return result[0] if result else 0
+        return self.coins_in_pocket
 
     def coins_in_bank(self):
-        """
-        Retrieve the number of coins in the bank for the given character from the SQLite DB.
-        """
-        connection = sqlite3.connect(self.coins_db_path)
-        cursor = connection.cursor()
+        return self.coins_in_bank
 
-        cursor.execute("SELECT bank FROM coins WHERE character = ?", (self.character_name,))
-        result = cursor.fetchone()
-
-        connection.close()
-
-        return result[0] if result else 0
 
 def main():
     """
