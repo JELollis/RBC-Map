@@ -66,12 +66,12 @@ To install all required modules, run the following command:
  pip install pymysql requests bs4 PySide6 PySide6-WebEngine
 """
 
+import importlib.util
+import os
 # -----------------------
 # Imports Handling
 # -----------------------
 import sys
-import importlib.util
-import os
 
 # List of required modules
 required_modules = [
@@ -111,7 +111,6 @@ if not check_required_modules(required_modules):
 
 # Proceed with the rest of the imports and program setup
 import logging
-import pickle
 import pymysql
 import requests
 import re
@@ -131,7 +130,6 @@ from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
 import sqlite3
-from hashlib import sha256
 from cryptography.fernet import Fernet
 
 # Initialize Fernet encryption using the loaded key
@@ -1038,6 +1036,7 @@ class RBCCommunityMap(QMainWindow):
         # Make sure the webview expands to fill the remaining space
         self.website_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+        # Directly process coins from HTML within `process_html`
         if self.selected_character:
             connection = sqlite3.connect(DB_PATH)
             cursor = connection.cursor()
@@ -1046,12 +1045,8 @@ class RBCCommunityMap(QMainWindow):
                 character_row = cursor.fetchone()
                 if character_row:
                     character_id = character_row[0]
-                    self.coin_scraper = CoinScraper(
-                        character_name=self.selected_character['name'],
-                        character_id=character_id,
-                        web_profile=self.web_profile
-                    )
-                    logging.info(f"CoinScraper initialized for {self.selected_character['name']} with ID {character_id}.")
+                    self.selected_character['id'] = character_id  # Ensure character ID is available for coin extraction
+                    logging.info(f"Character ID {character_id} set for {self.selected_character['name']}.")
                 else:
                     logging.error(f"Character '{self.selected_character['name']}' not found in the database.")
             except sqlite3.Error as e:
@@ -1059,8 +1054,8 @@ class RBCCommunityMap(QMainWindow):
             finally:
                 connection.close()
 
-            self.show()
-            self.update_minimap()
+                self.show()
+                self.update_minimap()
 
     # -----------------------
     # Browser Controls Setup
@@ -1615,12 +1610,23 @@ class RBCCommunityMap(QMainWindow):
             # Extract coordinates for the minimap
             x_coord, y_coord = self.extract_coordinates_from_html(html)
             if x_coord is not None and y_coord is not None:
-                self.column_start = x_coord
-                self.row_start = y_coord
+                # Apply specific offsets based on zoom level
+                if self.zoom_level == 3:
+                    offset = 0  # No offset needed for 3x3
+                elif self.zoom_level == 5:
+                    offset = -1  # Offset by -1 for 5x5
+                elif self.zoom_level == 7:
+                    offset = -2  # Offset by -2 for 7x7
+                else:
+                    offset = -(self.zoom_level // 2)  # Default case if needed
+
+                # Apply the calculated offset to center the minimap
+                self.column_start = x_coord + offset
+                self.row_start = y_coord + offset
                 self.update_minimap()
 
             # Call the method to extract bank coins and pocket changes from the HTML
-            self.coin_scraper.extract_coins_from_html(html)
+            self.extract_coins_from_html(html)
             logging.debug("HTML processed successfully for coordinates and coin count.")
 
         except Exception as e:
@@ -1656,6 +1662,124 @@ class RBCCommunityMap(QMainWindow):
 
         return None, None
 
+    def extract_coins_from_html(self, html):
+        """
+        Extract bank coins, pocket coins, and handle coin-related actions such as deposits,
+        withdrawals, transit handling, and coins gained from hunting or stealing.
+
+        Args:
+            html (str): The HTML content as a string.
+
+        This method searches for bank balance, deposits, withdrawals, hunting, robbing, receiving,
+        and transit coin actions in the HTML content, updating both bank and pocket coins in the
+        SQLite database based on character_id.
+        """
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        # Get the character ID for the selected character
+        character_id = self.selected_character['id']
+
+        # Search for the bank balance line
+        bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
+
+        # Search for a deposit action
+        deposit_match = re.search(r"You deposit (\d+) coins.", html)
+
+        # Search for a withdrawal action
+        withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
+
+        # Search for transit pocket coin update
+        transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
+
+        # Additional coin-related actions
+        actions = {
+            'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
+            'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
+            'human': r'You drink the human\'s blood.*You also found (\d+) coins',
+            'bag_of_coins': r'The bag contained (\d+) coins',
+            'robbing': r'You stole (\d+) coins from (\w+)',
+            'silver_suitcase': r'The suitcase contained (\d+) coins',
+            'given_coins': r'(\w+) gave you (\d+) coins',
+            'getting_robbed': r'(\w+) stole (\d+) coins from you'
+        }
+
+        # Handle bank balance update
+        if bank_match:
+            bank_coins = int(bank_match.group(1))
+            logging.info(f"Bank coins found: {bank_coins}")
+
+            # Update the bank coins in the SQLite database
+            cursor.execute('''
+                UPDATE coins
+                SET bank = ?
+                WHERE character_id = ?
+            ''', (bank_coins, character_id))
+
+        # Handle deposit action
+        if deposit_match:
+            deposit_coins = int(deposit_match.group(1))
+            logging.info(f"Deposit found: {deposit_coins} coins")
+
+            # Reduce the pocket coins by the deposited amount
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = pocket - ?
+                WHERE character_id = ?
+            ''', (deposit_coins, character_id))
+
+        # Handle withdrawal action
+        if withdraw_match:
+            withdraw_coins = int(withdraw_match.group(1))
+            logging.info(f"Withdrawal found: {withdraw_coins} coins")
+
+            # Increase the pocket coins by the withdrawn amount
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = pocket + ?
+                WHERE character_id = ?
+            ''', (withdraw_coins, character_id))
+
+        # Handle transit coin update
+        if transit_match:
+            coins_in_pocket = int(transit_match.group(1))
+            logging.info(f"Transit found: Pocket coins updated to {coins_in_pocket}")
+
+            # Explicitly set the pocket coin count after transit
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = ?
+                WHERE character_id = ?
+            ''', (coins_in_pocket, character_id))
+
+        # Handle other coin-related actions (hunting, robbing, etc.)
+        for action, pattern in actions.items():
+            match = re.search(pattern, html)
+            if match:
+                coin_count = int(match.group(1))
+                if action == 'getting_robbed':
+                    # Losing coins when robbed
+                    vamp_name = match.group(2)
+                    cursor.execute('''
+                        UPDATE coins
+                        SET pocket = pocket - ?
+                        WHERE character_id = ?
+                    ''', (coin_count, character_id))
+                    logging.info(f"Lost {coin_count} coins to {vamp_name}.")
+                else:
+                    # Gaining coins from hunting, robbing, etc.
+                    cursor.execute('''
+                        UPDATE coins
+                        SET pocket = pocket + ?
+                        WHERE character_id = ?
+                    ''', (coin_count, character_id))
+                    logging.info(f"Gained {coin_count} coins from {action}.")
+                break  # Exit loop after first match
+
+        connection.commit()
+        connection.close()
+        logging.info(f"Updated coins for character ID {character_id}.")
+
     def refresh_webview(self):
         """
         Refresh the webview content.
@@ -1669,16 +1793,20 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     def draw_minimap(self):
         """
-        Draws the minimap with various features such as special locations and lines to nearest locations.
+        Draws the minimap with various features such as special locations and lines to nearest locations,
+        with cell lines and dynamically scaled text size.
         """
         pixmap = QPixmap(self.minimap_size, self.minimap_size)
         painter = QPainter(pixmap)
         painter.fillRect(0, 0, self.minimap_size, self.minimap_size, QColor('lightgrey'))
 
         block_size = self.minimap_size // self.zoom_level
+        font_size = max(8, block_size // 4)  # Dynamically adjust font size, with a minimum of 5
         border_size = 1  # Size of the border around each cell
+
+        # Dynamically adjust font size based on block size
         font = painter.font()
-        font.setPointSize(8)  # Adjust font size as needed
+        font.setPointSize(font_size)
         painter.setFont(font)
 
         # Calculate font metrics for centering text
@@ -1686,7 +1814,7 @@ class RBCCommunityMap(QMainWindow):
 
         def draw_location(column_index, row_index, color, label_text=None):
             """
-            Draws a location on the minimap.
+            Draws a location on the minimap with dynamic scaling and border.
 
             Args:
                 column_index (int): Column index of the location.
@@ -1703,11 +1831,16 @@ class RBCCommunityMap(QMainWindow):
                              block_size - 2 * inner_margin, block_size - 2 * inner_margin, color)
 
             if label_text:
+                # Calculate bounding box for text centering
                 text_rect = font_metrics.boundingRect(label_text)
+                # Calculate centered position with boundaries
                 text_x = x0 + (block_size - text_rect.width()) // 2
                 text_y = y0 + (block_size + text_rect.height()) // 2 - font_metrics.descent()
+
+                # Define QRect for wrapping within cell size, ensuring center alignment with bounds
+                wrap_rect = QRect(x0, y0, block_size, block_size)
                 painter.setPen(QColor('white'))
-                painter.drawText(text_x, text_y, label_text)
+                painter.drawText(wrap_rect, Qt.AlignCenter | Qt.TextWordWrap, label_text)
 
         # Draw the grid
         for i in range(self.zoom_level):
@@ -1725,9 +1858,8 @@ class RBCCommunityMap(QMainWindow):
                 row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index < min(self.columns.values()) or column_index > max(
-                        self.columns.values()) or row_index < min(
-                        self.rows.values()) or row_index > max(self.rows.values()):
+                if column_index < min(self.columns.values()) or column_index > max(self.columns.values()) or \
+                        row_index < min(self.rows.values()) or row_index > max(self.rows.values()):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -1740,11 +1872,18 @@ class RBCCommunityMap(QMainWindow):
                 # Draw labels only at intersections of named streets
                 if column_name and row_name:
                     label_text = f"{column_name} & {row_name}"
-                    text_rect = font_metrics.boundingRect(label_text)
-                    text_x = x0 + (block_size - text_rect.width()) // 2
-                    text_y = y0 + (block_size + text_rect.height()) // 2 - font_metrics.descent()
+
+                    # Set the font size dynamically, ensuring it does not exceed the maximum
+                    max_font_size = 8  # Set to desired maximum font size
+                    calculated_font_size = max(4, min(block_size // 3, max_font_size))
+                    font = painter.font()
+                    font.setPointSize(calculated_font_size)
+                    painter.setFont(font)
+
+                    # Define text rectangle and enable word wrapping with center alignment
+                    text_rect = QRect(x0, y0, block_size, block_size)
                     painter.setPen(QColor('white'))
-                    painter.drawText(text_x, text_y, label_text)
+                    painter.drawText(text_rect, Qt.AlignCenter | Qt.TextWordWrap, label_text)
 
         # Draw special locations (banks with correct offsets)
         for (col_name, row_name, _, _) in self.banks_coordinates:
@@ -1865,31 +2004,12 @@ class RBCCommunityMap(QMainWindow):
 
     def update_minimap(self):
         """
-        Update the minimap with dynamic text scaling, word wrapping, and re-centering after zoom.
+        Update the minimap.
+
+        Calls draw_minimap and then updates the info frame with any relevant information.
         """
-        if not hasattr(self, 'is_updating_minimap') or not self.is_updating_minimap:
-            self.is_updating_minimap = True
-
-            # 1. Draw the minimap with updated cell and font settings
-            self.draw_minimap()
-
-            # 2. Update font size based on cell dimensions
-            cell_width = self.calculate_cell_width()  # Get cell width after any zoom adjustments
-            font_size = max(8, cell_width // 3)  # Scale font to cell width, with a minimum size for readability
-            self.set_font_size(font_size)
-
-            # 3. Apply word wrapping to keep labels within cell boundaries
-            self.apply_word_wrap(cell_width)
-
-            # 4. Recenter minimap if the zoom level has changed
-            if self.zoom_changed():  # Only recenter if there was a zoom change
-                self.recenter_minimap()
-
-            # 5. Update the info frame with the latest information
-            self.update_info_frame()
-
-            # 6. Reset updating status
-            self.is_updating_minimap = False
+        self.draw_minimap()
+        self.update_info_frame()
 
     def find_nearest_location(self, x, y, locations):
         """
@@ -2004,39 +2124,36 @@ class RBCCommunityMap(QMainWindow):
     def zoom_in(self):
         """
         Zoom in the minimap, ensuring the character stays centered.
-
-        Decreases the zoom level (down to a minimum of 3) and recalibrates the minimap center.
         """
         if self.zoom_level > 3:
             self.zoom_level -= 2  # Reduce by 2 to keep zoom levels odd-numbered
-            self.recenter_minimap()
+            self.website_frame.page().toHtml(self.process_html)
 
     def zoom_out(self):
         """
         Zoom out the minimap, ensuring the character stays centered.
-
-        Increases the zoom level (up to a maximum of 9) and recalibrates the minimap center.
         """
-        if self.zoom_level < 9:
+        if self.zoom_level < 7:  # Adjusted max level to improve readability
             self.zoom_level += 2  # Increase by 2 to keep zoom levels odd-numbered
-            self.recenter_minimap()
+            self.website_frame.page().toHtml(self.process_html)
 
     def recenter_minimap(self):
         """
         Recenter the minimap so that the character's location is at the center cell.
         """
+        # Ensure character_x and character_y are up to date
+        if not hasattr(self, 'character_x') or not hasattr(self, 'character_y'):
+            logging.error("Character position not set. Cannot recenter minimap.")
+            return
+
         # Calculate the center offset based on the current zoom level
         center_offset = (self.zoom_level - 1) // 2
 
-        # Calculate the current character position in the grid
-        character_x = self.column_start + center_offset
-        character_y = self.row_start + center_offset
+        # Set `column_start` and `row_start` to keep the character centered
+        self.column_start = max(self.character_x - center_offset, 0)
+        self.row_start = max(self.character_y - center_offset, 0)
 
-        # Set `column_start` and `row_start` to ensure the character remains centered
-        self.column_start = max(character_x - center_offset, 0)
-        self.row_start = max(character_y - center_offset, 0)
-
-        # Update the minimap display
+        # Update the minimap display after recentering
         self.update_minimap()
 
     def go_to_location(self):
@@ -2048,11 +2165,15 @@ class RBCCommunityMap(QMainWindow):
         """
         column_name = self.combo_columns.currentText()
         row_name = self.combo_rows.currentText()
+
         if column_name in self.columns:
             self.column_start = self.columns[column_name] - self.zoom_level // 2
+
         if row_name in self.rows:
             self.row_start = self.rows[row_name] - self.zoom_level // 2
-        self.update_minimap()
+
+        # Recenter and update the minimap after setting the new location
+        self.recenter_minimap()
 
     def open_set_destination_dialog(self):
         """
@@ -2062,8 +2183,13 @@ class RBCCommunityMap(QMainWindow):
         it loads the destination and updates the minimap.
         """
         dialog = set_destination_dialog(self)
-        if dialog.exec():
+
+        # Execute dialog and check for acceptance
+        if dialog.exec() == QDialog.Accepted:
+            # Load the newly set destination from the database
             self.load_destination()
+
+            # Update the minimap with the new destination
             self.update_minimap()
 
     def mousePressEvent(self, event):
@@ -2079,18 +2205,21 @@ class RBCCommunityMap(QMainWindow):
             x = event.position().x()
             y = event.position().y()
 
+            # Calculate the cell size based on the current zoom level
             block_size = self.minimap_size // self.zoom_level
-            col_clicked = x // block_size
-            row_clicked = y // block_size
+            col_clicked = int(x // block_size)
+            row_clicked = int(y // block_size)
 
+            # Adjust the starting position based on click
             new_column_start = self.column_start + col_clicked - self.zoom_level // 2
             new_row_start = self.row_start + row_clicked - self.zoom_level // 2
 
-            if -1 <= new_column_start <= 200 - self.zoom_level + 1:
-                self.column_start = new_column_start
-            if -1 <= new_row_start <= 200 - self.zoom_level + 1:
-                self.row_start = new_row_start
+            # Set bounds for the minimap view to prevent going out of the defined area
+            max_bound = 200 - self.zoom_level + 1
+            self.column_start = max(0, min(new_column_start, max_bound))
+            self.row_start = max(0, min(new_row_start, max_bound))
 
+            # Update the minimap to reflect the new center position
             self.update_minimap()
 
     # -----------------------
@@ -3339,149 +3468,6 @@ class ShoppingListTool(QMainWindow):
         connection.close()
 
         return result[0] if result else 0
-
-class CoinScraper:
-    def __init__(self, character_name, character_id, web_profile):
-        """
-        Initialize the CoinScraper with the given character name, character ID, and web profile.
-
-        Args:
-            character_name (str): The name of the character for whom to scrape the coin count.
-            character_id (int): The unique ID of the character for database updates.
-            web_profile (QWebEngineProfile): The web profile to use for maintaining session data.
-        """
-        logging.debug("Initializing CoinScraper.")
-        self.character_name = character_name
-        self.character_id = character_id
-        self.web_profile = web_profile
-        self.website_frame = QWebEngineView(self.web_profile)
-
-        # Start scraping process with periodic checks
-        self.check_coin_count()
-
-    def check_coin_count(self):
-        """
-        Periodically scrape the page for the coin count by loading the relevant page.
-        """
-        coin_url = "https://quiz.ravenblack.net/blood.pl?action=viewvamp"
-        self.website_frame.setUrl(QUrl(coin_url))
-        self.website_frame.loadFinished.connect(self.on_page_loaded)
-
-    def on_page_loaded(self):
-        """
-        Handle page load completion and trigger HTML processing.
-        """
-        logging.debug("Page loaded. Processing HTML for coin count.")
-        self.website_frame.page().toHtml(self.extract_coins_from_html)
-
-    def extract_coins_from_html(self, html):
-        """
-        Extract bank coins, pocket coins, and handle coin-related actions from the HTML content.
-        Updates both bank and pocket coins in the database for the current character.
-        """
-        connection = sqlite3.connect(DB_PATH)
-        cursor = connection.cursor()
-
-        try:
-            # Search for the bank balance line
-            bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
-            if bank_match:
-                bank_coins = int(bank_match.group(1))
-                logging.info(f"Bank coins found: {bank_coins}")
-                cursor.execute('''
-                    UPDATE coins
-                    SET bank = ?
-                    WHERE character_id = ?
-                ''', (bank_coins, self.character_id))
-
-            # Search for pocket coin amounts
-            pocket_match = re.search(r"Money: (one|\d+) coins|You have (one|\d+) coins", html, re.IGNORECASE)
-            if pocket_match:
-                pocket_coins_text = pocket_match.group(1) or pocket_match.group(2)
-                pocket_coins = 1 if pocket_coins_text.lower() == "one" else int(pocket_coins_text)
-                logging.info(f"Pocket coins found: {pocket_coins}")
-                cursor.execute('''
-                    UPDATE coins
-                    SET pocket = ?
-                    WHERE character_id = ?
-                ''', (pocket_coins, self.character_id))
-
-            # Define actions for additional coin changes
-            actions = {
-                'deposit': r"You deposit (\d+) coins.",
-                'withdraw': r"You withdraw (\d+) coins.",
-                'transit': r"It costs 5 coins to ride. You have (\d+).",
-                'hunter': r"You drink the hunter\'s blood.*You also found (\d+) coins",
-                'paladin': r"You drink the paladin\'s blood.*You also found (\d+) coins",
-                'human': r"You drink the human\'s blood.*You also found (\d+) coins",
-                'bag_of_coins': r'The bag contained (\d+) coins',
-                'robbing': r'You stole (\d+) coins from (\w+)',
-                'silver_suitcase': r'The suitcase contained (\d+) coins',
-                'given_coins': r'(\w+) gave you (\d+) coins',
-                'getting_robbed': r'(\w+) stole (\d+) coins from you'
-            }
-
-            # Process each action pattern and update coins as needed
-            for action, pattern in actions.items():
-                match = re.search(pattern, html)
-                if match:
-                    coin_count = int(match.group(1))
-
-                    if action == 'deposit':
-                        # Deposit reduces pocket coins
-                        cursor.execute('''
-                            UPDATE coins
-                            SET pocket = pocket - ?
-                            WHERE character_id = ?
-                        ''', (coin_count, self.character_id))
-                        logging.info(f"Deposit action: -{coin_count} coins to pocket.")
-
-                    elif action == 'withdraw':
-                        # Withdraw increases pocket coins
-                        cursor.execute('''
-                            UPDATE coins
-                            SET pocket = pocket + ?
-                            WHERE character_id = ?
-                        ''', (coin_count, self.character_id))
-                        logging.info(f"Withdraw action: +{coin_count} coins to pocket.")
-
-                    elif action == 'transit':
-                        # Set pocket coins after transit
-                        coins_in_pocket = int(match.group(1))
-                        cursor.execute('''
-                            UPDATE coins
-                            SET pocket = ?
-                            WHERE character_id = ?
-                        ''', (coins_in_pocket, self.character_id))
-                        logging.info(f"Transit action: Pocket coins set to {coins_in_pocket}.")
-
-                    elif action == 'getting_robbed':
-                        # Losing coins when robbed
-                        cursor.execute('''
-                            UPDATE coins
-                            SET pocket = pocket - ?
-                            WHERE character_id = ?
-                        ''', (coin_count, self.character_id))
-                        logging.info(f"Getting robbed: -{coin_count} coins from pocket.")
-
-                    else:
-                        # Gaining coins (from hunting, robbing, receiving, etc.)
-                        cursor.execute('''
-                            UPDATE coins
-                            SET pocket = pocket + ?
-                            WHERE character_id = ?
-                        ''', (coin_count, self.character_id))
-                        logging.info(f"Gained {coin_count} coins from action: {action}.")
-                    break  # Exit loop after first match to avoid multiple updates from one HTML pass
-
-            connection.commit()
-            logging.info(f"Updated coins for character ID {self.character_id}.")
-
-        except Exception as e:
-            logging.error(f"Failed to update coins from HTML: {e}")
-
-        finally:
-            connection.close()
 
 def main():
     """

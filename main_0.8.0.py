@@ -1571,6 +1571,8 @@ class RBCCommunityMap(QMainWindow):
 
         block_size = self.minimap_size // self.zoom_level
         border_size = 1  # Size of the border around each cell
+
+        # Dynamically adjust font size based on block size
         font = painter.font()
         font.setPointSize(8)  # Adjust font size as needed
         painter.setFont(font)
@@ -1654,7 +1656,6 @@ class RBCCommunityMap(QMainWindow):
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
-        # Draw other locations as before
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
                 logging.debug(f"Drawing tavern '{name}' at coordinates ({column_index}, {row_index})")
