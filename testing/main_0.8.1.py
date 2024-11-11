@@ -209,83 +209,162 @@ DB_PATH = 'sessions/rbc_map_data.db'
 
 def initialize_database():
     """
-    Initialize the consolidated database for all data storage.
-    Only creates the database and tables if the file does not exist.
+    Initialize and verify the consolidated database for all data storage.
+    Ensures all necessary tables are created if they are missing, and checks each table's columns to verify schema.
     """
-    if not os.path.exists(DB_PATH):
-        connection = sqlite3.connect(DB_PATH)
-        cursor = connection.cursor()
+    connection = sqlite3.connect(DB_PATH)
+    cursor = connection.cursor()
 
-        # Create the characters table with a primary key on id
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS characters (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                password TEXT
-            )
-        ''')
+    # Define the schema for each table
+    required_tables = {
+        "characters": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS characters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    password TEXT
+                )
+            ''',
+            "columns": {
+                "id": "INTEGER",
+                "name": "TEXT",
+                "password": "TEXT"
+            }
+        },
+        "last_active_character": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS last_active_character (
+                    character_id INTEGER,
+                    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+                )
+            ''',
+            "columns": {
+                "character_id": "INTEGER"
+            }
+        },
+        "settings": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS settings (
+                    setting_name TEXT PRIMARY KEY,
+                    setting_value BLOB
+                )
+            ''',
+            "columns": {
+                "setting_name": "TEXT",
+                "setting_value": "BLOB"
+            }
+        },
+        "coins": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS coins (
+                    character_id INTEGER,
+                    pocket INTEGER DEFAULT 0,
+                    bank INTEGER DEFAULT 0,
+                    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+                )
+            ''',
+            "columns": {
+                "character_id": "INTEGER",
+                "pocket": "INTEGER",
+                "bank": "INTEGER"
+            }
+        },
+        "cookies": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS cookies (
+                    name TEXT,
+                    domain TEXT,
+                    path TEXT,
+                    value TEXT,
+                    expiration INTEGER,
+                    UNIQUE(name, domain, path)
+                )
+            ''',
+            "columns": {
+                "name": "TEXT",
+                "domain": "TEXT",
+                "path": "TEXT",
+                "value": "TEXT",
+                "expiration": "INTEGER"
+            }
+        },
+        "color_mappings": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS color_mappings (
+                    Type TEXT PRIMARY KEY,
+                    Color TEXT
+                )
+            ''',
+            "columns": {
+                "Type": "TEXT",
+                "Color": "TEXT"
+            }
+        },
+        "destinations": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS destinations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER,
+                    col INTEGER,
+                    row INTEGER,
+                    timestamp TEXT,
+                    FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
+                )
+            ''',
+            "columns": {
+                "id": "INTEGER",
+                "character_id": "INTEGER",
+                "col": "INTEGER",
+                "row": "INTEGER",
+                "timestamp": "TEXT"
+            }
+        },
+        "recent_destinations": {
+            "sql": '''
+                CREATE TABLE IF NOT EXISTS recent_destinations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER,
+                    col INTEGER,
+                    row INTEGER,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
+                )
+            ''',
+            "columns": {
+                "id": "INTEGER",
+                "character_id": "INTEGER",
+                "col": "INTEGER",
+                "row": "INTEGER",
+                "timestamp": "DATETIME"
+            }
+        }
+    }
 
-        # Create the last_active_character table with a foreign key on character_id
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS last_active_character (
-                character_id INTEGER,
-                FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-            )
-        ''')
+    # Check and create each table if missing, and verify columns
+    for table_name, table_info in required_tables.items():
+        # Create table if it does not exist
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+        if not cursor.fetchone():
+            cursor.execute(table_info["sql"])
+            logging.info(f"Table '{table_name}' created.")
+        else:
+            logging.info(f"Table '{table_name}' already exists.")
 
-        # Create the settings table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS settings (
-                setting_name TEXT PRIMARY KEY,
-                setting_value BLOB
-            )
-        ''')
+        # Verify columns in the existing table
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        existing_columns = {col[1]: col[2] for col in cursor.fetchall()}
+        for column_name, column_type in table_info["columns"].items():
+            if column_name not in existing_columns:
+                # Add missing column
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                logging.info(f"Added missing column '{column_name}' to table '{table_name}'")
+            elif existing_columns[column_name].upper() != column_type.upper():
+                logging.warning(f"Column '{column_name}' in '{table_name}' has type '{existing_columns[column_name]}', expected '{column_type}'")
 
-        # Create the coins table with a foreign key on character_id
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS coins (
-                character_id INTEGER,
-                pocket INTEGER DEFAULT 0,
-                bank INTEGER DEFAULT 0,
-                FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-            )
-        ''')
-
-        # Create the cookies table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cookies (
-                name TEXT,
-                domain TEXT,
-                path TEXT,
-                value TEXT,
-                expiration INTEGER,
-                UNIQUE(name, domain, path) ON CONFLICT REPLACE
-            )
-        ''')
-
-        # Create the color_mappings table for theme settings
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS color_mappings (
-                Type TEXT PRIMARY KEY,
-                Color TEXT
-            )
-        ''')
-
-        # Create the destinations table to store recent destinations with a limit of the last 10
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS destinations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                col INTEGER,
-                row INTEGER,
-                timestamp TEXT
-            )
-        ''')
-
-        connection.commit()
-        connection.close()
-        print(f"Database {DB_PATH} created with required tables.")
-    else:
-        print(f"Database {DB_PATH} already exists. Initialization skipped.")
+    # Commit and close the connection
+    connection.commit()
+    connection.close()
+    logging.info("Database verification and table creation with column check completed.")
 
 # Call database initialization
 initialize_database()
@@ -902,39 +981,61 @@ class RBCCommunityMap(QMainWindow):
         # Information frame to display closest locations and AP costs
         info_frame = QFrame()
         info_frame.setFrameShape(QFrame.Shape.Box)
-        info_frame.setFixedHeight(80)
+        info_frame.setFixedHeight(260)  # Increased height for better spacing
         info_layout = QVBoxLayout()
+        info_layout.setSpacing(5)  # Space between each label for clarity
         info_frame.setLayout(info_layout)
         left_layout.addWidget(info_frame)
 
-        # Labels to display closest locations and destination
-        self.bank_label = QLabel()
+        # Common style for each info label with padding, border, and smaller font size
+        label_style = """
+            background-color: {color};
+            color: white;
+            font-weight: bold;
+            padding: 5px;
+            border: 2px solid black;
+            font-size: 12px;  /* Set smaller font size for readability */
+        """
+
+        # Closest Bank Info
+        self.bank_label = QLabel("Bank")
         self.bank_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.bank_label.setStyleSheet("background-color: blue; color: white;font-weight: bold;")
+        self.bank_label.setStyleSheet(label_style.format(color="blue"))
         self.bank_label.setWordWrap(True)
-        self.bank_label.setFixedHeight(15)
+        self.bank_label.setFixedHeight(45)
         info_layout.addWidget(self.bank_label)
 
-        self.transit_label = QLabel()
+        # Closest Transit Info
+        self.transit_label = QLabel("Transit")
         self.transit_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.transit_label.setStyleSheet("background-color: red; color: white;font-weight: bold;")
+        self.transit_label.setStyleSheet(label_style.format(color="red"))
         self.transit_label.setWordWrap(True)
-        self.transit_label.setFixedHeight(15)
+        self.transit_label.setFixedHeight(45)
         info_layout.addWidget(self.transit_label)
 
-        self.tavern_label = QLabel()
+        # Closest Tavern Info
+        self.tavern_label = QLabel("Tavern")
         self.tavern_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.tavern_label.setStyleSheet("background-color: orange; color: white;font-weight: bold;")
+        self.tavern_label.setStyleSheet(label_style.format(color="orange"))
         self.tavern_label.setWordWrap(True)
-        self.tavern_label.setFixedHeight(15)
+        self.tavern_label.setFixedHeight(45)
         info_layout.addWidget(self.tavern_label)
 
-        self.destination_label = QLabel()
+        # Set Destination Info
+        self.destination_label = QLabel("Set Destination")
         self.destination_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.destination_label.setStyleSheet("background-color: green; color: white;font-weight: bold;")
+        self.destination_label.setStyleSheet(label_style.format(color="green"))
         self.destination_label.setWordWrap(True)
-        self.destination_label.setFixedHeight(15)
+        self.destination_label.setFixedHeight(45)
         info_layout.addWidget(self.destination_label)
+
+        # Transit-Based AP for Set Destination Info
+        self.transit_destination_label = QLabel("Set Destination - Transit Route")
+        self.transit_destination_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.transit_destination_label.setStyleSheet(label_style.format(color="purple"))
+        self.transit_destination_label.setWordWrap(True)
+        self.transit_destination_label.setFixedHeight(45)
+        info_layout.addWidget(self.transit_destination_label)
 
         # ComboBox and Go Button
         combo_go_layout = QHBoxLayout()
@@ -1283,11 +1384,18 @@ class RBCCommunityMap(QMainWindow):
             if self.characters:
                 self.character_list.setCurrentRow(0)
                 self.selected_character = self.characters[0]
+                logging.debug(f"Selected character set: {self.selected_character}")
+                if 'id' not in self.selected_character:
+                    logging.error("Loaded character data lacks 'id'. Check database integrity.")
+            else:
+                logging.warning("No characters found in the database.")
+                self.selected_character = None
 
         except sqlite3.Error as e:
             logging.error(f"Failed to load characters from database: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load characters: {e}")
             self.characters = []
+            self.selected_character = None
         finally:
             connection.close()
 
@@ -1324,6 +1432,12 @@ class RBCCommunityMap(QMainWindow):
     def on_character_selected(self, item):
         """
         Handle character selection from the list.
+
+        Args:
+            item (QListWidgetItem): The selected item in the list.
+
+        Logs the selected character, saves the last active character,
+        logs out the current character, and then logs in the selected one.
         """
         character_name = item.text()
         selected_character = next((char for char in self.characters if char['name'] == character_name), None)
@@ -1332,26 +1446,34 @@ class RBCCommunityMap(QMainWindow):
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
 
-            # Retrieve character_id from the database
-            connection = sqlite3.connect(DB_PATH)
-            cursor = connection.cursor()
+            # Fetch character ID if missing
+            if 'id' not in self.selected_character:
+                connection = sqlite3.connect(DB_PATH)
+                cursor = connection.cursor()
+                try:
+                    cursor.execute("SELECT id FROM characters WHERE name = ?", (character_name,))
+                    character_row = cursor.fetchone()
+                    if character_row:
+                        self.selected_character['id'] = character_row[0]
+                        logging.debug(f"Character '{character_name}' ID set to {self.selected_character['id']}.")
+                    else:
+                        logging.error(f"Character '{character_name}' not found in characters table.")
+                except sqlite3.Error as e:
+                    logging.error(f"Failed to retrieve character_id for '{character_name}': {e}")
+                finally:
+                    connection.close()
 
-            try:
-                cursor.execute("SELECT id FROM characters WHERE name = ?", (character_name,))
-                character_row = cursor.fetchone()
-                if character_row:
-                    character_id = character_row[0]
-                    self.save_last_active_character(character_id)  # Pass character_id to save_last_active_character
-                else:
-                    logging.error(f"Character '{character_name}' not found in characters table.")
+            # Save last active character
+            if 'id' in self.selected_character:
+                self.save_last_active_character(self.selected_character['id'])
+            else:
+                logging.error(f"Cannot save last active character: ID missing for '{character_name}'.")
 
-            except sqlite3.Error as e:
-                logging.error(f"Failed to retrieve character_id for '{character_name}': {e}")
-            finally:
-                connection.close()
-
+            # Logout current character and login the selected one
             self.logout_current_character()
             QTimer.singleShot(1000, self.login_selected_character)
+        else:
+            logging.error(f"Character '{character_name}' selection failed.")
 
     def logout_current_character(self):
         """
@@ -1362,28 +1484,24 @@ class RBCCommunityMap(QMainWindow):
         QTimer.singleShot(1000, self.login_selected_character)
 
     def login_selected_character(self):
-        """
-        Log in the selected character using the plaintext password.
-        """
         if not self.selected_character:
             logging.warning("No character selected for login.")
             return
 
-        logging.debug(f"Logging in character: {self.selected_character['name']}")
+        logging.debug(
+            f"Logging in character: {self.selected_character['name']} with ID: {self.selected_character.get('id')}")
         name = self.selected_character['name']
-        password = self.selected_character['password']  # Plaintext password
-
-        # JavaScript code to fill in the login form
+        password = self.selected_character['password']
         login_script = f"""
-                    var loginForm = document.querySelector('form');
-                    if (loginForm) {{
-                        loginForm.iam.value = '{name}';
-                        loginForm.passwd.value = '{password}';
-                        loginForm.submit();
-                    }} else {{
-                        console.error('Login form not found.');
-                    }}
-                """
+            var loginForm = document.querySelector('form');
+            if (loginForm) {{
+                loginForm.iam.value = '{name}';
+                loginForm.passwd.value = '{password}';
+                loginForm.submit();
+            }} else {{
+                console.error('Login form not found.');
+            }}
+        """
         self.website_frame.page().runJavaScript(login_script)
 
     def firstrun_character_creation(self):
@@ -2192,6 +2310,42 @@ class RBCCommunityMap(QMainWindow):
             # Update the minimap with the new destination
             self.update_minimap()
 
+    def save_to_recent_destinations(self, destination_coords, character_id):
+        """
+        Save the current destination to the recent destinations for the specific character,
+        keeping only the last 10 entries per character.
+
+        Args:
+            destination_coords (tuple): Coordinates of the destination to save.
+            character_id (int): ID of the character for which to save the destination.
+        """
+        if destination_coords is None or character_id is None:
+            return
+
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        try:
+            # Insert the new destination with character_id
+            cursor.execute("INSERT INTO recent_destinations (character_id, col, row) VALUES (?, ?, ?)",
+                           (character_id, *destination_coords))
+
+            # Keep only the 10 most recent destinations per character
+            cursor.execute("""
+                DELETE FROM recent_destinations 
+                WHERE character_id = ? AND id NOT IN (
+                    SELECT id FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10
+                )
+            """, (character_id, character_id))
+
+            connection.commit()
+            logging.info(
+                f"Destination {destination_coords} saved to recent destinations for character ID {character_id}.")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save recent destination: {e}")
+        finally:
+            connection.close()
+
     # -----------------------
     # Infobar Management
     # -----------------------
@@ -2212,50 +2366,79 @@ class RBCCommunityMap(QMainWindow):
     def update_info_frame(self):
         """
         Update the information frame with the closest locations and AP costs.
-
-        This method calculates and displays the nearest tavern, bank, and transit station to the current location,
-        along with the AP (Action Points) cost to reach each. It also displays the details for the set destination,
-        if any.
         """
         current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
 
-        # Find nearest locations
-        nearest_tavern = self.find_nearest_tavern(current_x, current_y)
+        # Closest Bank
         nearest_bank = self.find_nearest_bank(current_x, current_y)
-        nearest_transit = self.find_nearest_transit(current_x, current_y)
-
-        # Get details for nearest tavern
-        if nearest_tavern:
-            tavern_coords = nearest_tavern[0][1]
-            tavern_name = next(name for name, coords in self.taverns_coordinates.items() if coords == tavern_coords)
-            tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
-            tavern_intersection = self.get_intersection_name(tavern_coords)
-            self.tavern_label.setText(f"{tavern_name} - {tavern_intersection} - AP: {tavern_ap_cost}")
-
-        # Get details for nearest bank
         if nearest_bank:
             bank_coords = nearest_bank[0][1]
             adjusted_bank_coords = (bank_coords[0] + 1, bank_coords[1] + 1)
             bank_ap_cost = self.calculate_ap_cost((current_x, current_y), adjusted_bank_coords)
             bank_intersection = self.get_intersection_name(adjusted_bank_coords)
-            self.bank_label.setText(f"OmniBank - {bank_intersection} - AP: {bank_ap_cost}")
+            self.bank_label.setText(f"Bank\n{bank_intersection} - AP: {bank_ap_cost}")
 
-        # Get details for nearest transit
+        # Closest Transit
+        nearest_transit = self.find_nearest_transit(current_x, current_y)
         if nearest_transit:
             transit_coords = nearest_transit[0][1]
             transit_name = next(name for name, coords in self.transits_coordinates.items() if coords == transit_coords)
             transit_ap_cost = self.calculate_ap_cost((current_x, current_y), transit_coords)
             transit_intersection = self.get_intersection_name(transit_coords)
-            self.transit_label.setText(f"{transit_name} - {transit_intersection} - AP: {transit_ap_cost}")
+            self.transit_label.setText(f"Transit - {transit_name}\n{transit_intersection} - AP: {transit_ap_cost}")
 
-        # Get details for set destination
+        # Closest Tavern
+        nearest_tavern = self.find_nearest_tavern(current_x, current_y)
+        if nearest_tavern:
+            tavern_coords = nearest_tavern[0][1]
+            tavern_name = next(name for name, coords in self.taverns_coordinates.items() if coords == tavern_coords)
+            tavern_ap_cost = self.calculate_ap_cost((current_x, current_y), tavern_coords)
+            tavern_intersection = self.get_intersection_name(tavern_coords)
+            self.tavern_label.setText(f"{tavern_name}\n{tavern_intersection} - AP: {tavern_ap_cost}")
+
+        # Set Destination Info
         if self.destination:
             destination_coords = self.destination
             destination_ap_cost = self.calculate_ap_cost((current_x, current_y), destination_coords)
             destination_intersection = self.get_intersection_name(destination_coords)
-            self.destination_label.setText(f"Destination - {destination_intersection} - AP: {destination_ap_cost}")
+            # Check for a named place at destination
+            place_name = next(
+                (name for name, coords in self.places_of_interest_coordinates.items() if coords == destination_coords),
+                None
+            )
+            destination_label_text = f"Set Destination - {place_name}" if place_name else "Set Destination"
+            self.destination_label.setText(
+                f"{destination_label_text}\n{destination_intersection} - AP: {destination_ap_cost}")
+
+            # Transit-Based AP Cost for Set Destination
+            nearest_transit_to_character = self.find_nearest_transit(current_x, current_y)
+            nearest_transit_to_destination = self.find_nearest_transit(destination_coords[0], destination_coords[1])
+
+            if nearest_transit_to_character and nearest_transit_to_destination:
+                char_transit_coords = nearest_transit_to_character[0][1]
+                dest_transit_coords = nearest_transit_to_destination[0][1]
+                char_to_transit_ap = self.calculate_ap_cost((current_x, current_y), char_transit_coords)
+                dest_to_transit_ap = self.calculate_ap_cost(destination_coords, dest_transit_coords)
+                total_ap_via_transit = char_to_transit_ap + dest_to_transit_ap
+
+                # Get transit names
+                char_transit_name = next(
+                    name for name, coords in self.transits_coordinates.items() if coords == char_transit_coords)
+                dest_transit_name = next(
+                    name for name, coords in self.transits_coordinates.items() if coords == dest_transit_coords)
+
+                # Update the transit destination label
+                self.transit_destination_label.setText(
+                    f"Set Destination - {char_transit_name} to {dest_transit_name}\n"
+                    f"{self.get_intersection_name(dest_transit_coords)} - Total AP: {total_ap_via_transit}"
+                )
+            else:
+                self.transit_destination_label.setText("Transit Route Info Unavailable")
+
         else:
+            # Clear labels when no destination is set
             self.destination_label.setText("No Destination Set")
+            self.transit_destination_label.setText("No Destination Set")
 
     def get_intersection_name(self, coords):
         """
@@ -2870,7 +3053,7 @@ class AVITDScraper:
             logging.info("Database connection closed.")
 
 # -----------------------
-# Set Destination
+# Set Destination Dialog
 # -----------------------
 class set_destination_dialog(QDialog):
     """
@@ -2878,27 +3061,20 @@ class set_destination_dialog(QDialog):
     """
 
     def __init__(self, parent=None):
-        """
-        Initialize the set destination dialog.
-
-        Args:
-            parent (QWidget): Parent widget.
-        """
         super().__init__(parent)
         self.setWindowTitle("Set Destination")
         self.resize(200, 250)
+        self.parent = parent  # Access to parent methods and properties
+        logging.info("Initialized set_destination_dialog")
 
-        # Store the parent reference to access its methods
-        self.parent = parent
-
-        # Set up the main layout for the dialog
+        # Main layout setup
         main_layout = QVBoxLayout(self)
 
         # Dropdown for recent destinations
         self.recent_destinations_dropdown = QComboBox()
         self.populate_recent_destinations()
 
-        # Comboboxes to select destinations
+        # Dropdowns for selecting destinations
         dropdown_layout = QFormLayout()
         self.tavern_dropdown = QComboBox()
         self.bank_dropdown = QComboBox()
@@ -2908,7 +3084,7 @@ class set_destination_dialog(QDialog):
         self.poi_dropdown = QComboBox()
         self.user_building_dropdown = QComboBox()
 
-        # Populate dropdowns with values from the MySQL database
+        # Populate dropdowns with values from the data sources
         self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
         self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
         self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
@@ -2916,6 +3092,8 @@ class set_destination_dialog(QDialog):
         self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
         self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
         self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
+
+        logging.info("Populated destination dropdowns.")
 
         dropdown_layout.addRow("Recent Destinations:", self.recent_destinations_dropdown)
         dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
@@ -2946,9 +3124,8 @@ class set_destination_dialog(QDialog):
         main_layout.addLayout(dropdown_layout)
         main_layout.addLayout(custom_location_layout)
 
-        # Add control buttons
+        # Control buttons
         button_layout = QGridLayout()
-
         set_button = QPushButton("Set Destination")
         set_button.clicked.connect(self.set_destination)
         clear_button = QPushButton("Clear Destination")
@@ -2966,46 +3143,81 @@ class set_destination_dialog(QDialog):
         main_layout.addLayout(button_layout)
 
     def populate_recent_destinations(self):
-        """
-        Populate the recent destinations dropdown with a human-readable street format.
-        """
+        logging.info("Populating recent destinations.")
         self.recent_destinations_dropdown.clear()
         self.recent_destinations_dropdown.addItem("Select a recent destination")
+        character_id = self.parent.selected_character.get('id')
 
+        # Fetch recent destinations for the specific character
         connection = sqlite3.connect(DB_PATH)
         cursor = connection.cursor()
-
-        # Retrieve recent destinations from the database
-        cursor.execute("SELECT col, row FROM destinations ORDER BY timestamp DESC LIMIT 10")
+        cursor.execute(
+            "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
+            (character_id,)
+        )
         recent_destinations = cursor.fetchall()
-
-        # Map each destination's grid coordinates to street names
-        for col, row in recent_destinations:
-            col_name = self.parent.columns.get(col, f"Column {col}")
-            row_name = self.parent.rows.get(row, f"Row {row}")
-
-            # Format as "ABC Street & 123 Street"
-            destination_name = f"{col_name} & {row_name}"
-            self.recent_destinations_dropdown.addItem(destination_name, (col, row))  # Store (col, row) as data
-
         connection.close()
+        logging.info(f"Fetched {len(recent_destinations)} recent destinations for character {character_id}.")
+
+        # Process each recent destination
+        mysql_conn = connect_to_database()  # Use the global MySQL connection function
+
+        if not mysql_conn:
+            logging.error("Failed to connect to MySQL database for retrieving street names.")
+            return
+
+        with mysql_conn.cursor() as mysql_cursor:
+            for col, row in recent_destinations:
+                try:
+                    # Determine if we are on the boundary; skip rounding if true
+                    if col in [0, 200] or row in [0, 200]:
+                        rounded_col, rounded_row = col, row
+                    else:
+                        # For non-boundary coordinates, round down to nearest odd number
+                        rounded_col = col if col % 2 != 0 else col - 1
+                        rounded_row = row if row % 2 != 0 else row - 1
+
+                    logging.debug("Rounded col=%d to %d and row=%d to %d", col, rounded_col, row, rounded_row)
+
+                    # Retrieve street names based on rounded coordinates
+                    mysql_cursor.execute("SELECT Name FROM `columns` WHERE Coordinate = %s", (rounded_col,))
+                    col_name = mysql_cursor.fetchone()
+                    if col_name:
+                        col_name = col_name[0]
+                    else:
+                        col_name = f"Column {rounded_col}"
+                        logging.warning("No name found for column coordinate %d", rounded_col)
+
+                    mysql_cursor.execute("SELECT Name FROM `rows` WHERE Coordinate = %s", (rounded_row,))
+                    row_name = mysql_cursor.fetchone()
+                    if row_name:
+                        row_name = row_name[0]
+                    else:
+                        row_name = f"Row {rounded_row}"
+                        logging.warning("No name found for row coordinate %d", rounded_row)
+
+                    # Format as "Street Name & Street Number"
+                    destination_name = f"{col_name} & {row_name}"
+                    self.recent_destinations_dropdown.addItem(destination_name, (col, row))
+                    logging.info("Added recent destination: %s", destination_name)
+
+                except Exception as e:
+                    logging.error(f"Error processing recent destination (col={col}, row={row}): {e}")
+
+        mysql_conn.close()
 
     def populate_dropdown(self, dropdown, items):
+        logging.info("Populating dropdown with %d items.", len(items))
         dropdown.clear()
         dropdown.addItem("Select a destination")
         dropdown.addItems(items)
 
     def update_comboboxes(self):
-        """
-        Update the comboboxes with the latest data after scraping.
-        """
+        logging.info("Updating comboboxes.")
         self.show_notification("Updating Shop and Guild Data. Please wait...")
 
         if hasattr(self.parent, 'AVITD_scraper') and self.parent.AVITD_scraper:
             self.parent.AVITD_scraper.scrape_guilds_and_shops()
-            logging.info("AVITD Scraper used to update guilds and shops.")
-        else:
-            logging.error("AVITD Scraper is not initialized or accessible in the parent class.")
 
         self.parent.columns, self.parent.rows, self.parent.banks_coordinates, \
             self.parent.taverns_coordinates, self.parent.transits_coordinates, \
@@ -3014,17 +3226,16 @@ class set_destination_dialog(QDialog):
             self.parent.places_of_interest_coordinates = load_data()
 
         self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown,
-                               [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
         self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
         self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
         self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
         self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
         self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
-        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys())
-        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys())
+        logging.info("Comboboxes updated successfully.")
 
     def show_notification(self, message):
+        logging.info("Displaying notification: %s", message)
         dialog = QDialog(self)
         dialog.setWindowTitle("Notification")
         dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
@@ -3039,106 +3250,119 @@ class set_destination_dialog(QDialog):
         dialog.exec()
 
     def clear_destination(self):
-        """
-        Clear the currently set destination and update the minimap.
-        """
-        self.parent.destination = None
+        if not self.parent.selected_character:
+            logging.warning("No character selected for clearing destination.")
+            return
 
+        character_id = self.parent.selected_character['id']
         connection = sqlite3.connect(DB_PATH)
         cursor = connection.cursor()
         try:
-            cursor.execute('DELETE FROM destinations')
+            cursor.execute('DELETE FROM destinations WHERE character_id = ?', (character_id,))
             connection.commit()
-            logging.info("All destinations cleared from database.")
+            logging.info(f"Cleared destination for character {character_id}")
 
+            self.parent.destination = None
+            self.parent.update_minimap()
         except sqlite3.Error as e:
-            logging.error(f"Failed to clear destinations in database: {e}")
-
+            logging.error(f"Failed to clear destination for character {character_id}: {e}")
         finally:
             connection.close()
 
-        self.parent.update_minimap()
         self.accept()
 
     def set_destination(self):
-        """
-        Set the destination based on user selection from the dropdowns.
-        """
-        selected_tavern = self.tavern_dropdown.currentText()
-        selected_bank = self.bank_dropdown.currentText()
-        selected_transit = self.transit_dropdown.currentText()
-        selected_shop = self.shop_dropdown.currentText()
-        selected_guild = self.guild_dropdown.currentText()
-        selected_poi = self.poi_dropdown.currentText()
-        selected_user_building = self.user_building_dropdown.currentText()
+        logging.info("Attempting to set destination.")
 
-        col, row = None, None
-        direction = None
+        destination_coords = self.get_selected_destination()
+        if not destination_coords:
+            logging.warning("No valid destination selected.")
+            return
 
-        if selected_tavern != "Select a destination":
-            col, row = self.parent.taverns_coordinates[selected_tavern]
-        elif selected_bank != "Select a destination":
-            col_name, row_name = selected_bank.split(" & ")
-            col, row = self.parent.columns[col_name], self.parent.rows[row_name]
-            col += 1
-            row += 1
-        elif selected_transit != "Select a destination":
-            col, row = self.parent.transits_coordinates[selected_transit]
-        elif selected_shop != "Select a destination":
-            col, row = self.parent.shops_coordinates[selected_shop]
-        elif selected_guild != "Select a destination":
-            col, row = self.parent.guilds_coordinates[selected_guild]
-        elif selected_poi != "Select a destination":
-            col, row = self.parent.places_of_interest_coordinates[selected_poi]
-        elif selected_user_building != "Select a destination":
-            col, row = self.parent.user_buildings_coordinates[selected_user_building]
-        else:
-            col_name = self.columns_dropdown.currentText()
-            row_name = self.rows_dropdown.currentText()
-            direction = self.directional_dropdown.currentText()
-
-            if col_name and row_name:
-                col = self.parent.columns.get(col_name)
-                row = self.parent.rows.get(row_name)
-
-                if col is not None and row is not None:
-                    if direction == "East":
-                        col += 1
-                    elif direction == "South":
-                        row += 1
-                    elif direction == "South East":
-                        col += 1
-                        row += 1
-
-        if col is not None and row is not None:
-            self.parent.destination = (col, row)
+        if self.parent.selected_character:
+            character_id = self.parent.selected_character['id']
+            logging.info(f"Setting destination for character {character_id} to {destination_coords}")
 
             connection = sqlite3.connect(DB_PATH)
             cursor = connection.cursor()
             try:
-                cursor.execute('''
-                    INSERT INTO destinations (col, row, timestamp)
-                    VALUES (?, ?, ?)
-                ''', (col, row, datetime.now().isoformat()))
+                cursor.execute("SELECT id FROM destinations WHERE character_id = ?", (character_id,))
+                existing_destination = cursor.fetchone()
 
-                cursor.execute('''
-                    DELETE FROM destinations
-                    WHERE id NOT IN (SELECT id FROM destinations ORDER BY timestamp DESC LIMIT 10)
-                ''')
+                if existing_destination:
+                    cursor.execute('''
+                        UPDATE destinations
+                        SET col = ?, row = ?, timestamp = datetime('now')
+                        WHERE character_id = ?
+                    ''', (destination_coords[0], destination_coords[1], character_id))
+                else:
+                    cursor.execute('''
+                        INSERT INTO destinations (character_id, col, row, timestamp)
+                        VALUES (?, ?, ?, datetime('now'))
+                    ''', (character_id, destination_coords[0], destination_coords[1]))
 
                 connection.commit()
-                logging.info(f"Destination set to col={col}, row={row} with direction={direction} and saved to database.")
+                logging.info(f"Destination set successfully for character {character_id} at {destination_coords}.")
 
+                self.parent.save_to_recent_destinations(destination_coords, character_id)
+                self.parent.destination = destination_coords
+                self.parent.update_minimap()
             except sqlite3.Error as e:
-                logging.error(f"Failed to set destination in database: {e}")
-
+                logging.error(f"Failed to set destination for character {character_id}: {e}")
             finally:
                 connection.close()
 
-            self.parent.update_minimap()
             self.accept()
         else:
-            logging.warning("No valid destination selected or incorrect coordinates provided.")
+            logging.warning("No character selected. Destination not set.")
+
+    def get_selected_destination(self):
+        logging.info("Retrieving selected destination.")
+
+        # Dropdowns with predefined coordinates
+        selected_dropdowns = [
+            (self.tavern_dropdown, self.parent.taverns_coordinates),
+            (self.transit_dropdown, self.parent.transits_coordinates),
+            (self.shop_dropdown, self.parent.shops_coordinates),
+            (self.guild_dropdown, self.parent.guilds_coordinates),
+            (self.poi_dropdown, self.parent.places_of_interest_coordinates),
+            (self.user_building_dropdown, self.parent.user_buildings_coordinates)
+        ]
+
+        # First, check each dropdown for a valid selection
+        for dropdown, data in selected_dropdowns:
+            selection = dropdown.currentText()
+            if selection and selection != "Select a destination":
+                coords = data.get(selection)
+                logging.info("Selected destination: %s with coordinates %s", selection, coords)
+                return coords
+
+        # Special handling for banks
+        bank_selection = self.bank_dropdown.currentText()
+        if bank_selection and bank_selection != "Select a destination":
+            # Parse the bank's "ABC Street & 123 Street" format
+            col_name, row_name = bank_selection.split(" & ")
+
+            # Look up column and row coordinates using parent data (columns and rows tables)
+            col_coord = self.parent.columns.get(col_name.strip())
+            row_coord = self.parent.rows.get(row_name.strip())
+
+            if col_coord is not None and row_coord is not None:
+                # Apply +1 offset for cell directly SE of intersection
+                logging.info("Selected bank destination: %s with coordinates (%d, %d)", bank_selection, col_coord + 1,
+                             row_coord + 1)
+                return col_coord + 1, row_coord + 1
+
+        # Custom location entry
+        col = self.parent.columns.get(self.columns_dropdown.currentText())
+        row = self.parent.rows.get(self.rows_dropdown.currentText())
+        if col is not None and row is not None:
+            logging.info("Custom destination selected: Column %s, Row %s", col, row)
+            return col, row
+
+        logging.warning("No valid destination selected.")
+        return None
+
 
 # -----------------------
 # Shopping list Tools

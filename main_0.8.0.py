@@ -1225,6 +1225,7 @@ class RBCCommunityMap(QMainWindow):
         """
         character_name = item.text()
         selected_character = next((char for char in self.characters if char['name'] == character_name), None)
+
         if selected_character:
             logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
