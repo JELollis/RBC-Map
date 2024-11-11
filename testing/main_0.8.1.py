@@ -3070,6 +3070,15 @@ class set_destination_dialog(QDialog):
         # Main layout setup
         main_layout = QVBoxLayout(self)
 
+        # Define the style with a border for dropdowns
+        dropdown_style = """
+            QComboBox {
+                border: 2px solid #5F6368;
+                padding: 5px;
+                border-radius: 4px;
+            }
+        """
+
         # Dropdown for recent destinations
         self.recent_destinations_dropdown = QComboBox()
         self.populate_recent_destinations()
@@ -3148,63 +3157,69 @@ class set_destination_dialog(QDialog):
         self.recent_destinations_dropdown.addItem("Select a recent destination")
         character_id = self.parent.selected_character.get('id')
 
-        # Fetch recent destinations for the specific character
         connection = sqlite3.connect(DB_PATH)
         cursor = connection.cursor()
+
+        # Fetch recent destinations for the character
         cursor.execute(
             "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
             (character_id,)
         )
         recent_destinations = cursor.fetchall()
         connection.close()
+
         logging.info(f"Fetched {len(recent_destinations)} recent destinations for character {character_id}.")
 
         # Process each recent destination
-        mysql_conn = connect_to_database()  # Use the global MySQL connection function
+        for col, row in recent_destinations:
+            try:
+                # Convert to integers if they aren't already
+                col = int(col)
+                row = int(row)
+            except ValueError:
+                logging.error("Non-integer values for col/row: col=%s, row=%s", col, row)
+                continue
 
-        if not mysql_conn:
-            logging.error("Failed to connect to MySQL database for retrieving street names.")
-            return
+            # Round coordinates to the nearest odd number (unless boundary)
+            rounded_col = col if col in (0, 200) else (col if col % 2 != 0 else col - 1)
+            rounded_row = row if row in (0, 200) else (row if row % 2 != 0 else row - 1)
+            logging.debug("Rounded col=%d to %d and row=%d to %d", col, rounded_col, row, rounded_row)
 
-        with mysql_conn.cursor() as mysql_cursor:
-            for col, row in recent_destinations:
-                try:
-                    # Determine if we are on the boundary; skip rounding if true
-                    if col in [0, 200] or row in [0, 200]:
-                        rounded_col, rounded_row = col, row
-                    else:
-                        # For non-boundary coordinates, round down to nearest odd number
-                        rounded_col = col if col % 2 != 0 else col - 1
-                        rounded_row = row if row % 2 != 0 else row - 1
+            # Fetch street names
+            column_connection = database_connection
+            cursor = column_connection.cursor()
+            try:
+                cursor.execute("SELECT Name FROM `columns` WHERE Coordinate = %s", (rounded_col,))
+                col_name = cursor.fetchone()
+                col_name = col_name[0] if col_name else f"Column {rounded_col}"
 
-                    logging.debug("Rounded col=%d to %d and row=%d to %d", col, rounded_col, row, rounded_row)
+                cursor.execute("SELECT Name FROM `rows` WHERE Coordinate = %s", (rounded_row,))
+                row_name = cursor.fetchone()
+                row_name = row_name[0] if row_name else f"Row {rounded_row}"
 
-                    # Retrieve street names based on rounded coordinates
-                    mysql_cursor.execute("SELECT Name FROM `columns` WHERE Coordinate = %s", (rounded_col,))
-                    col_name = mysql_cursor.fetchone()
-                    if col_name:
-                        col_name = col_name[0]
-                    else:
-                        col_name = f"Column {rounded_col}"
-                        logging.warning("No name found for column coordinate %d", rounded_col)
+                # Check for a named building at this location across all relevant tables
+                building_name = None
+                for table in ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]:
+                    cursor.execute(
+                        f"SELECT Name FROM `{table}` WHERE `Column` = %s AND `Row` = %s",
+                        (col_name, row_name)
+                    )
+                    result = cursor.fetchone()
+                    if result:
+                        building_name = result[0]
+                        break
 
-                    mysql_cursor.execute("SELECT Name FROM `rows` WHERE Coordinate = %s", (rounded_row,))
-                    row_name = mysql_cursor.fetchone()
-                    if row_name:
-                        row_name = row_name[0]
-                    else:
-                        row_name = f"Row {rounded_row}"
-                        logging.warning("No name found for row coordinate %d", rounded_row)
+                # Format display name
+                display_name = f"{col_name} & {row_name}"
+                if building_name:
+                    display_name += f" - {building_name}"
 
-                    # Format as "Street Name & Street Number"
-                    destination_name = f"{col_name} & {row_name}"
-                    self.recent_destinations_dropdown.addItem(destination_name, (col, row))
-                    logging.info("Added recent destination: %s", destination_name)
-
-                except Exception as e:
-                    logging.error(f"Error processing recent destination (col={col}, row={row}): {e}")
-
-        mysql_conn.close()
+                self.recent_destinations_dropdown.addItem(display_name, (col, row))
+                logging.info(f"Added recent destination: {display_name}")
+            except pymysql.MySQLError as e:
+                logging.error(f"Error processing recent destination (col={col}, row={row}): {e}")
+            finally:
+                cursor.close()
 
     def populate_dropdown(self, dropdown, items):
         logging.info("Populating dropdown with %d items.", len(items))
@@ -3362,7 +3377,6 @@ class set_destination_dialog(QDialog):
 
         logging.warning("No valid destination selected.")
         return None
-
 
 # -----------------------
 # Shopping list Tools
