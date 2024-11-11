@@ -2310,7 +2310,7 @@ class RBCCommunityMap(QMainWindow):
         """
         QMessageBox.about(self, "About RBC City Map",
                           "RBC City Map Application\n\n"
-                          "Version 0.8.0\n\n"
+                          "Version 0.8.1\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
                           "Development team shown in credits.\n\n")
@@ -3152,7 +3152,7 @@ class ShoppingListTool(QMainWindow):
         self.db_path = db_path  # Central SQLite DB path
 
         # Initialize MySQL connection for shop data
-        self.mysql_connection = connect_to_database()  # MySQL connection for shop items
+        self.mysql_connection = connect_to_database()
         if not self.mysql_connection:
             print("Failed to connect to the MySQL database.")
             sys.exit(1)
@@ -3160,7 +3160,7 @@ class ShoppingListTool(QMainWindow):
         self.cursor = self.mysql_connection.cursor()
 
         # Initialize SQLite connection for coin data
-        self.sqlite_connection = sqlite3.connect(self.db_path)  # Central SQLite DB connection
+        self.sqlite_connection = sqlite3.connect(self.db_path)
         self.sqlite_cursor = self.sqlite_connection.cursor()
 
         # Initialize shopping list total
@@ -3171,9 +3171,6 @@ class ShoppingListTool(QMainWindow):
 
         # Load data from MySQL (shop info)
         self.populate_shop_dropdown()
-
-        # Load coin information from SQLite
-        self.load_coin_info()
 
     def setup_ui(self):
         # Initialize UI elements
@@ -3204,7 +3201,8 @@ class ShoppingListTool(QMainWindow):
 
         # Create a label to display the total of the shopping list, coins in pocket, and bank balance
         self.total_label = QLabel(
-            f"List total: 0 Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
+            f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}"
+        )
         layout.addWidget(self.total_label)
 
         central_widget = QWidget(self)
@@ -3216,7 +3214,7 @@ class ShoppingListTool(QMainWindow):
 
         # Load items when shop or charisma level changes
         self.shop_combobox.currentIndexChanged.connect(self.load_items)
-        self.charisma_combobox.currentIndexChanged.connect(self.load_items)
+        self.charisma_combobox.currentIndexChanged.connect(self.update_shopping_list_prices)
 
         # Load items initially
         self.load_items()
@@ -3229,93 +3227,51 @@ class ShoppingListTool(QMainWindow):
         if selected_item:
             item_text = selected_item.text()
             item_name, item_price = item_text.split(" - ")
-            quantity = 1  # Default quantity is 1
+            item_price = int(item_price.split(" Coins")[0])
 
-            # Check if the item is already in the shopping list
-            for i in range(self.shopping_list.count()):
-                existing_item_text = self.shopping_list.item(i).text()
-                existing_item_name = existing_item_text.split(" - ")[0]
-                if existing_item_name == item_name:
-                    # Update the quantity if the item is already present
-                    existing_quantity = int(existing_item_text.split(" - ")[2].split("x")[0])
-                    self.shopping_list.item(i).setText(f"{item_name} - {item_price} Coins - {existing_quantity + 1}x")
-                    self.update_total()
-                    return
+            # Prompt user for the quantity
+            quantity, ok = QInputDialog.getInt(self, "Enter Quantity", f"How many {item_name} to add?", 1, 1)
+            if ok:
+                # Check if the item is already in the shopping list
+                for i in range(self.shopping_list.count()):
+                    existing_item_text = self.shopping_list.item(i).text()
+                    existing_item_name = existing_item_text.split(" - ")[0]
+                    if existing_item_name == item_name:
+                        # Update the quantity if the item is already present
+                        existing_quantity = int(existing_item_text.split(" - ")[2].split("x")[0])
+                        self.shopping_list.item(i).setText(
+                            f"{item_name} - {item_price} Coins - {existing_quantity + quantity}x"
+                        )
+                        self.update_total()
+                        return
 
-            # If the item is not in the list, add it with quantity 1
-            self.shopping_list.addItem(f"{item_name} - {item_price} Coins - {quantity}x")
-            self.update_total()
+                # If the item is not in the list, add it with the entered quantity
+                self.shopping_list.addItem(f"{item_name} - {item_price} Coins - {quantity}x")
+                self.update_total()
 
     def remove_item(self):
         """
-        Remove the selected item from the shopping list or decrease its quantity.
+        Prompt for quantity to remove from the selected item in the shopping list.
         """
         selected_item = self.shopping_list.currentItem()
         if selected_item:
             item_text = selected_item.text()
             item_name, item_price, item_quantity = item_text.split(" - ")
+            item_price = int(item_price.split(" Coins")[0])
             item_quantity = int(item_quantity.split("x")[0])
 
-            if item_quantity > 1:
-                # Decrease the quantity if more than 1
-                self.shopping_list.currentItem().setText(f"{item_name} - {item_price} Coins - {item_quantity - 1}x")
-            else:
-                # Remove the item from the list if quantity is 1
-                self.shopping_list.takeItem(self.shopping_list.row(selected_item))
+            # Prompt the user for the quantity to remove
+            quantity_to_remove, ok = QInputDialog.getInt(self, "Enter Quantity", f"How many {item_name} to remove?", 1, 1, item_quantity)
+            if ok:
+                new_quantity = item_quantity - quantity_to_remove
+                if new_quantity > 0:
+                    # Update the item's quantity in the list without re-adding "Coins"
+                    self.shopping_list.currentItem().setText(f"{item_name} - {item_price} Coins - {new_quantity}x")
+                else:
+                    # Remove the item if the quantity reaches zero
+                    self.shopping_list.takeItem(self.shopping_list.row(selected_item))
 
-            self.update_total()
-
-    def add_from_damage_calculator(self, hw_count, gs_count):
-        """
-        Add Holy Water and Garlic Spray to the shopping list based on the damage calculator results.
-        """
-        shop_name = "Discount Potions"
-
-        try:
-            # Fetch the price for Vial of Holy Water from MySQL
-            query_hw = """
-            SELECT charisma_level_1 FROM shop_items
-            WHERE shop_name = %s AND item_name = 'Vial of Holy Water'
-            """
-            self.cursor.execute(query_hw, (shop_name,))
-            hw_price = self.cursor.fetchone()
-
-            if hw_price:
-                hw_price = hw_price[0]
-            else:
-                print("Vial of Holy Water not found.")
-                return
-
-            # Fetch the price for Garlic Spray from MySQL
-            query_gs = """
-            SELECT charisma_level_1 FROM shop_items
-            WHERE shop_name = %s AND item_name = 'Garlic Spray'
-            """
-            self.cursor.execute(query_gs, (shop_name,))
-            gs_price = self.cursor.fetchone()
-
-            if gs_price:
-                gs_price = gs_price[0]
-            else:
-                print("Garlic Spray not found.")
-                return
-
-            # Add Vial of Holy Water to the shopping list if hw_count > 0
-            if hw_count > 0:
-                self.shopping_list.addItem(f"Vial of Holy Water - {hw_price} Coins - {hw_count}x")
-
-            # Add Garlic Spray to the shopping list if gs_count > 0
-            if gs_count > 0:
-                self.shopping_list.addItem(f"Garlic Spray - {gs_price} Coins - {gs_count}x")
-
-            # Update the total price after adding the items
-            self.update_total()
-
-            # Ensure the shopping list window stays visible
-            self.show()
-
-        except pymysql.MySQLError as err:
-            print(f"Error fetching prices from Discount Potions: {err}")
+                self.update_total()
 
     def populate_shop_dropdown(self):
         """
@@ -3332,7 +3288,6 @@ class ShoppingListTool(QMainWindow):
     def load_items(self):
         """
         Load items from the selected shop and charisma level into the available items list.
-        Update the shopping list prices based on the selected charisma level.
         """
         self.available_items_list.clear()
         shop_name = self.shop_combobox.currentText()
@@ -3360,9 +3315,24 @@ class ShoppingListTool(QMainWindow):
             price = item[1]
             self.available_items_list.addItem(f"{item_name} - {price} Coins")
 
-        # Now update the prices of items in the shopping list based on the charisma level
-        for index in range(self.shopping_list.count()):
-            item_text = self.shopping_list.item(index).text()
+    def update_shopping_list_prices(self):
+        """
+        Update the prices in the shopping list based on the selected charisma level.
+        """
+        shop_name = self.shop_combobox.currentText()
+        charisma_level = self.charisma_combobox.currentText()
+
+        # Determine the price column based on charisma level
+        price_column = {
+            "No Charisma": "base_price",
+            "Charisma 1": "charisma_level_1",
+            "Charisma 2": "charisma_level_2",
+            "Charisma 3": "charisma_level_3"
+        }.get(charisma_level, "base_price")
+
+        # Update prices for each item in the shopping list
+        for i in range(self.shopping_list.count()):
+            item_text = self.shopping_list.item(i).text()
             item_name = item_text.split(" - ")[0]
             quantity = int(item_text.split(" - ")[2].split("x")[0])
 
@@ -3377,55 +3347,53 @@ class ShoppingListTool(QMainWindow):
 
             if result:
                 updated_price = result[0]
-                self.shopping_list.item(index).setText(f"{item_name} - {updated_price} Coins - {quantity}x")
+                self.shopping_list.item(i).setText(f"{item_name} - {updated_price} Coins - {quantity}x")
 
         self.update_total()
 
     def update_total(self):
         """
-        Update the total price of the shopping list and display it.
+        Update the total cost of the shopping list and display it.
         """
         self.list_total = 0
         for index in range(self.shopping_list.count()):
             item_text = self.shopping_list.item(index).text()
             item_price = int(item_text.split(" - ")[1].split(" Coins")[0])
-            quantity = int(item_text.split(" - ")[2].split("x")[0])
-            self.list_total += item_price * quantity
+            item_quantity = int(item_text.split(" - ")[2].split("x")[0])
+            self.list_total += item_price * item_quantity
 
-        self.total_label.setText(f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
-
-    def load_coin_info(self):
-        """
-        Load the character's coin information from the SQLite database.
-        """
-        try:
-            # Query to get coins in pocket and in bank for the character
-            self.sqlite_cursor.execute("""
-            SELECT coins_in_pocket, coins_in_bank
-            FROM characters
-            WHERE character_name = ?
-            """, (self.character_name,))
-            result = self.sqlite_cursor.fetchone()
-
-            if result:
-                self.coins_in_pocket = result[0]
-                self.coins_in_bank = result[1]
-            else:
-                print(f"Character {self.character_name} not found in the database.")
-                self.coins_in_pocket = 0
-                self.coins_in_bank = 0
-
-        except sqlite3.DatabaseError as err:
-            print(f"Error fetching coin info: {err}")
-            self.coins_in_pocket = 0
-            self.coins_in_bank = 0
+        # Update the label with the correct total, considering the coins in pocket and bank
+        self.total_label.setText(
+            f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}"
+        )
 
     def coins_in_pocket(self):
-        return self.coins_in_pocket
+        """
+        Retrieve the number of coins in the pocket for the given character from the SQLite DB.
+        """
+        cursor = self.sqlite_connection.cursor()
+        cursor.execute("SELECT id FROM characters WHERE name = ?", (self.character_name,))
+        character_id = cursor.fetchone()
+
+        if character_id:
+            cursor.execute("SELECT pocket FROM coins WHERE character_id = ?", (character_id[0],))
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        return 0
 
     def coins_in_bank(self):
-        return self.coins_in_bank
+        """
+        Retrieve the number of coins in the bank for the given character from the SQLite DB.
+        """
+        cursor = self.sqlite_connection.cursor()
+        cursor.execute("SELECT id FROM characters WHERE name = ?", (self.character_name,))
+        character_id = cursor.fetchone()
 
+        if character_id:
+            cursor.execute("SELECT bank FROM coins WHERE character_id = ?", (character_id[0],))
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        return 0
 
 def main():
     """
