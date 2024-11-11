@@ -115,4 +115,4 @@
 	-The scraping process now runs before updating comboboxes with the latest data.
 	-Improved logic to handle missing or outdated data during the scraping process.
 -	**Bug Fixes**: Addressed various bugs related to data handling and UI updates.
-- **Perormance Improvements**: Optimized data loading and scraping processes for faster updates.
+- **Performance Improvements**: Optimized data loading and scraping processes for faster updates.
