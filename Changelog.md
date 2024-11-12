@@ -116,3 +116,90 @@
 	-Improved logic to handle missing or outdated data during the scraping process.
 -	**Bug Fixes**: Addressed various bugs related to data handling and UI updates.
 - **Performance Improvements**: Optimized data loading and scraping processes for faster updates.
+
+---
+
+### Version 0.8.0
+
+**Major New Features**:
+**Enhanced Data Loading and Management**:
+-	Comprehensive loading from MySQL, including coordinates for `banks`, `taverns`, `transits`, `user_buildings`, `shops`, `guilds`, and `places_of_interest`.
+-	Improved data handling in functions like `load_data` and `connect_to_database` to support these entities.
+
+**Coin Management and Cookie Persistence**:
+-	Introduced SQLite databases for cookies (`cookies.db`) and coins (`coins.db`), including initialization functions `initialize_cookie_db` and `initialize_coins_db`.
+   **Coin Tracking**: The `extract_coins_from_html` function was enhanced to track coins for different activities, including bank balances, deposits, withdrawals, and coins gained or lost from in-game actions.
+-	Persistent session and character data through SQLite cookies database.
+
+**Web Scraping Enhancements**:
+-	Expanded `AVITDScraper` to fetch guild and shop update timestamps, supporting automatic updates with `update_guilds` and `update_shops`.
+-	`get_next_update_times` function retrieves update times for guilds and shops from the database, with timestamp calculations to determine when to scrape new data.
+
+**UI and Minimap Enhancements**:
+-	Improved **minimap rendering** for banks, taverns, transits, guilds, shops, and user buildings with specific color mappings.
+-	Added `draw_minimap` method to handle dynamic scaling based on zoom, with labels for locations and intersection names.
+   **Zoom Controls**: `zoom_in` and `zoom_out` functions dynamically adjust the view, redrawing the minimap with specific block and font sizes.
+   **Nearest Locations**: Functions to draw lines from the user's current location to the nearest bank, tavern, and transit.
+
+**Theme Customization**:
+   **Theme Management**: Introduced a `ThemeCustomizationDialog` with methods to save and load theme settings (`save_theme_settings`, `load_theme_settings`, `apply_theme`).
+-	Customizable UI theme, including background color, text color, button color, and specific colors for minimap elements.
+
+**Character Management and Persistence**:
+   **Character List Enhancements**: Manage multiple characters with options to add, modify, and delete characters stored in `characters.pkl`.
+-	Persistent storage of the last active character with automatic login functionality.
+
+**Improved Console Logging**:
+   **JavaScript Logging Injection**: Injects console logging from the embedded web page for enhanced debugging and error tracking.
+
+**Known Issues**:
+-	Occasional map display overlap when zoomed out.
+-	Delays in loading data when relying on remote database connections.
+
+---
+
+### Version 0.8.1
+
+**General Enhancements**:
+-	Expanded the functionality of the **RBC Community Map** to include various user and map management features.
+-	Introduced advanced error handling and structured logging, including directory setup for logs, sessions, and images.
+
+**Database & Session Management**:
+**SQLite Database Integration**: Centralized data management in `sessions/rbc_map_data.db` to handle characters, coins, destinations, recent destinations, cookies, color mappings, and theme settings.
+**Character Management Enhancements**:
+-	Updated to support multiple characters with database-based tracking, including auto-login functionality for the last active character.
+-	First-run character creation flow that initializes a new character with default settings.
+**Cookie Persistence**: Cookies are now stored in SQLite for persistent sessions, loaded on application start, and synced with the in-app web engine.
+
+**Map & Minimap Features**:
+**Dynamic Minimap Rendering**:
+-	Introduced dynamic scaling for minimap labels based on the zoom level.
+-	Added the `draw_minimap` function with refined logic for rendering various points of interest, such as banks, taverns, and transits, with color-coded labels.
+-	Improved minimap display by applying colors and labels with word-wrapping support for intersection names.
+**Navigation Enhancements**:
+-	Enabled destination management through a dialog box, allowing users to set and save destinations with a visual indicator.
+-	Included a feature to display Action Points (AP) cost for travel to set destinations, with transit costs factored in.
+
+**User Interface & Theme Customization**:
+**Theming System**:
+-	Introduced the `ThemeCustomizationDialog` for user-defined themes, allowing custom color settings for the app UI and saving them to SQLite for persistence.
+-	`apply_theme` method applies saved theme settings to all UI components dynamically.
+**Enhanced Layout**:
+-	Organized a side panel with sections for closest location details, zoom controls, and navigation buttons.
+-	Additional UI controls like "Go" buttons, zoom buttons, and action buttons for `Refresh`, `Discord`, and `Website`.
+  
+**Coin and Resource Tracking**:
+**Coin Management**:
+-	Integrated `extract_coins_from_html` method to parse and update coin balances directly from HTML, handling bank deposits, withdrawals, hunting rewards, and transit fees.
+-	Coin data is saved in the SQLite database, ensuring that changes persist across sessions.
+
+**Error Logging and Debugging**:
+**Enhanced Logging**:
+-	Set up detailed logging across the application, including logging for database operations, theme application, character selection, and webview actions.
+-	Integrated JavaScript console logging for the embedded web view, capturing and displaying JavaScript console messages within the application.
+
+**File Structure and Code Organization**:
+-	Modularized the code for easier maintenance, separating different features into methods within `RBCCommunityMap`.
+-	Established a directory structure with `sessions`, `images`, `logs`, and `settings` folders, with initialization functions to ensure the application creates these folders if missing.
+
+---

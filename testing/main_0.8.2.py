@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.8.1
+# Filename: main_0.8.2
 
 """
 =========================
@@ -2493,7 +2493,7 @@ class RBCCommunityMap(QMainWindow):
         """
         QMessageBox.about(self, "About RBC City Map",
                           "RBC City Map Application\n\n"
-                          "Version 0.8.1\n\n"
+                          "Version 0.8.2\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
                           "Development team shown in credits.\n\n")
