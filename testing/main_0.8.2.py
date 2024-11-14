@@ -1221,6 +1221,11 @@ class RBCCommunityMap(QMainWindow):
         damage_calculator_action.triggered.connect(self.open_damage_calculator_tool)
         tools_menu.addAction(damage_calculator_action)
 
+        # Power Reference Tool
+        power_reference_action = QAction('Power Reference Tool', self)
+        power_reference_action.triggered.connect(self.open_powers_dialog)
+        tools_menu.addAction(power_reference_action)
+
         # Help menu
         help_menu = menu_bar.addMenu('Help')
         faq_action = QAction('FAQ', self)
@@ -1364,6 +1369,13 @@ class RBCCommunityMap(QMainWindow):
         shopping_list_text += f"\n\nTotal Coins - {total_cost}"
 
         QMessageBox.information(self, "Damage Calculator Shopping List", shopping_list_text)
+
+    def open_powers_dialog(self):
+        """
+        Opens the Powers Information dialog.
+        """
+        powers_dialog = PowersDialog(database_connection)  # Ensure to pass the correct MySQL connection
+        powers_dialog.exec()
 
     # -----------------------
     # Character Management
@@ -3835,6 +3847,96 @@ class DamageCalculator(QDialog):
         results.append(f"Totals: Hits: {total_hits} Coins: {total_cost:,}")
         self.result_display.setText("\n".join(results))
         self.total_cost_label.setText(f"Total Cost: {total_cost:,} Coins")
+
+# -----------------------
+# Powers Reference Tool
+# -----------------------
+class PowersDialog(QDialog):
+    def __init__(self, db_connection):
+        super().__init__()
+        self.db_connection = db_connection
+        self.setWindowTitle("Powers Information")
+        self.setMinimumSize(600, 400)
+
+        # Layout setup
+        main_layout = QHBoxLayout(self)
+
+        # Left panel: List of powers
+        self.powers_list = QListWidget()
+        self.powers_list.itemClicked.connect(self.load_power_info)
+        main_layout.addWidget(self.powers_list)
+
+        # Right panel: Power details
+        self.details_panel = QVBoxLayout()
+
+        # Power name
+        self.power_name_label = QLabel("<b>Power:</b>")
+        self.details_panel.addWidget(self.power_name_label)
+
+        # Guild
+        self.guild_label = QLabel("<b>Guild:</b>")
+        self.details_panel.addWidget(self.guild_label)
+
+        # Cost
+        self.cost_label = QLabel("<b>Cost:</b>")
+        self.details_panel.addWidget(self.cost_label)
+
+        # Quest information
+        self.quest_info_text = QTextEdit()
+        self.quest_info_text.setReadOnly(True)
+        self.details_panel.addWidget(QLabel("<b>Quest Info:</b>"))
+        self.details_panel.addWidget(self.quest_info_text)
+
+        # Skill information
+        self.skill_info_text = QTextEdit()
+        self.skill_info_text.setReadOnly(True)
+        self.details_panel.addWidget(QLabel("<b>Skill Info:</b>"))
+        self.details_panel.addWidget(self.skill_info_text)
+
+        main_layout.addLayout(self.details_panel)
+
+        # Load all powers into the list
+        self.load_powers()
+
+    def load_powers(self):
+        """
+        Loads all powers from the database and populates the list widget.
+        """
+        try:
+            with self.db_connection.cursor() as cursor:
+                cursor.execute("SELECT power_id, name FROM powers ORDER BY name ASC")
+                for power_id, name in cursor.fetchall():
+                    self.powers_list.addItem(name)
+        except pymysql.MySQLError as e:
+            QMessageBox.critical(self, "Database Error", f"Failed to load powers from the database:\n{e}")
+
+    def load_power_info(self, item):
+        """
+        Loads detailed information for the selected power.
+        """
+        try:
+            power_name = item.text()
+            with self.db_connection.cursor() as cursor:
+                # Query the power details
+                cursor.execute(
+                    """
+                    SELECT name, guild, cost, quest_info, skill_info
+                    FROM powers
+                    WHERE name = %s
+                    """, (power_name,)
+                )
+                result = cursor.fetchone()
+                if result:
+                    name, guild, cost, quest_info, skill_info = result
+                    self.power_name_label.setText(f"<b>Power:</b> {name}")
+                    self.guild_label.setText(f"<b>Guild:</b> {guild}")
+                    self.cost_label.setText(f"<b>Cost:</b> {cost} coins" if cost else "<b>Cost:</b> Unknown")
+                    self.quest_info_text.setPlainText(quest_info if quest_info else "None")
+                    self.skill_info_text.setPlainText(skill_info if skill_info else "None")
+                else:
+                    QMessageBox.warning(self, "Not Found", f"No details found for '{power_name}'.")
+        except pymysql.MySQLError as e:
+            QMessageBox.critical(self, "Database Error", f"Failed to load power details:\n{e}")
 
 # -----------------------
 # Main Entry Point
