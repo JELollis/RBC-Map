@@ -5,26 +5,25 @@
 =========================
 RBC Community Map Application
 =========================
-The RBC Community Map Application provides a comprehensive graphical interface for navigating
-the city map of RavenBlack City. It offers features such as zooming, setting and saving destinations,
+The RBC Community Map Application provides a graphical interface for navigating
+the city map of RavenBlack City. It includes features such as zooming, setting and saving destinations,
 viewing points of interest (such as banks, taverns, and guilds), and managing user characters.
-Map data is dynamically fetched from a MySQL database, and the app also supports refreshing
-data from the 'A View in the Dark' website via web scraping.
+Map data is dynamically fetched from an SQLite database, with some components refreshed via web scraping.
 
-Features include:
-- Zooming in and out of the map.
-- Setting, saving, and loading destinations.
-- Viewing closest points of interest, such as banks and taverns.
-- Managing multiple user characters, including automatic login for the last active character.
-- Handling cookies and persistent sessions for web scraping.
-- Coin and bank balance tracking with automatic updates from in-game actions.
+Main Features:
+- Zooming in and out of the map with dynamic label adjustments.
+- Setting, saving, and loading destinations with AP cost calculation.
+- Viewing closest points of interest, including banks, taverns, and transits.
+- Managing multiple user characters, with automatic login for the last active character.
+- Persistent sessions and cookies managed via an SQLite database.
+- Coin and bank balance tracking with automatic updates based on in-game actions.
+- Customizable themes, including colors for UI and minimap components.
 
 Modules:
 - sys: Provides access to system-specific parameters and functions.
 - os: Used for interacting with the operating system (e.g., directory and file management).
 - pickle: Facilitates the serialization and deserialization of Python objects.
-- pymysql: Interface for connecting to and interacting with a MySQL database.
-- sqlite3: Interface for SQLite database management, used for cookies and coins.
+- sqlite3: Interface for SQLite database management, used for session data, cookies, coins, and theme settings.
 - requests: Allows sending HTTP requests to interact with external websites.
 - re: Provides regular expression matching operations, useful for HTML parsing.
 - datetime: Supplies classes for manipulating dates and times.
@@ -35,36 +34,37 @@ Modules:
 Classes:
 - RBCCommunityMap: The main application class, responsible for initializing and managing the user interface,
   web scraping, character management, and map functionalities.
-- DatabaseViewer: Displays the contents of MySQL database tables in a tabbed view for inspection.
+- DatabaseViewer: Displays the contents of SQLite database tables in a tabbed view for inspection.
 - CharacterDialog: A dialog class for adding, modifying, or deleting user characters.
 - ThemeCustomizationDialog: A dialog class that allows users to customize the application's theme.
 - SetDestinationDialog: A dialog class for setting destinations on the map.
 - AVITDScraper: A web scraper class for fetching and updating data for guilds and shops from 'A View in the Dark'.
 
-Functions:
-- connect_to_database: Establishes a connection to the MySQL database and handles any connection errors.
-- load_data: Loads map data from the MySQL database, including coordinates for banks, taverns, transits, shops, and guilds.
+Key Functions:
+- connect_to_database: Establishes a connection to the SQLite database and handles connection errors.
+- load_data: Loads map data from the SQLite database, including coordinates for banks, taverns, transits, shops, and guilds.
 - initialize_cookie_db: Sets up an SQLite database for managing cookies.
 - save_cookie_to_db: Saves individual cookies from web sessions to the SQLite database.
 - load_cookies_from_db: Loads cookies from the SQLite database into the web engine for persistent sessions.
 - clear_cookie_db: Clears all cookies from the SQLite database.
-- fetch_table_data: Retrieves column names and data from a specified MySQL database table.
+- fetch_table_data: Retrieves column names and data from a specified SQLite database table.
 - extract_coordinates_from_html: Extracts in-game map coordinates from loaded HTML content.
 - find_nearest_location: Finds the nearest point of interest based on a set of coordinates.
 - calculate_ap_cost: Calculates the Action Point (AP) cost between two locations on the map.
-- update_guilds: Scrapes and updates the guilds data in the MySQL database.
-- update_shops: Scrapes and updates the shops data in the MySQL database.
+- update_guilds: Scrapes and updates guilds data in the SQLite database.
+- update_shops: Scrapes and updates shops data in the SQLite database.
 - get_next_update_times: Retrieves the next update times for guilds and shops from the database.
 - inject_console_logging: Injects JavaScript into web pages to capture and log console messages.
 - apply_theme: Applies the selected theme to the application UI components.
-- save_theme_settings: Saves customized theme settings to a file for persistence.
-- load_theme_settings: Loads saved theme settings from a file or the MySQL database.
+- save_theme_settings: Saves customized theme settings to the SQLite database.
+- load_theme_settings: Loads saved theme settings from the SQLite database.
 - show_about_dialog: Displays an 'About' dialog with details about the application and its version.
 - show_credits_dialog: Displays a scrolling 'Credits' dialog with contributors to the project.
 
 To install all required modules, run the following command:
  pip install pymysql requests bs4 PySide6 PySide6-WebEngine
 """
+
 
 import importlib.util
 import os
@@ -806,8 +806,8 @@ class RBCCommunityMap(QMainWindow):
         """
         Set up cookie handling, including loading and saving cookies from the 'cookies' table in rbc_map_data.db.
         """
-        # Ensure the cookies table exists in the unified database
-        self.initialize_cookie_db()
+        # No need to initialize the cookies table here as it's done during database initialization
+        # Ensure that cookies table exists, it's handled by initialize_database()
 
         # Connect the QWebEngineProfile's cookie store to the application
         self.cookie_store = self.web_profile.cookieStore()
@@ -815,27 +815,6 @@ class RBCCommunityMap(QMainWindow):
 
         # Load previously saved cookies from the database
         self.load_cookies()
-
-    def initialize_cookie_db(self):
-        """
-        Create the 'cookies' table in rbc_map_data.db if it does not already exist.
-        """
-        connection = sqlite3.connect(DB_PATH)
-        cursor = connection.cursor()
-
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS cookies (
-                name TEXT,
-                domain TEXT,
-                path TEXT,
-                value TEXT,
-                expiration INTEGER,
-                UNIQUE(name, domain, path) ON CONFLICT REPLACE
-            )
-        ''')
-
-        connection.commit()
-        connection.close()
 
     def load_cookies(self):
         """
@@ -870,7 +849,7 @@ class RBCCommunityMap(QMainWindow):
             # Convert expiration date to a timestamp if it’s not a session cookie
             expiration = cookie.expirationDate().toSecsSinceEpoch() if not cookie.isSessionCookie() else None
 
-            cursor.execute('''
+            cursor.execute(''' 
                 INSERT INTO cookies (name, domain, path, value, expiration)
                 VALUES (?, ?, ?, ?, ?)
             ''', (
@@ -1798,29 +1777,11 @@ class RBCCommunityMap(QMainWindow):
         # Get the character ID for the selected character
         character_id = self.selected_character['id']
 
-        # Search for the bank balance line
+        # Search for the bank balance line (found by "Welcome to Omnibank")
         bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
 
-        # Search for a deposit action
-        deposit_match = re.search(r"You deposit (\d+) coins.", html)
-
-        # Search for a withdrawal action
-        withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
-
-        # Search for transit pocket coin update
-        transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
-
-        # Additional coin-related actions
-        actions = {
-            'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
-            'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
-            'human': r'You drink the human\'s blood.*You also found (\d+) coins',
-            'bag_of_coins': r'The bag contained (\d+) coins',
-            'robbing': r'You stole (\d+) coins from (\w+)',
-            'silver_suitcase': r'The suitcase contained (\d+) coins',
-            'given_coins': r'(\w+) gave you (\d+) coins',
-            'getting_robbed': r'(\w+) stole (\d+) coins from you'
-        }
+        # Search for the pocket balance line (found by "You have \d+ coins")
+        pocket_match = re.search(r"You have (\d+) coins", html)
 
         # Handle bank balance update
         if bank_match:
@@ -1829,12 +1790,25 @@ class RBCCommunityMap(QMainWindow):
 
             # Update the bank coins in the SQLite database
             cursor.execute('''
-                UPDATE coins
-                SET bank = ?
+                UPDATE coins 
+                SET bank = ? 
                 WHERE character_id = ?
             ''', (bank_coins, character_id))
 
-        # Handle deposit action
+        # Handle pocket coin balance update
+        if pocket_match:
+            pocket_coins = int(pocket_match.group(1))
+            logging.info(f"Pocket coins found: {pocket_coins}")
+
+            # Update the pocket coins in the SQLite database
+            cursor.execute('''
+                UPDATE coins 
+                SET pocket = ? 
+                WHERE character_id = ?
+            ''', (pocket_coins, character_id))
+
+        # Handle deposit action (optional, depending on your needs)
+        deposit_match = re.search(r"You deposit (\d+) coins.", html)
         if deposit_match:
             deposit_coins = int(deposit_match.group(1))
             logging.info(f"Deposit found: {deposit_coins} coins")
@@ -1846,7 +1820,8 @@ class RBCCommunityMap(QMainWindow):
                 WHERE character_id = ?
             ''', (deposit_coins, character_id))
 
-        # Handle withdrawal action
+        # Handle withdrawal action (optional, depending on your needs)
+        withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
         if withdraw_match:
             withdraw_coins = int(withdraw_match.group(1))
             logging.info(f"Withdrawal found: {withdraw_coins} coins")
@@ -1858,7 +1833,8 @@ class RBCCommunityMap(QMainWindow):
                 WHERE character_id = ?
             ''', (withdraw_coins, character_id))
 
-        # Handle transit coin update
+        # Handle transit coin update (optional, depending on your needs)
+        transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
         if transit_match:
             coins_in_pocket = int(transit_match.group(1))
             logging.info(f"Transit found: Pocket coins updated to {coins_in_pocket}")
@@ -1870,7 +1846,19 @@ class RBCCommunityMap(QMainWindow):
                 WHERE character_id = ?
             ''', (coins_in_pocket, character_id))
 
-        # Handle other coin-related actions (hunting, robbing, etc.)
+        # Handle other coin-related actions (e.g., hunting, robbing, etc.)
+        actions = {
+            'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
+            'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
+            'human': r'You drink the human\'s blood.*You also found (\d+) coins',
+            'bag_of_coins': r'The bag contained (\d+) coins',
+            'robbing': r'You stole (\d+) coins from (\w+)',
+            'silver_suitcase': r'The suitcase contained (\d+) coins',
+            'given_coins': r'(\w+) gave you (\d+) coins',
+            'getting_robbed': r'(\w+) stole (\d+) coins from you'
+        }
+
+        # Handle other coin-related actions (e.g., hunting, robbing, etc.)
         for action, pattern in actions.items():
             match = re.search(pattern, html)
             if match:
@@ -3289,9 +3277,13 @@ class set_destination_dialog(QDialog):
     def set_destination(self):
         logging.info("Attempting to set destination.")
 
+        # Retrieve the selected destination coordinates
         destination_coords = self.get_selected_destination()
+
         if not destination_coords:
             logging.warning("No valid destination selected.")
+            # Show a dialog to the user if no destination is selected
+            self.show_error_dialog("No destination selected", "Please select a valid destination from the list.")
             return
 
         if self.parent.selected_character:
@@ -3301,6 +3293,24 @@ class set_destination_dialog(QDialog):
             connection = sqlite3.connect(DB_PATH)
             cursor = connection.cursor()
             try:
+                # First, check if the destination already exists in recent destinations
+                cursor.execute('''
+                    SELECT 1 FROM recent_destinations WHERE character_id = ? AND col = ? AND row = ?
+                ''', (character_id, destination_coords[0], destination_coords[1]))
+                existing_destination = cursor.fetchone()
+
+                if existing_destination:
+                    logging.info("Destination already exists in recent destinations. Not adding again.")
+                else:
+                    # If not, add it to the recent destinations
+                    cursor.execute('''
+                        INSERT INTO recent_destinations (character_id, col, row, timestamp)
+                        VALUES (?, ?, ?, datetime('now'))
+                    ''', (character_id, destination_coords[0], destination_coords[1]))
+                    connection.commit()
+                    logging.info(f"Added destination to recent destinations: {destination_coords}")
+
+                # Now, update or insert the destination as the current destination
                 cursor.execute("SELECT id FROM destinations WHERE character_id = ?", (character_id,))
                 existing_destination = cursor.fetchone()
 
@@ -3319,7 +3329,6 @@ class set_destination_dialog(QDialog):
                 connection.commit()
                 logging.info(f"Destination set successfully for character {character_id} at {destination_coords}.")
 
-                self.parent.save_to_recent_destinations(destination_coords, character_id)
                 self.parent.destination = destination_coords
                 self.parent.update_minimap()
             except sqlite3.Error as e:
@@ -3330,9 +3339,18 @@ class set_destination_dialog(QDialog):
             self.accept()
         else:
             logging.warning("No character selected. Destination not set.")
+            self.show_error_dialog("No character selected", "Please select a character to set the destination.")
 
     def get_selected_destination(self):
         logging.info("Retrieving selected destination.")
+
+        # Check recent destinations dropdown first
+        recent_selection = self.recent_destinations_dropdown.currentText()
+        if recent_selection and recent_selection != "Select a recent destination":
+            # Fetch the coordinates stored with the dropdown item
+            coords = self.recent_destinations_dropdown.currentData()
+            logging.info(f"Selected recent destination: {recent_selection} with coordinates {coords}")
+            return coords
 
         # Dropdowns with predefined coordinates
         selected_dropdowns = [
@@ -3344,12 +3362,12 @@ class set_destination_dialog(QDialog):
             (self.user_building_dropdown, self.parent.user_buildings_coordinates)
         ]
 
-        # First, check each dropdown for a valid selection
+        # Check each dropdown for a valid selection
         for dropdown, data in selected_dropdowns:
             selection = dropdown.currentText()
             if selection and selection != "Select a destination":
                 coords = data.get(selection)
-                logging.info("Selected destination: %s with coordinates %s", selection, coords)
+                logging.info(f"Selected destination: {selection} with coordinates {coords}")
                 return coords
 
         # Special handling for banks
@@ -3377,6 +3395,26 @@ class set_destination_dialog(QDialog):
 
         logging.warning("No valid destination selected.")
         return None
+
+    def show_error_dialog(self, title, message):
+        # Create a dialog box to display the error message
+        error_dialog = QDialog(self)
+        error_dialog.setWindowTitle(title)
+        error_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+
+        layout = QVBoxLayout()
+        message_label = QLabel(message)
+        layout.addWidget(message_label)
+
+        # Adding a button to close the dialog
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(error_dialog.accept)
+        layout.addWidget(close_button)
+
+        error_dialog.setLayout(layout)
+        error_dialog.setFixedSize(300, 100)  # Set a fixed size for the dialog
+        error_dialog.exec()
+
 
 # -----------------------
 # Shopping list Tools
