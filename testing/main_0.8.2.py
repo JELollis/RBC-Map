@@ -2537,7 +2537,8 @@ class RBCCommunityMap(QMainWindow):
                           "Version 0.8.2\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
-                          "Development team shown in credits.\n\n")
+                          "Development team shown in credits.\n\n\n"
+                          "This program is based on the LIAM\u00B2 app by Leprichaun")
 
     def show_credits_dialog(self):
         """
@@ -2552,11 +2553,15 @@ class RBCCommunityMap(QMainWindow):
             "Apple OSx Compatibility: Joseph Lemois\n\n"
             "Linux Compatibility: Josh \"Blaskewitts\" Corse, Fern Lovebond\n\n"
             "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n"
+            "Special Thanks to Cain \"Leprichaun\" McBride for the LIAM\u00B2 program \nthat inspired this program\n\n"
+            "Special Thanks to Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retreived\n\n"
+            "Special Thanks also to everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
+            "Most importantly, thank YOU for using this app. \nWe all hope it serves you well!"
         )
 
         credits_dialog = QDialog()
         credits_dialog.setWindowTitle('Credits')
-        credits_dialog.setFixedSize(600, 400)
+        credits_dialog.setFixedSize(650, 450)
 
         layout = QVBoxLayout(credits_dialog)
 
