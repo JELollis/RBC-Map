@@ -2540,6 +2540,8 @@ class RBCCommunityMap(QMainWindow):
                           "Development team shown in credits.\n\n\n"
                           "This program is based on the LIAM\u00B2 app by Leprichaun")
 
+    from PySide6.QtCore import QTimer
+
     def show_credits_dialog(self):
         """
         Display a "Credits" dialog with a list of contributors to the RBC City Map project.
@@ -2552,16 +2554,18 @@ class RBCCommunityMap(QMainWindow):
             "Windows: Jonathan Lollis (Nesmuth), Justin Solivan\n\n"
             "Apple OSx Compatibility: Joseph Lemois\n\n"
             "Linux Compatibility: Josh \"Blaskewitts\" Corse, Fern Lovebond\n\n"
-            "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n"
-            "Special Thanks to Cain \"Leprichaun\" McBride for the LIAM\u00B2 program \nthat inspired this program\n\n"
-            "Special Thanks to Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retreived\n\n"
-            "Special Thanks also to everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
+            "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n\n\n"
+            "Special Thanks:\n\n"
+            "Cain \"Leprichaun\" McBride for the LIAM\u00B2 program \nthat inspired this program\n\n"
+            "Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retrieved\n\n"
+            "Everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
+            "Anders for RBNav and the help along the way\n\n\n\n"
             "Most importantly, thank YOU for using this app. \nWe all hope it serves you well!"
         )
 
         credits_dialog = QDialog()
         credits_dialog.setWindowTitle('Credits')
-        credits_dialog.setFixedSize(650, 450)
+        credits_dialog.setFixedSize(650, 400)
 
         layout = QVBoxLayout(credits_dialog)
 
@@ -2582,18 +2586,22 @@ class RBCCommunityMap(QMainWindow):
 
         # Create and start the scrolling animation
         animation = QPropertyAnimation(credits_label, b"geometry")
-        animation.setDuration(30000)  # 30 seconds
+        animation.setDuration(35000)  # 30 seconds
         animation.setStartValue(QRect(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height()))
         animation.setEndValue(
             QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
         animation.setEasingCurve(QEasingCurve.Type.Linear)
 
+        # Close dialog 5 seconds after the animation finishes
+        def close_after_delay():
+            QTimer.singleShot(2500, credits_dialog.accept)  # Wait 2.5 seconds before closing
+
+        animation.finished.connect(close_after_delay)
         animation.start()
 
         credits_dialog.exec()
 
-
-# -----------------------
+    # -----------------------
 # Database Viewer Class
 # -----------------------
     def open_database_viewer(self):
