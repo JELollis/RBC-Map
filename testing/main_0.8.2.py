@@ -927,7 +927,7 @@ class RBCCommunityMap(QMainWindow):
         refresh_button.setIconSize(QSize(30, 30))
         refresh_button.setFixedSize(30, 30)
         refresh_button.setStyleSheet("background-color: transparent; border: none;")
-        refresh_button.clicked.connect(self.website_frame.reload)
+        refresh_button.clicked.connect(lambda: self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl')))
         self.browser_controls_layout.addWidget(refresh_button)
 
         # Set spacing between buttons to make them closer together
@@ -1074,7 +1074,7 @@ class RBCCommunityMap(QMainWindow):
 
         refresh_button = QPushButton('Refresh')
         refresh_button.setFixedSize(button_size, 25)
-        refresh_button.clicked.connect(self.refresh_webview)
+        refresh_button.clicked.connect(lambda: self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl')))
         action_layout.addWidget(refresh_button)
 
         discord_button = QPushButton('Discord')
