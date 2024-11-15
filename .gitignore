@@ -15,3 +15,5 @@ qodana.yaml
 /Version Control/__pycache__
 testing/secret.key
 testing/fernet_key.py
+/Version Control/__pycache__
+Version Control/__pycache__/variables.cpython-312.pyc
