@@ -1,20 +1,17 @@
-
-testing/characters.pkl
-testing/Cookies
-testing/sessions/active_user.pkl
-testing/sessions/users.pkl
-testing/sessions/users.pkl
 /testing/logs
+/testing/sessions
 /logs
 /sessions
-testing/cookies.pkl
-/testing/sessions
 qodana.yaml
 *.yaml
-/.idea
 /.idea
 /Version Control/__pycache__
 /settings
 /testing/settings
 /MySQL Dump
 /Distributions
+/Distributions/*
+/Distributions
+/Version Control/__pycache__
+testing/secret.key
+testing/fernet_key.py
