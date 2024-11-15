@@ -1760,24 +1760,19 @@ class RBCCommunityMap(QMainWindow):
             # Extract coordinates for the minimap
             x_coord, y_coord = self.extract_coordinates_from_html(html)
             if x_coord is not None and y_coord is not None:
-                # Apply specific offsets based on zoom level
-                if self.zoom_level == 3:
-                    offset = 0  # No offset needed for 3x3
-                elif self.zoom_level == 5:
-                    offset = -1  # Offset by -1 for 5x5
-                elif self.zoom_level == 7:
-                    offset = -2  # Offset by -2 for 7x7
-                else:
-                    offset = -(self.zoom_level // 2)  # Default case if needed
+                # Set character coordinates directly
+                self.character_x, self.character_y = x_coord, y_coord
+                logging.debug(f"Set character coordinates to x={self.character_x}, y={self.character_y}")
 
-                # Apply the calculated offset to center the minimap
-                self.column_start = x_coord + offset
-                self.row_start = y_coord + offset
-                self.update_minimap()
+                # Call recenter_minimap to update the minimap based on character's position
+                self.recenter_minimap()
 
             # Call the method to extract bank coins and pocket changes from the HTML
             self.extract_coins_from_html(html)
             logging.debug("HTML processed successfully for coordinates and coin count.")
+
+        except Exception as e:
+            logging.error(f"Unexpected error in process_html: {e}")
 
         except Exception as e:
             logging.error(f"Unexpected error in process_html: {e}")
@@ -1799,7 +1794,10 @@ class RBCCommunityMap(QMainWindow):
         x_input = soup.find('input', {'name': 'x'})
         y_input = soup.find('input', {'name': 'y'})
         if x_input and y_input:
-            return int(x_input['value']), int(y_input['value'])
+            x_value = int(x_input['value'])
+            y_value = int(y_input['value'])
+            logging.debug(f"Extracted coordinates from input fields: x={x_value}, y={y_value}")
+            return x_value, y_value
 
         current_location_td = soup.find('td', {'class': 'street', 'style': 'border: solid 1px white;'})
 
@@ -1808,8 +1806,10 @@ class RBCCommunityMap(QMainWindow):
             if form:
                 x_value = int(form.find('input', {'name': 'x'})['value'])
                 y_value = int(form.find('input', {'name': 'y'})['value'])
+                logging.debug(f"Extracted coordinates from form: x={x_value}, y={y_value}")
                 return x_value, y_value
 
+        logging.debug("No coordinates found in the HTML content.")
         return None, None
 
     def extract_coins_from_html(self, html):
@@ -1971,6 +1971,9 @@ class RBCCommunityMap(QMainWindow):
         # Calculate font metrics for centering text
         font_metrics = QFontMetrics(font)
 
+        logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "
+                      f"zoom_level={self.zoom_level}, block_size={block_size}")
+
         def draw_location(column_index, row_index, color, label_text=None):
             """
             Draws a location on the minimap with dynamic scaling and border.
@@ -1983,6 +1986,8 @@ class RBCCommunityMap(QMainWindow):
             """
             x0 = (column_index - self.column_start) * block_size
             y0 = (row_index - self.row_start) * block_size
+            logging.debug(f"Drawing location at column_index={column_index}, row_index={row_index}, "
+                          f"x0={x0}, y0={y0}")
 
             # Draw a smaller rectangle within the cell
             inner_margin = block_size // 4
@@ -2008,6 +2013,8 @@ class RBCCommunityMap(QMainWindow):
                 row_index = self.row_start + i
 
                 x0, y0 = j * block_size, i * block_size
+                logging.debug(f"Drawing grid cell at column_index={column_index}, row_index={row_index}, "
+                              f"x0={x0}, y0={y0}")
 
                 # Draw the cell background
                 painter.setPen(QColor('white'))
@@ -2017,8 +2024,7 @@ class RBCCommunityMap(QMainWindow):
                 row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index < min(self.columns.values()) or column_index > max(self.columns.values()) or \
-                        row_index < min(self.rows.values()) or row_index > max(self.rows.values()):
+                if column_index <= -1 or column_index >= 201 or row_index <= -1 or row_index >= 201:
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -2052,50 +2058,42 @@ class RBCCommunityMap(QMainWindow):
                 # Adjust bank coordinates by +1 to match the tavern and transit coordinate system
                 adjusted_column_index = column_index + 1
                 adjusted_row_index = row_index + 1
-                logging.debug(
-                    f"Drawing bank at {col_name} & {row_name} with coordinates ({adjusted_column_index}, {adjusted_row_index})")
                 draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing tavern '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["tavern"], name)
             else:
                 logging.warning(f"Skipping tavern '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.transits_coordinates.items():
             if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing transit '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["transit"], name)
             else:
                 logging.warning(f"Skipping transit '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing user building '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["user_building"], name)
             else:
                 logging.warning(f"Skipping user building '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing shop '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
             else:
                 logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing guild '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
             else:
                 logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
-                logging.debug(f"Drawing place of interest '{name}' at coordinates ({column_index}, {row_index})")
                 draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
             else:
                 logging.warning(f"Skipping place of interest '{name}' due to missing coordinates")
@@ -2111,8 +2109,6 @@ class RBCCommunityMap(QMainWindow):
         # Draw nearest tavern line
         if nearest_tavern:
             nearest_tavern_coords = nearest_tavern[0][1]
-            logging.debug(
-                f"Drawing line to nearest tavern at coordinates ({nearest_tavern_coords[0]}, {nearest_tavern_coords[1]})")
             painter.setPen(QPen(QColor('orange'), 3))  # Set pen color to orange and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
@@ -2124,8 +2120,6 @@ class RBCCommunityMap(QMainWindow):
         # Draw nearest bank line
         if nearest_bank:
             nearest_bank_coords = nearest_bank[0][1]
-            logging.debug(
-                f"Drawing line to nearest bank at coordinates ({nearest_bank_coords[0] + 1}, {nearest_bank_coords[1] + 1})")
             painter.setPen(QPen(QColor('blue'), 3))  # Set pen color to blue and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
@@ -2137,8 +2131,6 @@ class RBCCommunityMap(QMainWindow):
         # Draw nearest transit line
         if nearest_transit:
             nearest_transit_coords = nearest_transit[0][1]
-            logging.debug(
-                f"Drawing line to nearest transit at coordinates ({nearest_transit_coords[0]}, {nearest_transit_coords[1]})")
             painter.setPen(QPen(QColor('red'), 3))  # Set pen color to red and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
@@ -2149,7 +2141,6 @@ class RBCCommunityMap(QMainWindow):
 
         # Draw destination line
         if self.destination:
-            logging.debug(f"Drawing line to destination at coordinates ({self.destination[0]}, {self.destination[1]})")
             painter.setPen(QPen(QColor('green'), 3))  # Set pen color to green and width to 3
             painter.drawLine(
                 (current_x - self.column_start) * block_size + block_size // 2,
@@ -2308,9 +2299,13 @@ class RBCCommunityMap(QMainWindow):
         # Calculate the center offset based on the current zoom level
         center_offset = (self.zoom_level - 1) // 2
 
-        # Set `column_start` and `row_start` to keep the character centered
-        self.column_start = max(self.character_x - center_offset, 0)
-        self.row_start = max(self.character_y - center_offset, 0)
+        # Set `column_start` and `row_start` to keep the character centered, clamping to map boundaries
+        self.column_start = max(-1, min(self.character_x - center_offset, 201 - self.zoom_level + 1))
+        self.row_start = max(-1, min(self.character_y - center_offset, 201 - self.zoom_level + 1))
+
+        # Log the values for debugging
+        logging.debug(f"Recentered minimap: character_x={self.character_x}, character_y={self.character_y}, "
+                      f"column_start={self.column_start}, row_start={self.row_start}")
 
         # Update the minimap display after recentering
         self.update_minimap()
@@ -2327,12 +2322,18 @@ class RBCCommunityMap(QMainWindow):
 
         if column_name in self.columns:
             self.column_start = self.columns[column_name] - self.zoom_level // 2
+            logging.debug(f"Set column_start to {self.column_start} for column '{column_name}'")
+        else:
+            logging.error(f"Column '{column_name}' not found in self.columns")
 
         if row_name in self.rows:
             self.row_start = self.rows[row_name] - self.zoom_level // 2
+            logging.debug(f"Set row_start to {self.row_start} for row '{row_name}'")
+        else:
+            logging.error(f"Row '{row_name}' not found in self.rows")
 
-        # Recenter and update the minimap after setting the new location
-        self.recenter_minimap()
+        # Update the minimap after setting the new location
+        self.update_minimap()
 
     def open_set_destination_dialog(self):
         """
@@ -2602,8 +2603,8 @@ class RBCCommunityMap(QMainWindow):
         credits_dialog.exec()
 
     # -----------------------
-# Database Viewer Class
-# -----------------------
+    # Database Viewer Class
+    # -----------------------
     def open_database_viewer(self):
         """
         Open the database viewer to browse and inspect data from the RBC City Map database.
