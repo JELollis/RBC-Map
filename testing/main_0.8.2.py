@@ -915,7 +915,7 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(back_button)
 
         forward_button = QPushButton()
-        forward_button.setIcon(QIcon('./images/forward.png'))
+        forward_button.setIcon(QIcon('images/forward.png'))
         forward_button.setIconSize(QSize(30, 30))
         forward_button.setFixedSize(30, 30)
         forward_button.setStyleSheet("background-color: transparent; border: none;")
@@ -923,7 +923,7 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(forward_button)
 
         refresh_button = QPushButton()
-        refresh_button.setIcon(QIcon('./images/refresh.png'))
+        refresh_button.setIcon(QIcon('images/refresh.png'))
         refresh_button.setIconSize(QSize(30, 30))
         refresh_button.setFixedSize(30, 30)
         refresh_button.setStyleSheet("background-color: transparent; border: none;")
