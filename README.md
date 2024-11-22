@@ -1,6 +1,10 @@
 # RBC City Map Application
 
-This project is an attempt to create an interactive map coded in Python for use with **Vampires, The Dark Alleyway** located at [RavenBlack City](https://quiz.ravenblack.net/blood.pl).
+This project is an attempt to create an interactive map coded in Python for use with **Vampires, The Dark Alleyway**, located at [RavenBlack City](https://quiz.ravenblack.net/blood.pl).
+
+![Main Application](Screenshots/Main%20Application.png "Main Application")
+
+---
 
 ## Goals
 
@@ -10,10 +14,7 @@ This project is an attempt to create an interactive map coded in Python for use 
      - **Red Line**: Drawn to the nearest transit station.
      - **Blue Line**: Drawn to the nearest bank.
      - **Orange Line**: Drawn to the nearest pub.
-     - **Closest Locations**: Easily find the closest, second closest, or third closest locations by clicking the appropriate "closest" level button.
-   - **User Buildings**: Indicate user-specific buildings on the grid.
-   - **Moving Buildings**: Track and indicate moving buildings.
-   - **Zoom Levels**: The map can zoom in or out to display a 3x3 (default), 5x5, 7x7, or 9x9 grid around the player’s position.
+   - **Zoom Levels**: Display a 3x3 (default), 5x5, 7x7, or 9x9 grid around the player’s position.
    - **Manual Centering**:
      - **Click to Center**: Click on a square in the minimap grid to center it.
      - **Dropdown Selection**: Select a location using the dropdowns below the map and click "Go" to center the minimap on that location.
@@ -21,53 +22,93 @@ This project is an attempt to create an interactive map coded in Python for use 
      - **Manual Centering**: Manually center the map on a destination.
      - **Set Destination**: Click "Set Destination" to mark the destination on the map.
      - **Green Line**: Paints a green line on the map to the destination.
+   - **Customizable Themes**: Personalize the minimap and interface themes for a more customized experience.
 
-### 2) Website Features
-   - **Add New Buildings**: Allow users to add new buildings to the map.
-   - **Track Moving Buildings**: Track the movement of buildings such as guilds.
-   - **Target Tracking**: Track specific targets like hunters.
+![Minimap Theme](Screenshots/Minimap%20Theme.png "Minimap Theme")
 
-### 3) Character Management
+---
+
+### 2) Character Management
    - **Quick Switch**: Store login credentials to quickly and easily switch between characters.
    - **Local Data Storage**:
-     - User data is stored in a local binary file generated using Python's `pickle` module.
-     - No user data is stored on the server at any time for any reason.
+     - User data is securely stored in a local SQLite database.
+     - No user data is stored on external servers.
 
-### 4) Backend Storage
-   - **MySQL Database**: All app data is stored in a MySQL backend.
+![New User Dialog](Screenshots/New%20User%20Dialog.png "New User Dialog")
+
+---
+
+### 3) Shopping List Tool
+   - Create and manage shopping lists for in-game items.
+   - Automatically calculate total costs for required items.
+   - View available coins and plan purchases accordingly.
+
+![Shopping List Tool](Screenshots/Shopping%20List%20Tool.png "Shopping List Tool")
+
+---
+
+### 4) Database Viewer
+   - A utility to interact with the underlying data tables.
+   - Provides detailed views and management options for advanced users.
+
+![Database Viewer](Screenshots/Database%20Viewer.png "Database Viewer")
+
+---
+
+### 5) Damage Calculator
+   - Calculate the amount of damage needed to reduce a target to staking level.
+   - Analyze various combinations of items and their effects.
+
+![Damage Calculator](Screenshots/Damage%20Calculator.png "Damage Calculator")
+
+---
+
+### 6) Power Information
+   - View detailed information about the powers available in the game, including their descriptions, costs, and effects.
+
+![Power Information](Screenshots/Power%20Information.png "Power Information")
+
+---
+
+### 7) Interface and Theme Customization
+   - Customize the application's interface with personalized themes, including the minimap and main interface elements.
+
+![Interface Theme](Screenshots/Interface%20Theme.png "Interface Theme")
+
+---
+
+## Recent Updates (v0.9.0)
+
+- **Zoom Level Persistence**: The application now saves the zoom level and restores it on startup.
+- **Minimap Edge Fixes**: Improved handling of edge cases where coordinates align with map boundaries.
+- **Theme Customization**: Enhanced customization options for themes and improved UI elements.
+- **Uninstaller Improvements**: Installer and uninstaller have been upgraded for better file handling and directory cleanup.
 
 ---
 
 ## Development
 
-Currently, multiple versions are being worked on simultaneously. Feature testing is located in the "testing" folder.
+This project is hosted on GitHub: [RBC-Map GitHub Repository](https://github.com/JELollis/RBC-Map). Contributions and feedback are always welcome!
 
-### Credits
+### License
+The RBC City Map Application is licensed under the Apache License 2.0. See the `LICENSE` file for full terms.
 
-This project is based on the original idea from the player "Leprichaun," who created the program LIAM2. Full credit goes to them for inspiring this project. Visit [LIAM2](https://liam2.leprichaunproductions.com/) for more information.
+---
 
 ### Contributors
-- **Windows Compatibility**: Jonathan Lollis, Justin Solivan
+
+#### Development Team:
+- **Windows Compatibility**: Jonathan Lollis (Nesmuth), Justin Solivan
 - **Apple OSx Compatibility**: Joseph Lemois
-- **Linux Compatibility**: Blaskewitts, Fern Lovebond
-- **Design and Layout**: Shuvi, Blair Wilson
+- **Linux Compatibility**: Josh "Blaskewitts" Corse, Fern Lovebond
+- **Design and Layout**: Shuvi, Blair Wilson (Ikunnaprinsess)
+
+#### Special Thanks:
+- Cain "Leprechaun" McBride for the **LIAM²** program, which inspired this project.
+- Cliff Burton for **A View in the Dark**, the source for shops and guilds data.
+- Everyone contributing to the **RavenBlack Wiki** and **A View in the Dark**.
+- Anders for **RBNav** and support throughout development.
 
 ---
 
-## New Features in Recent Versions
-
-### Character Management
-- Added features to manage multiple characters within the application, including adding, modifying, and deleting characters. Character data is stored securely using the `pickle` module.
-
-### Theme Customization
-- Introduced theme customization options allowing users to personalize the application's appearance. Users can save and load their theme settings, offering a more personalized experience.
-
-### Database Viewer
-- A new database viewer utility has been added for advanced users. This feature allows direct interaction with the underlying data tables, providing detailed views and management options.
-
-### Scraping and Data Updates (v0.7.3)
-- Automated scraping and data updates for guilds and shops when the "Update Data" button is clicked. The scraping process now runs before updating comboboxes with the latest data.
-
----
-
-This README provides a comprehensive overview of the RBC City Map Application, its goals, features, and recent updates. For any further development, refer to the "testing" folder for feature testing and exploration.
+We hope this tool enhances your experience in RavenBlack City. Thank you for using the RBC City Map application!
