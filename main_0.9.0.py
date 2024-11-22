@@ -1,77 +1,79 @@
 #!/usr/bin/env python3
-# Filename: main_0.8.2
+# Filename: main_0.9.0
 
 """
 =========================
-RBC Community Map Application
+RBC City Map Application
 =========================
-The RBC Community Map Application provides a graphical interface for navigating
-the city map of RavenBlack City. It includes features such as zooming, setting and saving destinations,
-viewing points of interest (such as banks, taverns, and guilds), managing user characters, and calculating
-damage required to defeat targets with specific blood point (BP) levels.
-
-Map data is dynamically fetched from an SQLite database, with some components refreshed via web scraping.
-
-Main Features:
-- Zooming in and out of the map with dynamic label adjustments.
-- Setting, saving, and loading destinations with AP cost calculation.
-- Viewing closest points of interest, including banks, taverns, and transits.
-- Managing multiple user characters, with automatic login for the last active character.
-- Persistent sessions and cookies managed via an SQLite database.
-- Coin and bank balance tracking with automatic updates based on in-game actions.
-- Customizable themes, including colors for UI and minimap components.
-- Damage Calculator: A tool for determining the quantity and cost of weapons needed to reduce a target's BP to zero.
-  - Uses Vial of Holy Water, Garlic Spray, and Wooden Stake, based on BP thresholds.
-  - Prices vary by charisma level, with dynamic cost calculation based on target BP.
+This application provides a comprehensive graphical interface for viewing and navigating
+the city map of RavenBlack City. It includes features such as zooming in and out, setting
+and saving destinations, viewing the closest points of interest, managing user characters,
+customizing the application theme, and dynamically interacting with map data. The map data
+is stored and managed using an SQLite database, with support for refreshing data scraped
+from the 'A View in the Dark' website.
 
 Modules:
 - sys: Provides access to system-specific parameters and functions.
-- os: Used for interacting with the operating system (e.g., directory and file management).
+- os: Used for interacting with the operating system (e.g., file and directory management).
 - pickle: Facilitates the serialization and deserialization of Python objects.
-- sqlite3: Interface for SQLite database management, used for session data, cookies, coins, and theme settings.
 - requests: Allows sending HTTP requests to interact with external websites.
-- re: Provides regular expression matching operations, useful for HTML parsing.
+- re: Provides regular expression matching operations.
 - datetime: Supplies classes for manipulating dates and times.
 - bs4 (BeautifulSoup): Used for parsing HTML and XML documents.
-- PySide6: Provides Python bindings for the Qt application framework, including UI components.
-- PySide6.QtWebEngineWidgets: Provides web view functionality to render in-game pages.
+- PySide6: Provides a set of Python bindings for the Qt application framework.
+- sqlite3: Interface for SQLite database management.
+- webbrowser: Enables the opening of URLs in the default web browser.
+- math: Provides mathematical functions used in damage calculations.
+- logging: Used for logging debug, information, warning, and error messages.
 
 Classes:
-- RBCCommunityMap: The main application class, responsible for initializing and managing the user interface,
-  web scraping, character management, and map functionalities.
-- DatabaseViewer: Displays the contents of SQLite database tables in a tabbed view for inspection.
-- CharacterDialog: A dialog class for adding, modifying, or deleting user characters.
-- ThemeCustomizationDialog: A dialog class that allows users to customize the application's theme.
-- SetDestinationDialog: A dialog class for setting destinations on the map.
-- AVITDScraper: A web scraper class for fetching and updating data for guilds and shops from 'A View in the Dark'.
-- DamageCalculator: A dialog-based tool for calculating the hits and costs needed to bring a target’s BP to zero,
-  considering charisma level discounts and optimized weapon usage (Holy Water, Garlic Spray, Wooden Stake).
+- RBCCommunityMap: The main application class that initializes and manages the user interface,
+  character management, web scraping, shopping list generation, minimap functionalities, and theme customization.
+- DatabaseViewer: A utility class that displays the contents of database tables in a tabbed view.
+- CharacterDialog: A dialog class for adding or modifying user characters.
+- ThemeCustomizationDialog: A dialog class for customizing the application theme.
+- SetDestinationDialog: A dialog class for setting a destination on the map.
+- AVITDScraper: A scraper class that fetches data from 'A View in the Dark' to update guilds
+  and shops data in the database.
+- ShoppingListTool: A tool for generating shopping lists, including calculating total costs
+  based on selected items and character conditions.
+- CoinScraper: A class responsible for scraping the current coin count from the character's
+  webpage and updating the database with the available coins.
+- DamageCalculator: A class for calculating damage dealt to characters based on their blood points (BP).
+- DamageCalculatorUI: A user interface for the DamageCalculator, allowing users to calculate
+  and analyze damage and optionally add required items to the shopping list.
 
-Key Functions:
-- connect_to_database: Establishes a connection to the SQLite database and handles connection errors.
-- load_data: Loads map data from the SQLite database, including coordinates for banks, taverns, transits, shops, and guilds.
-- initialize_cookie_db: Sets up an SQLite database for managing cookies.
-- save_cookie_to_db: Saves individual cookies from web sessions to the SQLite database.
-- load_cookies_from_db: Loads cookies from the SQLite database into the web engine for persistent sessions.
+Functions:
+- initialize_database: Sets up the SQLite database for storing map data, character data, settings, and cookies.
+- save_cookie_to_db: Saves individual cookies to the SQLite database.
+- load_cookies_from_db: Loads cookies from the SQLite database into the web engine.
 - clear_cookie_db: Clears all cookies from the SQLite database.
-- fetch_table_data: Retrieves column names and data from a specified SQLite database table.
-- extract_coordinates_from_html: Extracts in-game map coordinates from loaded HTML content.
-- find_nearest_location: Finds the nearest point of interest based on a set of coordinates.
-- calculate_ap_cost: Calculates the Action Point (AP) cost between two locations on the map.
-- update_guilds: Scrapes and updates guilds data in the SQLite database.
-- update_shops: Scrapes and updates shops data in the SQLite database.
-- get_next_update_times: Retrieves the next update times for guilds and shops from the database.
-- inject_console_logging: Injects JavaScript into web pages to capture and log console messages.
-- apply_theme: Applies the selected theme to the application UI components.
-- save_theme_settings: Saves customized theme settings to the SQLite database.
-- load_theme_settings: Loads saved theme settings from the SQLite database.
-- show_about_dialog: Displays an 'About' dialog with details about the application and its version.
-- show_credits_dialog: Displays a scrolling 'Credits' dialog with contributors to the project.
-- calculate_damage (DamageCalculator): Calculates the quantity and cost of weapons required to reduce a target's BP
-  based on current BP and charisma level, applying the most cost-effective weapon strategy.
+- fetch_table_data: Retrieves and returns the column names and data from a specified database table.
+- extract_coordinates_from_html: Extracts map coordinates from the loaded HTML content.
+- process_html: Updates map-related data such as character coordinates and coins using extracted HTML data.
+- find_nearest_location: Finds the nearest point of interest based on a given set of coordinates.
+- calculate_ap_cost: Calculates the Action Point (AP) cost between two map coordinates.
+- update_guilds: Updates the guilds data in the SQLite database using scraped data.
+- update_shops: Updates the shops data in the SQLite database using scraped data.
+- get_next_update_times: Retrieves the next update times for guilds and shops from the SQLite database.
+- inject_console_logging: Injects JavaScript into the web page to capture and log console messages.
+- apply_theme: Applies the currently selected theme to the application UI.
+- save_theme_settings: Saves the customized theme settings to the SQLite database.
+- load_theme_settings: Loads the saved theme settings from the SQLite database.
+- save_zoom_level_to_database: Saves the minimap zoom level to the SQLite database.
+- load_zoom_level_from_database: Loads the minimap zoom level from the SQLite database during application start.
+- show_about_dialog: Displays the 'About' dialog with information about the application.
+- show_credits_dialog: Displays the 'Credits' dialog with information about contributors.
+
+Key Features:
+- Dynamic minimap with zoom functionality, edge-case handling, and grid-based rendering.
+- Database-backed storage for settings, themes, character data, and cookies using SQLite.
+- Integration with 'A View in the Dark' for data scraping and updating in-game information.
+- Support for customizing themes and dynamically updating the application's appearance.
+- Ability to calculate damage dealt to characters and generate shopping lists based on in-game needs.
 
 To install all required modules, run the following command:
- pip install pymysql requests bs4 PySide6 PySide6-WebEngine
+ pip install requests bs4 PySide6 PySide6-WebEngine
 """
 
 import importlib.util
@@ -132,7 +134,7 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
     QTextEdit
 )
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
 from PySide6.QtCore import Slot as pyqtSlot
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -355,200 +357,207 @@ CREATE TABLE IF NOT EXISTS `userbuildings` (
 `Row` TEXT NOT NULL,
 PRIMARY KEY (`ID`)
 );
-INSERT OR IGNORE INTO \"banks\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (1,'Cedar','1st','OmniBank'),
- (2,'Despair','1st','OmniBank'),
- (3,'Uranium','1st','OmniBank'),
- (4,'Fir','2nd','OmniBank'),
- (5,'Oppression','2nd','OmniBank'),
- (6,'Kracken','3rd','OmniBank'),
- (7,'Dogwood','4th','OmniBank'),
- (8,'Yew','4th','OmniBank'),
- (9,'Malaise','4th','OmniBank'),
- (10,'Flint','5th','OmniBank'),
- (11,'Ivory','5th','OmniBank'),
- (12,'Kyanite','6th','OmniBank'),
- (13,'Kracken','7th','OmniBank'),
- (14,'Larch','7th','OmniBank'),
- (15,'Steel','7th','OmniBank'),
- (16,'Olive','9th','OmniBank'),
- (17,'Sorrow','9th','OmniBank'),
- (18,'Quail','10th','OmniBank'),
- (19,'Squid','10th','OmniBank'),
- (20,'Nervous','10th','OmniBank'),
- (21,'Pyrites','10th','OmniBank'),
- (22,'Raven','11th','OmniBank'),
- (23,'Tapir','11th','OmniBank'),
- (24,'Unicorn','11th','OmniBank'),
- (25,'Lead','11th','OmniBank'),
- (26,'Malachite','11th','OmniBank'),
- (27,'Quail','12th','OmniBank'),
- (28,'Buzzard','13th','OmniBank'),
- (29,'Kracken','13th','OmniBank'),
- (30,'Bleak','14th','OmniBank'),
- (31,'Knotweed','15th','OmniBank'),
- (32,'Raven','15th','OmniBank'),
- (33,'Fear','15th','OmniBank'),
- (34,'Gypsum','15th','OmniBank'),
- (35,'Juniper','16th','OmniBank'),
- (36,'Sycamore','16th','OmniBank'),
- (37,'Amethyst','16th','OmniBank'),
- (38,'Kracken','18th','OmniBank'),
- (39,'Quail','18th','OmniBank'),
- (40,'Ruby','18th','OmniBank'),
- (41,'Emerald','19th','OmniBank'),
- (42,'Pessimism','19th','OmniBank'),
- (43,'Juniper','20th','OmniBank'),
- (44,'Umbrella','20th','OmniBank'),
- (45,'Ennui','20th','OmniBank'),
- (46,'Lead','21st','OmniBank'),
- (47,'Zelkova','23rd','OmniBank'),
- (48,'Chagrin','23rd','OmniBank'),
- (49,'Torment','23rd','OmniBank'),
- (50,'Unctuous','23rd','OmniBank'),
- (51,'Squid','24th','OmniBank'),
- (52,'Pyrites','24th','OmniBank'),
- (53,'Vexation','24th','OmniBank'),
- (54,'Jaded','25th','OmniBank'),
- (55,'Beech','26th','OmniBank'),
- (56,'Quail','26th','OmniBank'),
- (57,'Octopus','27th','OmniBank'),
- (58,'Beryl','28th','OmniBank'),
- (59,'Qualms','28th','OmniBank'),
- (60,'Torment','28th','OmniBank'),
- (61,'Knotweed','29th','OmniBank'),
- (62,'Anguish','30th','OmniBank'),
- (63,'Ragweed','31st','OmniBank'),
- (64,'Ire','31st','OmniBank'),
- (65,'Steel','31st','OmniBank'),
- (66,'Torment','31st','OmniBank'),
- (67,'Ferret','32nd','OmniBank'),
- (68,'Malachite','32nd','OmniBank'),
- (69,'Larch','33rd','OmniBank'),
- (70,'Kracken','34th','OmniBank'),
- (71,'Maple','34th','OmniBank'),
- (72,'Gloom','34th','OmniBank'),
- (73,'Quail','36th','OmniBank'),
- (74,'Malaise','36th','OmniBank'),
- (75,'Obsidian','36th','OmniBank'),
- (76,'Duck','37th','OmniBank'),
- (77,'Nettle','37th','OmniBank'),
- (78,'Amethyst','37th','OmniBank'),
- (79,'Flint','37th','OmniBank'),
- (80,'Beech','39th','OmniBank'),
- (81,'Chagrin','39th','OmniBank'),
- (82,'Hessite','39th','OmniBank'),
- (83,'Alder','40th','OmniBank'),
- (84,'Quail','41st','OmniBank'),
- (85,'Tapir','41st','OmniBank'),
- (86,'Pine','42nd','OmniBank'),
- (87,'Ire','42nd','OmniBank'),
- (88,'Jackal','43rd','OmniBank'),
- (89,'Vulture','43rd','OmniBank'),
- (90,'Unctuous','43rd','OmniBank'),
- (91,'Pilchard','44th','OmniBank'),
- (92,'Pine','44th','OmniBank'),
- (93,'Pessimism','44th','OmniBank'),
- (94,'Woe','44th','OmniBank'),
- (95,'Kracken','45th','OmniBank'),
- (96,'Yak','45th','OmniBank'),
- (97,'Flint','45th','OmniBank'),
- (98,'Ruby','45th','OmniBank'),
- (99,'Haddock','46th','OmniBank'),
- (100,'Cobalt','46th','OmniBank'),
- (101,'Flint','47th','OmniBank'),
- (102,'Kracken','48th','OmniBank'),
- (103,'Quince','48th','OmniBank'),
- (104,'Jaded','48th','OmniBank'),
- (105,'Sorrow','48th','OmniBank'),
- (106,'Uranium','48th','OmniBank'),
- (107,'Horror','49th','OmniBank'),
- (108,'Malaise','50th','OmniBank'),
- (109,'Cedar','52nd','OmniBank'),
- (110,'Haddock','52nd','OmniBank'),
- (111,'Ire','53rd','OmniBank'),
- (112,'Ragweed','56th','OmniBank'),
- (113,'Qualms','57th','OmniBank'),
- (114,'Quail','58th','OmniBank'),
- (115,'Horror','59th','OmniBank'),
- (116,'Pilchard','60th','OmniBank'),
- (117,'Teasel','60th','OmniBank'),
- (118,'Quince','61st','OmniBank'),
- (119,'Eagle','64th','OmniBank'),
- (120,'Steel','64th','OmniBank'),
- (121,'Beryl','65th','OmniBank'),
- (122,'Teasel','66th','OmniBank'),
- (123,'Haddock','67th','OmniBank'),
- (124,'Nettle','67th','OmniBank'),
- (125,'Vauxite','68th','OmniBank'),
- (126,'Ivy','70th','OmniBank'),
- (127,'Regret','70th','OmniBank'),
- (128,'Octopus','71st','OmniBank'),
- (129,'Gloom','71st','OmniBank'),
- (130,'Ivory','71st','OmniBank'),
- (131,'Jaded','71st','OmniBank'),
- (132,'Haddock','74th','OmniBank'),
- (133,'Quail','74th','OmniBank'),
- (134,'Zinc','74th','OmniBank'),
- (135,'Despair','75th','OmniBank'),
- (136,'Quartz','75th','OmniBank'),
- (137,'Qualms','75th','OmniBank'),
- (138,'Yearning','75th','OmniBank'),
- (139,'Hessite','76th','OmniBank'),
- (140,'WCL','77th','OmniBank'),
- (141,'Duck','77th','OmniBank'),
- (142,'Octopus','77th','OmniBank'),
- (143,'Mongoose','78th','OmniBank'),
- (144,'Unicorn','78th','OmniBank'),
- (145,'Ennui','78th','OmniBank'),
- (146,'Ivy','79th','OmniBank'),
- (147,'Mongoose','79th','OmniBank'),
- (148,'Raven','79th','OmniBank'),
- (149,'Obsidian','79th','OmniBank'),
- (150,'Alder','80th','OmniBank'),
- (151,'Cedar','80th','OmniBank'),
- (152,'Lion','80th','OmniBank'),
- (153,'Umbrella','80th','OmniBank'),
- (154,'Cobalt','81st','OmniBank'),
- (155,'Aardvark','82nd','OmniBank'),
- (156,'Vulture','82nd','OmniBank'),
- (157,'Yak','82nd','OmniBank'),
- (158,'Maple','84th','OmniBank'),
- (159,'Willow','84th','OmniBank'),
- (160,'Maple','85th','OmniBank'),
- (161,'Woe','85th','OmniBank'),
- (162,'Malachite','87th','OmniBank'),
- (163,'Pessimism','87th','OmniBank'),
- (164,'Haddock','88th','OmniBank'),
- (165,'Cobalt','88th','OmniBank'),
- (166,'Lead','88th','OmniBank'),
- (167,'Eagle','89th','OmniBank'),
- (168,'Gloom','89th','OmniBank'),
- (169,'Oppression','89th','OmniBank'),
- (170,'Ferret','90th','OmniBank'),
- (171,'Emerald','90th','OmniBank'),
- (172,'Gloom','90th','OmniBank'),
- (173,'Pyrites','90th','OmniBank'),
- (174,'Larch','91st','OmniBank'),
- (175,'Mongoose','91st','OmniBank'),
- (176,'Anguish','91st','OmniBank'),
- (177,'Vauxite','91st','OmniBank'),
- (178,'Teasel','92nd','OmniBank'),
- (179,'Yearning','92nd','OmniBank'),
- (180,'Cormorant','93rd','OmniBank'),
- (181,'Lonely','93rd','OmniBank'),
- (182,'Nickel','93rd','OmniBank'),
- (183,'Uranium','93rd','OmniBank'),
- (184,'Yak','94th','OmniBank'),
- (185,'Holly','96th','OmniBank'),
- (186,'Ire','97th','OmniBank'),
- (187,'Uranium','97th','OmniBank'),
- (188,'Elm','98th','OmniBank'),
- (189,'Juniper','98th','OmniBank'),
- (190,'Raven','98th','OmniBank'),
- (191,'Olive','99th','OmniBank'),
- (192,'Amethyst','99th','OmniBank'),
- (193,'Emerald','99th','OmniBank');
-INSERT OR IGNORE INTO \"color_mappings\" (\"id\",\"type\",\"color\") VALUES (1,'bank','blue'),
+INSERT OR IGNORE INTO `banks` ("ID","Column","Row","Name") VALUES (1,'Aardvark','82nd','OmniBank'),
+ (2,'Alder','40th','OmniBank'),
+ (3,'Alder','80th','OmniBank'),
+ (4,'Amethyst','16th','OmniBank'),
+ (5,'Amethyst','37th','OmniBank'),
+ (6,'Amethyst','99th','OmniBank'),
+ (7,'Anguish','30th','OmniBank'),
+ (8,'Anguish','73rd','OmniBank'),
+ (9,'Anguish','91st','OmniBank'),
+ (10,'Beech','26th','OmniBank'),
+ (11,'Beech','39th','OmniBank'),
+ (12,'Beryl','28th','OmniBank'),
+ (13,'Beryl','40th','OmniBank'),
+ (14,'Beryl','65th','OmniBank'),
+ (15,'Beryl','72nd','OmniBank'),
+ (16,'Bleak','14th','OmniBank'),
+ (17,'Buzzard','13th','OmniBank'),
+ (18,'Cedar','1st','OmniBank'),
+ (19,'Cedar','52nd','OmniBank'),
+ (20,'Cedar','80th','OmniBank'),
+ (21,'Chagrin','23rd','OmniBank'),
+ (22,'Chagrin','39th','OmniBank'),
+ (23,'Cobalt','46th','OmniBank'),
+ (24,'Cobalt','81st','OmniBank'),
+ (25,'Cobalt','88th','OmniBank'),
+ (26,'Cormorant','93rd','OmniBank'),
+ (27,'Despair','1st','OmniBank'),
+ (28,'Despair','75th','OmniBank'),
+ (29,'Dogwood','4th','OmniBank'),
+ (30,'Duck','37th','OmniBank'),
+ (31,'Duck','77th','OmniBank'),
+ (32,'Eagle','64th','OmniBank'),
+ (33,'Eagle','89th','OmniBank'),
+ (34,'Elm','98th','OmniBank'),
+ (35,'Emerald','19th','OmniBank'),
+ (36,'Emerald','90th','OmniBank'),
+ (37,'Emerald','99th','OmniBank'),
+ (38,'Ennui','20th','OmniBank'),
+ (39,'Ennui','78th','OmniBank'),
+ (40,'Fear','15th','OmniBank'),
+ (41,'Ferret','32nd','OmniBank'),
+ (42,'Ferret','90th','OmniBank'),
+ (43,'Fir','2nd','OmniBank'),
+ (44,'Flint','37th','OmniBank'),
+ (45,'Flint','45th','OmniBank'),
+ (46,'Flint','47th','OmniBank'),
+ (47,'Flint','5th','OmniBank'),
+ (48,'Gloom','34th','OmniBank'),
+ (49,'Gloom','71st','OmniBank'),
+ (50,'Gloom','89th','OmniBank'),
+ (51,'Gloom','90th','OmniBank'),
+ (52,'Haddock','46th','OmniBank'),
+ (53,'Haddock','52nd','OmniBank'),
+ (54,'Haddock','67th','OmniBank'),
+ (55,'Haddock','74th','OmniBank'),
+ (56,'Haddock','88th','OmniBank'),
+ (57,'Hessite','39th','OmniBank'),
+ (58,'Hessite','76th','OmniBank'),
+ (59,'Holly','96th','OmniBank'),
+ (60,'Horror','49th','OmniBank'),
+ (61,'Horror','59th','OmniBank'),
+ (62,'Ire','31st','OmniBank'),
+ (63,'Ire','42nd','OmniBank'),
+ (64,'Ire','53rd','OmniBank'),
+ (65,'Ire','97th','OmniBank'),
+ (66,'Ivory','5th','OmniBank'),
+ (67,'Ivory','71st','OmniBank'),
+ (68,'Ivy','70th','OmniBank'),
+ (69,'Ivy','79th','OmniBank'),
+ (70,'Ivy','NCL','OmniBank'),
+ (71,'Jackal','43rd','OmniBank'),
+ (72,'Jaded','25th','OmniBank'),
+ (73,'Jaded','48th','OmniBank'),
+ (74,'Jaded','71st','OmniBank'),
+ (75,'Juniper','16th','OmniBank'),
+ (76,'Juniper','20th','OmniBank'),
+ (77,'Juniper','98th','OmniBank'),
+ (78,'Knotweed','15th','OmniBank'),
+ (79,'Knotweed','29th','OmniBank'),
+ (80,'Kraken','13th','OmniBank'),
+ (81,'Kraken','18th','OmniBank'),
+ (82,'Kraken','34th','OmniBank'),
+ (83,'Kraken','3rd','OmniBank'),
+ (84,'Kraken','45th','OmniBank'),
+ (85,'Kraken','48th','OmniBank'),
+ (86,'Kraken','7th','OmniBank'),
+ (87,'Kyanite','40th','OmniBank'),
+ (88,'Kyanite','6th','OmniBank'),
+ (89,'Larch','33rd','OmniBank'),
+ (90,'Larch','7th','OmniBank'),
+ (91,'Larch','91st','OmniBank'),
+ (92,'Lead','11th','OmniBank'),
+ (93,'Lead','21st','OmniBank'),
+ (94,'Lead','88th','OmniBank'),
+ (95,'Lion','80th','OmniBank'),
+ (96,'Lonely','93rd','OmniBank'),
+ (97,'Malachite','11th','OmniBank'),
+ (98,'Malachite','32nd','OmniBank'),
+ (99,'Malachite','87th','OmniBank'),
+ (100,'Malaise','36th','OmniBank'),
+ (101,'Malaise','4th','OmniBank'),
+ (102,'Malaise','50th','OmniBank'),
+ (103,'Maple','34th','OmniBank'),
+ (104,'Maple','84th','OmniBank'),
+ (105,'Maple','85th','OmniBank'),
+ (106,'Mongoose','78th','OmniBank'),
+ (107,'Mongoose','79th','OmniBank'),
+ (108,'Mongoose','91st','OmniBank'),
+ (109,'Nervous','10th','OmniBank'),
+ (110,'Nettle','37th','OmniBank'),
+ (111,'Nettle','67th','OmniBank'),
+ (112,'Nickel','93rd','OmniBank'),
+ (113,'Obsidian','36th','OmniBank'),
+ (114,'Obsidian','79th','OmniBank'),
+ (115,'Octopus','27th','OmniBank'),
+ (116,'Octopus','71st','OmniBank'),
+ (117,'Octopus','77th','OmniBank'),
+ (118,'Olive','99th','OmniBank'),
+ (119,'Olive','9th','OmniBank'),
+ (120,'Oppression','2nd','OmniBank'),
+ (121,'Oppression','89th','OmniBank'),
+ (122,'Pessimism','19th','OmniBank'),
+ (123,'Pessimism','44th','OmniBank'),
+ (124,'Pessimism','87th','OmniBank'),
+ (125,'Pilchard','44th','OmniBank'),
+ (126,'Pilchard','60th','OmniBank'),
+ (127,'Pine','42nd','OmniBank'),
+ (128,'Pine','44th','OmniBank'),
+ (129,'Pyrites','11th','OmniBank'),
+ (130,'Pyrites','24th','OmniBank'),
+ (131,'Pyrites','90th','OmniBank'),
+ (132,'Quail','10th','OmniBank'),
+ (133,'Quail','12th','OmniBank'),
+ (134,'Quail','18th','OmniBank'),
+ (135,'Quail','26th','OmniBank'),
+ (136,'Quail','36th','OmniBank'),
+ (137,'Quail','41st','OmniBank'),
+ (138,'Quail','58th','OmniBank'),
+ (139,'Quail','74th','OmniBank'),
+ (140,'Qualms','28th','OmniBank'),
+ (141,'Qualms','57th','OmniBank'),
+ (142,'Qualms','75th','OmniBank'),
+ (143,'Quartz','75th','OmniBank'),
+ (144,'Quince','48th','OmniBank'),
+ (145,'Quince','61st','OmniBank'),
+ (146,'Ragweed','31st','OmniBank'),
+ (147,'Ragweed','56th','OmniBank'),
+ (148,'Raven','11th','OmniBank'),
+ (149,'Raven','15th','OmniBank'),
+ (150,'Raven','79th','OmniBank'),
+ (151,'Raven','98th','OmniBank'),
+ (152,'Regret','70th','OmniBank'),
+ (153,'Ruby','18th','OmniBank'),
+ (154,'Ruby','45th','OmniBank'),
+ (155,'Sorrow','48th','OmniBank'),
+ (156,'Sorrow','9th','OmniBank'),
+ (157,'Squid','10th','OmniBank'),
+ (158,'Squid','24th','OmniBank'),
+ (159,'Steel','31st','OmniBank'),
+ (160,'Steel','64th','OmniBank'),
+ (161,'Steel','7th','OmniBank'),
+ (162,'Sycamore','16th','OmniBank'),
+ (163,'Tapir','11th','OmniBank'),
+ (164,'Tapir','41st','OmniBank'),
+ (165,'Tapir','NCL','OmniBank'),
+ (166,'Teasel','60th','OmniBank'),
+ (167,'Teasel','66th','OmniBank'),
+ (168,'Teasel','92nd','OmniBank'),
+ (169,'Torment','23rd','OmniBank'),
+ (170,'Torment','28th','OmniBank'),
+ (171,'Torment','31st','OmniBank'),
+ (172,'Umbrella','20th','OmniBank'),
+ (173,'Umbrella','80th','OmniBank'),
+ (174,'Unctuous','23rd','OmniBank'),
+ (175,'Unctuous','43rd','OmniBank'),
+ (176,'Unicorn','11th','OmniBank'),
+ (177,'Unicorn','78th','OmniBank'),
+ (178,'Uranium','1st','OmniBank'),
+ (179,'Uranium','48th','OmniBank'),
+ (180,'Uranium','93rd','OmniBank'),
+ (181,'Uranium','97th','OmniBank'),
+ (182,'Vauxite','68th','OmniBank'),
+ (183,'Vauxite','91st','OmniBank'),
+ (184,'Vexation','24th','OmniBank'),
+ (185,'Vulture','43rd','OmniBank'),
+ (186,'Vulture','82nd','OmniBank'),
+ (187,'WCL','77th','OmniBank'),
+ (188,'Willow','84th','OmniBank'),
+ (189,'Woe','44th','OmniBank'),
+ (190,'Woe','85th','OmniBank'),
+ (191,'Yak','45th','OmniBank'),
+ (192,'Yak','82nd','OmniBank'),
+ (193,'Yak','94th','OmniBank'),
+ (194,'Yearning','75th','OmniBank'),
+ (195,'Yearning','93rd','OmniBank'),
+ (196,'Yew','4th','OmniBank'),
+ (197,'Zebra','61st','OmniBank'),
+ (198,'Zelkova','23rd','OmniBank'),
+ (199,'Zelkova','73rd','OmniBank'),
+ (200,'Zinc','74th','OmniBank');
+INSERT OR IGNORE INTO "color_mappings" ("id","type","color") VALUES (1,'bank','blue'),
  (2,'tavern','orange'),
  (3,'transit','red'),
  (4,'user_building','purple'),
@@ -564,145 +573,145 @@ INSERT OR IGNORE INTO \"color_mappings\" (\"id\",\"type\",\"color\") VALUES (1,'
  (15,'button_color','#b1b1b1'),
  (30,'set_destination','#1a7f7a'),
  (31,'set_destination_transit','#046380');
-INSERT OR IGNORE INTO \"columns\" (\"ID\",\"Name\",\"Coordinate\") VALUES (1,'WCL',0),
- (2,'Aardvark',1),
- (3,'Alder',3),
- (4,'Buzzard',5),
- (5,'Beech',7),
- (6,'Cormorant',9),
- (7,'Cedar',11),
- (8,'Duck',13),
- (9,'Dogwood',15),
- (10,'Eagle',17),
- (11,'Elm',19),
- (12,'Ferret',21),
- (13,'Fir',23),
- (14,'Gibbon',25),
- (15,'Gum',27),
- (16,'Haddock',29),
- (17,'Holly',31),
- (18,'Iguana',33),
- (19,'Ivy',35),
- (20,'Jackal',37),
- (21,'Juniper',39),
- (22,'Kracken',41),
- (23,'Knotweed',43),
- (24,'Lion',45),
- (25,'Larch',47),
- (26,'Mongoose',49),
- (27,'Maple',51),
- (28,'Nightingale',53),
- (29,'Nettle',55),
- (30,'Octopus',57),
- (31,'Olive',59),
- (32,'Pilchard',61),
- (33,'Pine',63),
- (34,'Quail',65),
- (35,'Quince',67),
- (36,'Raven',69),
- (37,'Ragweed',71),
- (38,'Squid',73),
- (39,'Sycamore',75),
- (40,'Tapir',77),
- (41,'Teasel',79),
- (42,'Unicorn',81),
- (43,'Umbrella',83),
- (44,'Vulture',85),
- (45,'Vervain',87),
- (46,'Walrus',89),
- (47,'Willow',91),
- (48,'Yak',93),
- (49,'Yew',95),
- (50,'Zebra',97),
- (51,'Zelkova',99),
- (52,'Amethyst',101),
- (53,'Anguish',103),
- (54,'Beryl',105),
- (55,'Bleak',107),
- (56,'Cobalt',109),
- (57,'Chagrin',111),
- (58,'Diamond',113),
- (59,'Despair',115),
- (60,'Emerald',117),
- (61,'Ennui',119),
- (62,'Flint',121),
- (63,'Fear',123),
- (64,'Gypsum',125),
- (65,'Gloom',127),
- (66,'Hessite',129),
- (67,'Horror',131),
- (68,'Ivory',133),
- (69,'Ire',135),
- (70,'Jet',137),
- (71,'Jaded',139),
- (72,'Kyanite',141),
- (73,'Killjoy',143),
- (74,'Lead',145),
- (75,'Lonely',147),
- (76,'Malachite',149),
- (77,'Malaise',151),
- (78,'Nickel',153),
- (79,'Nervous',155),
- (80,'Obsidian',157),
- (81,'Oppression',159),
- (82,'Pyrites',161),
- (83,'Pessimism',163),
- (84,'Quartz',165),
- (85,'Qualms',167),
- (86,'Ruby',169),
- (87,'Regret',171),
- (88,'Steel',173),
- (89,'Sorrow',175),
- (90,'Turquoise',177),
- (91,'Torment',179),
- (92,'Uranium',181),
- (93,'Unctuous',183),
- (94,'Vauxite',185),
- (95,'Vexation',187),
- (96,'Wulfenite',189),
- (97,'Woe',191),
- (98,'Yuksporite',193),
- (99,'Yearning',195),
- (100,'Zinc',197),
- (101,'Zestless',199),
- (102,'ECL',200),
- (103,'Western City Limits',0),
- (104,'Eastern City Limits',200);
-INSERT OR IGNORE INTO \"guilds\" (\"ID\",\"Name\",\"Column\",\"Row\",\"next_update\") VALUES (1,'Allurists Guild 1','','',''),
- (2,'Allurists Guild 2','','',''),
- (3,'Allurists Guild 3','','',''),
- (4,'Empaths Guild 1','','',''),
- (5,'Empaths Guild 2','','',''),
- (6,'Empaths Guild 3','','',''),
- (7,'Immolators Guild 1','','',''),
- (8,'Immolators Guild 2','','',''),
- (9,'Immolators Guild 3','','',''),
- (10,'Thieves Guild 1','','',''),
- (11,'Thieves Guild 2','','',''),
- (12,'Thieves Guild 3','','',''),
- (13,'Travellers Guild 1','','',''),
- (14,'Travellers Guild 2','','',''),
- (15,'Travellers Guild 3','','',''),
- (16,'Peacekkeepers Mission 1','Emerald','67th',''),
- (17,'Peacekkeepers Mission 2','Unicorn','33rd',''),
- (18,'Peacekkeepers Mission 3','Emerald','33rd','');
-INSERT OR IGNORE INTO \"placesofinterest\" (\"ID\",\"Name\",\"Column\",\"Row\") VALUES (1,'Battle Arena','Zelkova','52nd'),
+INSERT OR IGNORE INTO  "columns" ("ID","Name","Coordinate") VALUES 
+('1', 'WCL', '0'),
+('2', 'Western City Limits', '0'),
+('3', 'Aardvark', '2'),
+('4', 'Alder', '4'),
+('5', 'Buzzard', '6'),
+('6', 'Beech', '8'),
+('7', 'Cormorant', '10'),
+('8', 'Cedar', '12'),
+('9', 'Duck', '14'),
+('10', 'Dogwood', '16'),
+('11', 'Eagle', '18'),
+('12', 'Elm', '20'),
+('13', 'Ferret', '22'),
+('14', 'Fir', '24'),
+('15', 'Gibbon', '26'),
+('16', 'Gum', '28'),
+('17', 'Haddock', '30'),
+('18', 'Holly', '32'),
+('19', 'Iguana', '34'),
+('20', 'Ivy', '36'),
+('21', 'Jackal', '38'),
+('22', 'Juniper', '40'),
+('23', 'Kraken', '42'),
+('24', 'Knotweed', '44'),
+('25', 'Lion', '46'),
+('26', 'Larch', '48'),
+('27', 'Mongoose', '50'),
+('28', 'Maple', '52'),
+('29', 'Nightingale', '54'),
+('30', 'Nettle', '56'),
+('31', 'Octopus', '58'),
+('32', 'Olive', '60'),
+('33', 'Pilchard', '62'),
+('34', 'Pine', '64'),
+('35', 'Quail', '66'),
+('36', 'Quince', '68'),
+('37', 'Raven', '70'),
+('38', 'Ragweed', '72'),
+('39', 'Squid', '74'),
+('40', 'Sycamore', '76'),
+('41', 'Tapir', '78'),
+('42', 'Teasel', '80'),
+('43', 'Unicorn', '82'),
+('44', 'Umbrella', '84'),
+('45', 'Vulture', '86'),
+('46', 'Vervain', '88'),
+('47', 'Walrus', '90'),
+('48', 'Willow', '92'),
+('49', 'Yak', '94'),
+('50', 'Yew', '96'),
+('51', 'Zebra', '98'),
+('52', 'Zelkova', '100'),
+('53', 'Amethyst', '102'),
+('54', 'Anguish', '104'),
+('55', 'Beryl', '106'),
+('56', 'Bleak', '108'),
+('57', 'Cobalt', '110'),
+('58', 'Chagrin', '112'),
+('59', 'Diamond', '114'),
+('60', 'Despair', '116'),
+('61', 'Emerald', '118'),
+('62', 'Ennui', '120'),
+('63', 'Flint', '122'),
+('64', 'Fear', '124'),
+('65', 'Gypsum', '126'),
+('66', 'Gloom', '128'),
+('67', 'Hessite', '130'),
+('68', 'Horror', '132'),
+('69', 'Ivory', '134'),
+('70', 'Ire', '136'),
+('71', 'Jet', '138'),
+('72', 'Jaded', '140'),
+('73', 'Kyanite', '142'),
+('74', 'Killjoy', '144'),
+('75', 'Lead', '146'),
+('76', 'Lonely', '148'),
+('77', 'Malachite', '150'),
+('78', 'Malaise', '152'),
+('79', 'Nickel', '154'),
+('80', 'Nervous', '156'),
+('81', 'Obsidian', '158'),
+('82', 'Oppression', '160'),
+('83', 'Pyrites', '162'),
+('84', 'Pessimism', '164'),
+('85', 'Quartz', '166'),
+('86', 'Qualms', '168'),
+('87', 'Ruby', '170'),
+('88', 'Regret', '172'),
+('89', 'Steel', '174'),
+('90', 'Sorrow', '176'),
+('91', 'Turquoise', '178'),
+('92', 'Torment', '180'),
+('93', 'Uranium', '182'),
+('94', 'Unctuous', '184'),
+('95', 'Vauxite', '186'),
+('96', 'Vexation', '188'),
+('97', 'Wulfenite', '190'),
+('98', 'Woe', '192'),
+('99', 'Yuksporite', '194'),
+('100', 'Yearning', '196'),
+('101', 'Zinc', '198'),
+('102', 'Zestless', '200');
+INSERT OR IGNORE INTO  "guilds" ("ID","Name","Column","Row","next_update") VALUES (1,'Allurists Guild 1','Pessimism','66th','2024-11-22 19:00:02'),
+ (2,'Allurists Guild 2','Ruby','29th','2024-11-22 19:00:02'),
+ (3,'Allurists Guild 3','Jackal','47th','2024-11-22 19:00:02'),
+ (4,'Empaths Guild 1','Buzzard','23rd','2024-11-22 19:00:02'),
+ (5,'Empaths Guild 2','Buzzard','49th','2024-11-22 19:00:02'),
+ (6,'Empaths Guild 3','Squid','37th','2024-11-22 19:00:02'),
+ (7,'Immolators Guild 1','Quince','72nd','2024-11-22 19:00:02'),
+ (8,'Immolators Guild 2','Diamond','69th','2024-11-22 19:00:02'),
+ (9,'Immolators Guild 3','Lonely','65th','2024-11-22 19:00:02'),
+ (10,'Thieves Guild 1','Ruby','37th','2024-11-22 19:00:02'),
+ (11,'Thieves Guild 2','Olive','40th','2024-11-22 19:00:02'),
+ (12,'Thieves Guild 3','Ferret','33rd','2024-11-22 19:00:02'),
+ (13,'Travellers Guild 1','Unctuous','73rd','2024-11-22 19:00:02'),
+ (14,'Travellers Guild 2','Malachite','63rd','2024-11-22 19:00:02'),
+ (15,'Travellers Guild 3','Steel','16th','2024-11-22 19:00:02'),
+ (16,'Peacekkeepers Mission 1','Emerald','67th','2024-11-22 19:00:02'),
+ (17,'Peacekkeepers Mission 2','Unicorn','33rd','2024-11-22 19:00:02'),
+ (18,'Peacekkeepers Mission 3','Emerald','33rd','2024-11-22 19:00:02');
+INSERT OR IGNORE INTO  "placesofinterest" ("ID","Name","Column","Row") VALUES (1,'Battle Arena','Zelkova','52nd'),
  (2,'Hall of Binding','Vervain','40th'),
  (3,'Hall of Severance','Walrus','40th'),
  (4,'The Graveyard','Larch','50th'),
  (5,'Cloister of Secrets','Gloom','1st'),
- (6,'Eternal Aubade of Mystical Treasures','Zelkova','47th');
-INSERT OR IGNORE INTO \"powers\" (\"power_id\",\"name\",\"guild\",\"cost\",\"quest_info\",\"skill_info\") VALUES (1,'Battle Cloak','Any Peacekeeper''s Mission',2000,'None','Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
+ (6,'Eternal Aubade of Mystical Treasures','Zelkova','47th'),
+ (7,'Kindred Hospital','Woe','13th');
+INSERT OR IGNORE INTO  "powers" ("power_id","name","guild","cost","quest_info","skill_info") VALUES (1,'Battle Cloak','Any Peacekeeper''s Mission',2000,'None','Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
  (2,'Celerity 1','Travellers Guild 1',4000,'Bring items to 3 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
  (3,'Celerity 2','Travellers Guild 2',8000,'Bring items to 6 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
  (4,'Celerity 3','Travellers Guild 3',17500,'Bring items to 12 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (15 minutes/AP).'),
- (5,'Charisma 1','Allurists Guild 1',1000,'Convince 3 vampires to visit a specific pub and say \"VampName sent me\".','Shop prices reduced by 3%.'),
- (6,'Charisma 2','Allurists Guild 2',3000,'Convince 6 vampires to visit a specific pub and say \"VampName sent me\".','Shop prices reduced by 7%.'),
- (7,'Charisma 3','Allurists Guild 3',5000,'Convince 9 vampires to visit a specific pub and say \"VampName sent me\".','Shop prices reduced by 10%, with an additional coin discount on each item.'),
- (8,'Locate 1','Empaths Guild 1',1500,'Visit specific locations, say \"Check-Point\", and drain 10 BP per location.','You can now determine the distance to a specific vampire.'),
- (9,'Locate 2','Empaths Guild 2',4000,'Visit specific locations, say \"Check-Point\", and drain 15 BP per location.','Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
- (10,'Locate 3','Empaths Guild 3',15000,'Visit specific locations, say \"Check-Point\", and drain 25 BP per location.','Locate 3 reveals the exact street intersection of the vampire.'),
- (11,'Neutrality 1','Peacekeeper''s Mission 1',10000,'None','Neutrality designates a vampire as \"non-violent\", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
+ (5,'Charisma 1','Allurists Guild 1',1000,'Convince 3 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 3%.'),
+ (6,'Charisma 2','Allurists Guild 2',3000,'Convince 6 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 7%.'),
+ (7,'Charisma 3','Allurists Guild 3',5000,'Convince 9 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 10%, with an additional coin discount on each item.'),
+ (8,'Locate 1','Empaths Guild 1',1500,'Visit specific locations, say "Check-Point", and drain 10 BP per location.','You can now determine the distance to a specific vampire.'),
+ (9,'Locate 2','Empaths Guild 2',4000,'Visit specific locations, say "Check-Point", and drain 15 BP per location.','Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
+ (10,'Locate 3','Empaths Guild 3',15000,'Visit specific locations, say "Check-Point", and drain 25 BP per location.','Locate 3 reveals the exact street intersection of the vampire.'),
+ (11,'Neutrality 1','Peacekeeper''s Mission 1',10000,'None','Neutrality designates a vampire as "non-violent", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
  (12,'Neutrality 2','Peacekeeper''s Mission 2',10000,'Additional 500 BP cost at this level.','Continues non-violent status with Peacekeeper protection.'),
  (13,'Neutrality 3','Peacekeeper''s Mission 3',10000,'Additional 1000 BP cost at this level.','Non-violent status continues, and Vial of Holy Water causes only 1 BP of damage.'),
  (14,'Perception 1','Allurists Guild',7500,'Hunt and kill 1 Vampire Hunter within 10 days.','Allows detection of hunters and potentially coin sounds in vampire pockets.'),
@@ -726,111 +735,110 @@ INSERT OR IGNORE INTO \"powers\" (\"power_id\",\"name\",\"guild\",\"cost\",\"que
  (32,'Thrift 1','Allurists Guild 1',1000,'Buy 1 Perfect Red Rose from a specified shop.','5% chance to keep a used item/scroll instead of it burning up.'),
  (33,'Thrift 2','Allurists Guild 2',3000,'Buy 1 Perfect Red Rose from 3 specified shops.','10% chance to keep a used item/scroll instead of it burning up.'),
  (34,'Thrift 3','Allurists Guild 3',10000,'Buy 1 Perfect Red Rose from 6 specified shops.','15% chance to keep a used item/scroll instead of it burning up.');
-INSERT OR IGNORE INTO \"rows\" (\"ID\",\"Name\",\"Coordinate\") VALUES (1,'NCL',0),
- (2,'1st',1),
- (3,'2nd',3),
- (4,'3rd',5),
- (5,'4th',7),
- (6,'5th',9),
- (7,'6th',11),
- (8,'7th',13),
- (9,'8th',15),
- (10,'9th',17),
- (11,'10th',19),
- (12,'11th',21),
- (13,'12th',23),
- (14,'13th',25),
- (15,'14th',27),
- (16,'15th',29),
- (17,'16th',31),
- (18,'17th',33),
- (19,'18th',35),
- (20,'19th',37),
- (21,'20th',39),
- (22,'21st',41),
- (23,'22nd',43),
- (24,'23rd',45),
- (25,'24th',47),
- (26,'25th',49),
- (27,'26th',51),
- (28,'27th',53),
- (29,'28th',55),
- (30,'29th',57),
- (31,'30th',59),
- (32,'31st',61),
- (33,'32nd',63),
- (34,'33rd',65),
- (35,'34th',67),
- (36,'35th',69),
- (37,'36th',71),
- (38,'37th',73),
- (39,'38th',75),
- (40,'39th',77),
- (41,'40th',79),
- (42,'41st',81),
- (43,'42nd',83),
- (44,'43rd',85),
- (45,'44th',87),
- (46,'45th',89),
- (47,'46th',91),
- (48,'47th',93),
- (49,'48th',95),
- (50,'49th',97),
- (51,'50th',99),
- (52,'51st',101),
- (53,'52nd',103),
- (54,'53rd',105),
- (55,'54th',107),
- (56,'55th',109),
- (57,'56th',111),
- (58,'57th',113),
- (59,'58th',115),
- (60,'59th',117),
- (61,'60th',119),
- (62,'61st',121),
- (63,'62nd',123),
- (64,'63rd',125),
- (65,'64th',127),
- (66,'65th',129),
- (67,'66th',131),
- (68,'67th',133),
- (69,'68th',135),
- (70,'69th',137),
- (71,'70th',139),
- (72,'71st',141),
- (73,'72nd',143),
- (74,'73rd',145),
- (75,'74th',147),
- (76,'75th',149),
- (77,'76th',151),
- (78,'77th',153),
- (79,'78th',155),
- (80,'79th',157),
- (81,'80th',159),
- (82,'81st',161),
- (83,'82nd',163),
- (84,'83rd',165),
- (85,'84th',167),
- (86,'85th',169),
- (87,'86th',171),
- (88,'87th',173),
- (89,'88th',175),
- (90,'89th',177),
- (91,'90th',179),
- (92,'91st',181),
- (93,'92nd',183),
- (94,'93rd',185),
- (95,'94th',187),
- (96,'95th',189),
- (97,'96th',191),
- (98,'97th',193),
- (99,'98th',195),
- (100,'99th',197),
- (101,'100th',199),
- (102,'SCL',200),
- (103,'Northern City Limits',0),
- (104,'Southern City Limits',200);
-INSERT OR IGNORE INTO \"shop_items\" (\"id\",\"shop_name\",\"item_name\",\"base_price\",\"charisma_level_1\",\"charisma_level_2\",\"charisma_level_3\") VALUES (1,'Discount Magic','Perfect Dandelion',35,33,32,31),
+INSERT OR IGNORE INTO  "rows" ("ID","Name","Coordinate") VALUES
+ ('1', 'NCL', '0'),
+('2', 'Northern City Limits', '0'),
+('3', '1st', '2'),
+('4', '2nd', '4'),
+('5', '3rd', '6'),
+('6', '4th', '8'),
+('7', '5th', '10'),
+('8', '6th', '12'),
+('9', '7th', '14'),
+('10', '8th', '16'),
+('11', '9th', '18'),
+('12', '10th', '20'),
+('13', '11th', '22'),
+('14', '12th', '24'),
+('15', '13th', '26'),
+('16', '14th', '28'),
+('17', '15th', '30'),
+('18', '16th', '32'),
+('19', '17th', '34'),
+('20', '18th', '36'),
+('21', '19th', '38'),
+('22', '20th', '40'),
+('23', '21st', '42'),
+('24', '22nd', '44'),
+('25', '23rd', '46'),
+('26', '24th', '48'),
+('27', '25th', '50'),
+('28', '26th', '52'),
+('29', '27th', '54'),
+('30', '28th', '56'),
+('31', '29th', '58'),
+('32', '30th', '60'),
+('33', '31st', '62'),
+('34', '32nd', '64'),
+('35', '33rd', '66'),
+('36', '34th', '68'),
+('37', '35th', '70'),
+('38', '36th', '72'),
+('39', '37th', '74'),
+('40', '38th', '76'),
+('41', '39th', '78'),
+('42', '40th', '80'),
+('43', '41st', '82'),
+('44', '42nd', '84'),
+('45', '43rd', '86'),
+('46', '44th', '88'),
+('47', '45th', '90'),
+('48', '46th', '92'),
+('49', '47th', '94'),
+('50', '48th', '96'),
+('51', '49th', '98'),
+('52', '50th', '100'),
+('53', '51st', '102'),
+('54', '52nd', '104'),
+('55', '53rd', '106'),
+('56', '54th', '108'),
+('57', '55th', '110'),
+('58', '56th', '112'),
+('59', '57th', '114'),
+('60', '58th', '116'),
+('61', '59th', '118'),
+('62', '60th', '120'),
+('63', '61st', '122'),
+('64', '62nd', '124'),
+('65', '63rd', '126'),
+('66', '64th', '128'),
+('67', '65th', '130'),
+('68', '66th', '132'),
+('69', '67th', '134'),
+('70', '68th', '136'),
+('71', '69th', '138'),
+('72', '70th', '140'),
+('73', '71st', '142'),
+('74', '72nd', '144'),
+('75', '73rd', '146'),
+('76', '74th', '148'),
+('77', '75th', '150'),
+('78', '76th', '152'),
+('79', '77th', '154'),
+('80', '78th', '156'),
+('81', '79th', '158'),
+('82', '80th', '160'),
+('83', '81st', '162'),
+('84', '82nd', '164'),
+('85', '83rd', '166'),
+('86', '84th', '168'),
+('87', '85th', '170'),
+('88', '86th', '172'),
+('89', '87th', '174'),
+('90', '88th', '176'),
+('91', '89th', '178'),
+('92', '90th', '180'),
+('93', '91st', '182'),
+('94', '92nd', '184'),
+('95', '93rd', '186'),
+('96', '94th', '188'),
+('97', '95th', '190'),
+('98', '96th', '192'),
+('99', '97th', '194'),
+('100', '98th', '196'),
+('101', '99th', '198'),
+('102', '100th', '200');
+INSERT OR IGNORE INTO  "shop_items" ("id","shop_name","item_name","base_price","charisma_level_1","charisma_level_2","charisma_level_3") VALUES (1,'Discount Magic','Perfect Dandelion',35,33,32,31),
  (2,'Discount Magic','Sprint Potion',105,101,97,94),
  (3,'Discount Magic','Perfect Red Rose',350,339,325,315),
  (4,'Discount Magic','Scroll of Turning',350,339,325,315),
@@ -1071,120 +1079,127 @@ INSERT OR IGNORE INTO \"shop_items\" (\"id\",\"shop_name\",\"item_name\",\"base_
  (239,'The White House','Pewter Celtic Cross',10000,10000,10000,10000),
  (240,'The White House','Compass',11999,11999,11999,11999),
  (241,'The White House','Pewter Tankard',15000,15000,15000,15000);
-INSERT OR IGNORE INTO \"shops\" (\"ID\",\"Name\",\"Column\",\"Row\",\"next_update\") VALUES (1,'Ace Porn','','',''),
- (2,'Checkers Porn Shop','','',''),
- (3,'Dark Desires','','',''),
- (4,'Discount Magic','','',''),
- (5,'Discount Potions','','',''),
- (6,'Discount Scrolls','','',''),
- (7,'Herman''s Scrolls','','',''),
- (8,'Interesting Times','','',''),
- (9,'McPotions','','',''),
- (10,'Paper and Scrolls','','',''),
- (11,'Potable Potions','','',''),
- (12,'Potion Distillery','','',''),
- (13,'Potionworks','','',''),
- (14,'Reversi Porn','','',''),
- (15,'Scrollmania','','',''),
- (16,'Scrolls ''n'' Stuff','','',''),
- (17,'Scrolls R Us','','',''),
- (18,'Scrollworks','','',''),
- (19,'Silver Apothecary','','',''),
- (20,'Sparks','','',''),
- (21,'Spinners Porn','','',''),
- (22,'The Magic Box','','',''),
- (23,'The Potion Shoppe','','',''),
- (24,'White Light','','',''),
- (25,'Ye Olde Scrolles','','','');
-INSERT OR IGNORE INTO \"taverns\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (1,'Ferret','44th','Miller''s Tavern'),
- (2,'Gibbon','44th','The Ox and Bow'),
- (3,'Kyanite','19th','The Lounge'),
- (4,'Nervous','42nd','The Lightbringer'),
- (5,'Oppression','45th','The Angel''s Wing'),
- (6,'Pessimism','37th','The Book and Beggar'),
- (7,'Pyrites','41st','The Brain and Hatchling'),
- (8,'Qualms','43rd','The Broken Lover'),
- (9,'Steel','3rd','Oyler''s Tavern'),
- (10,'Vexation','2nd','The Hearth and Sabre'),
- (11,'Dogwood','78th','The Moon'),
- (12,'Eagle','67th','Shooter''s Tavern'),
- (13,'Ferret','84th','Fisherman''s Tavern'),
- (14,'Haddock','64th','Bowyer''s Tavern'),
- (15,'Jackal','53rd','The Palm and Parson'),
- (16,'Quail','85th','The Poltroon'),
- (17,'Yew','78th','Carter''s Tavern'),
- (19,'Oppression','70th','The Stick in the Mud'),
- (20,'Pyrites','70th','Mercer''s Tavern'),
+INSERT OR IGNORE INTO  "shops" ("ID","Name","Column","Row","next_update") VALUES (1,'Ace Porn','NA','NA','2024-11-22 10:40:02'),
+ (2,'Checkers Porn Shop','NA','NA','2024-11-22 10:40:02'),
+ (3,'Dark Desires','NA','NA','2024-11-22 10:40:02'),
+ (4,'Discount Magic','NA','NA','2024-11-22 10:40:02'),
+ (5,'Discount Potions','NA','NA','2024-11-22 10:40:02'),
+ (6,'Discount Scrolls','NA','NA','2024-11-22 10:40:02'),
+ (7,'Herman''s Scrolls','NA','NA','2024-11-22 10:40:02'),
+ (8,'Interesting Times','NA','NA','2024-11-22 10:40:02'),
+ (9,'McPotions','NA','NA','2024-11-22 10:40:02'),
+ (10,'Paper and Scrolls','NA','NA','2024-11-22 10:40:02'),
+ (11,'Potable Potions','NA','NA','2024-11-22 10:40:02'),
+ (12,'Potion Distillery','NA','NA','2024-11-22 10:40:02'),
+ (13,'Potionworks','NA','NA','2024-11-22 10:40:02'),
+ (14,'Reversi Porn','NA','NA','2024-11-22 10:40:02'),
+ (15,'Scrollmania','NA','NA','2024-11-22 10:40:02'),
+ (16,'Scrolls ''n'' Stuff','NA','NA','2024-11-22 10:40:02'),
+ (17,'Scrolls R Us','NA','NA','2024-11-22 10:40:02'),
+ (18,'Scrollworks','NA','NA','2024-11-22 10:40:02'),
+ (19,'Silver Apothecary','NA','NA','2024-11-22 10:40:02'),
+ (20,'Sparks','NA','NA','2024-11-22 10:40:02'),
+ (21,'Spinners Porn','NA','NA','2024-11-22 10:40:02'),
+ (22,'The Magic Box','NA','NA','2024-11-22 10:40:02'),
+ (23,'The Potion Shoppe','NA','NA','2024-11-22 10:40:02'),
+ (24,'White Light','NA','NA','2024-11-22 10:40:02'),
+ (25,'Ye Olde Scrolles','NA','NA','2024-11-22 10:40:02');
+INSERT OR IGNORE INTO  "taverns" ("ID","Column","Row","Name") VALUES (1,'Gum','33rd','Abbot''s Tavern'),
+ (2,'Knotweed','11th','Archer''s Tavern'),
+ (3,'Torment','16th','Baker''s Tavern'),
+ (4,'Fir','13th','Balmer''s Tavern'),
+ (5,'Nettle','3rd','Barker''s Tavern'),
+ (6,'Duck','7th','Bloodwood Canopy Cafe'),
+ (7,'Haddock','64th','Bowyer''s Tavern'),
+ (8,'Qualms','61st','Butler''s Tavern'),
+ (9,'Yew','78th','Carter''s Tavern'),
+ (10,'Raven','71st','Chandler''s Tavern'),
+ (11,'Bleak','64th','Club Xendom'),
+ (12,'Pilchard','48th','Draper''s Tavern'),
+ (13,'Yak','90th','Falconer''s Tavern'),
+ (14,'Ruby','20th','Fiddler''s Tavern'),
+ (15,'Ferret','84th','Fisherman''s Tavern'),
+ (16,'Pine','68th','Five French Hens'),
+ (17,'Steel','26th','Freeman''s Tavern'),
+ (18,'Gibbon','98th','Harper''s Tavern'),
+ (19,'Ire','63rd','Hawker''s Tavern'),
+ (20,'Hessite','55th','Hell''s Angels Clubhouse'),
+ (21,'Fir','72nd','Hunter''s Tavern'),
  (22,'Lion','1st','Leacher''s Tavern'),
- (23,'Diamond','1st','The Scupper and Forage'),
- (24,'Nervous','2nd','The Flirting Angel'),
- (25,'Nettle','3rd','Barker''s Tavern'),
- (26,'Yew','5th','Vagabond''s Tavern'),
- (27,'Qualms','5th','Rogue''s Tavern'),
- (28,'Ragweed','6th','The Dog House'),
- (29,'Duck','7th','The Stripey Dragon'),
- (30,'Gum','10th','The Crouching Tiger'),
- (31,'Knotweed','11th','Archer''s Tavern'),
- (32,'Vulture','11th','The Wild Hunt'),
- (33,'Fir','13th','Balmer''s Tavern'),
- (34,'Mongoose','15th','The Last Days'),
- (35,'Torment','16th','Baker''s Tavern'),
- (36,'Beech','19th','The Clam and Champion'),
- (37,'Ruby','20th','Fiddler''s Tavern'),
- (38,'Ruby','21st','The Round Room'),
- (39,'Steel','23rd','Porter''s Tavern'),
- (40,'Steel','26th','Freeman''s Tavern'),
- (42,'Nightingale','32nd','The Cosy Walrus'),
- (43,'Gum','33rd','Abbot''s Tavern'),
- (44,'Eagle','34th','The Sunken Sofa'),
- (45,'Fear','34th','Pub Forty-Two'),
- (46,'Despair','38th','The Thorn''s Pride'),
- (47,'Killjoy','46th','The Crow''s Nest Tavern'),
- (48,'Pilchard','48th','Draper''s Tavern'),
- (49,'Yearning','48th','The Marsupial'),
- (50,'Pine','51st','The Dead of Night'),
- (51,'Dogwood','54th','The Kestrel'),
- (52,'Obsidian','54th','The Gunny''s Shack'),
- (53,'Hessite','55th','The Weevil and Stallion'),
- (54,'Alder','57th','The Sign of the Times'),
- (55,'Nickel','57th','The Shining Devil'),
- (56,'Qualms','61st','Butler''s Tavern'),
- (57,'Walrus','62nd','The Ghastly Flabber'),
- (58,'Ire','63rd','Hawker''s Tavern'),
- (60,'Pine','68th','Five French Hens'),
- (61,'Walrus','68th','The Cart and Castle'),
- (62,'Anguish','68th','Xendom Tavern'),
- (63,'Malachite','70th','Pub'),
- (64,'Sorrow','70th','Pub'),
- (65,'Raven','71st','Pub'),
- (66,'Turquoise','71st','Pub'),
- (67,'Fir','72nd','Hunter''s Tavern'),
- (68,'Malachite','76th','Pub'),
- (69,'Ragweed','78th','Pub'),
- (70,'Lonely','78th','Pub'),
- (71,'Ennui','80th','The Stick and Stag'),
- (72,'Walrus','83rd','Pub'),
- (73,'Nettle','86th','Pub'),
- (74,'Lonely','87th','Pub'),
- (75,'Malaise','87th','Pub'),
- (76,'Sycamore','89th','Pub'),
- (77,'Pine','90th','Pub'),
- (78,'Yak','90th','Pub'),
- (79,'Ruby','90th','Pub'),
- (80,'Sorrow','91st','Pub'),
- (81,'Mongoose','92nd','Pub'),
- (82,'Unicorn','92nd','Pub'),
- (83,'Diamond','92nd','Painter''s Tavern'),
- (84,'Elm','93rd','The Teapot and Toxin'),
- (85,'Zinc','93rd','Pub'),
- (86,'Lion','95th','The Golden Partridge'),
- (87,'Hessite','97th','The McAllister Tavern'),
- (88,'Gibbon','98th','Harper''s Tavern'),
- (89,'Anguish','98th','Ten Turtle Doves'),
- (90,'Beryl','98th','Rider''s Tavern'),
- (91,'Ivory','99th','The Blinking Pixie'),
- (94,'Zebra','50th','The Guardian Outpost');
-INSERT OR IGNORE INTO \"transits\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (1,'Mongoose','25th','Calliope'),
+ (23,'Malachite','76th','Lovers at Dawn Inn'),
+ (24,'Ragweed','78th','Marbler''s Tavern'),
+ (25,'Ferret','44th','Miller''s Tavern'),
+ (26,'Steel','3rd','Oyler''s Tavern'),
+ (27,'Diamond','92nd','Painter''s Tavern'),
+ (28,'Walrus','83rd','Peace De Résistance'),
+ (29,'Fear','34th','Pub Forty-Two'),
+ (30,'Qualms','61st','Ratskeller'),
+ (31,'Beryl','98th','Rider''s Tavern'),
+ (32,'Qualms','5th','Rogue''s Tavern'),
+ (33,'Eagle','67th','Shooter''s Tavern'),
+ (34,'Bleak','NCL','Smuggler''s Cove'),
+ (35,'Anguish','98th','Ten Turtle Doves'),
+ (36,'Oppression','45th','The Angel''s Wing'),
+ (37,'Oppression','70th','The Axeman and Guillotine'),
+ (38,'Ivory','99th','The Blinking Pixie'),
+ (39,'Pessimism','37th','The Book and Beggar'),
+ (40,'Malachite','70th','The Booze Hall'),
+ (41,'Pyrites','41st','The Brain and Hatchling'),
+ (42,'Lonely','87th','The Brimming Brew'),
+ (43,'Qualms','43rd','The Broken Lover'),
+ (44,'Ruby','90th','The Burning Brand'),
+ (45,'Walrus','68th','The Cart and Castle'),
+ (46,'Lion','1st','The Celtic Moonligh'),
+ (47,'Beech','19th','The Clam and Champion'),
+ (48,'Nightingale','32nd','The Cosy Walrus'),
+ (49,'Sorrow','70th','The Crossed Swords Tavern'),
+ (50,'Gum','10th','The Crouching Tiger'),
+ (51,'Killjoy','46th','The Crow''s Nest Tavern'),
+ (52,'Pine','51st','The Dead of Night'),
+ (53,'Lonely','78th','The Demon''s Heart'),
+ (54,'Ragweed','6th','The Dog House'),
+ (55,'Zinc','94th','The Drunk Cup'),
+ (56,'Yak','30th','The Ferryman''s Arms'),
+ (57,'Nervous','2nd','The Flirty Angel'),
+ (58,'Sorrow','91st','The Freudian Slip'),
+ (59,'Walrus','62nd','The Ghastly Flabber'),
+ (60,'Lion','95th','The Golden Partridge'),
+ (61,'Zebra','50th','The Guardian Outpost'),
+ (62,'Obsidian','54th','The Gunny''s Shack'),
+ (63,'Vexation','2nd','The Hearth and Sabre'),
+ (64,'Dogwood','54th','The Kestrel'),
+ (65,'Mongoose','15th','The Last Days'),
+ (66,'Unicorn','92nd','The Lazy Sunflower'),
+ (67,'Nervous','42nd','The Lightbringer'),
+ (68,'Kyanite','19th','The Lounge'),
+ (69,'Yearning','48th','The Marsupial'),
+ (70,'Hessite','97th','The McAllister Tavern'),
+ (71,'Dogwood','78th','The Moon over Orion'),
+ (72,'Gibbon','44th','The Ox and Bow'),
+ (73,'Jackal','53rd','The Palm and Parson'),
+ (74,'Quail','85th','The Poltroon'),
+ (75,'Ruby','21st','The Round Room'),
+ (76,'Diamond','1st','The Scupper and Forage'),
+ (77,'Pine','91st','The Shattered Platter'),
+ (78,'Nickel','57th','The Shining Devil'),
+ (79,'Alder','57th','The Sign of the Times'),
+ (80,'Ennui','80th','The Stick and Stag'),
+ (81,'Oppression','70th','The Stick in the Mud'),
+ (82,'Malaise','87th','The Sun'),
+ (83,'Eagle','34th','The Sunken Sofa'),
+ (84,'Turquoise','71st','The Swords at Dawn'),
+ (85,'Elm','93rd','The Teapot and Toxin'),
+ (86,'Mongoose','92nd','The Thief of Hearts'),
+ (87,'Despair','38th','The Thorn''s Pride'),
+ (88,'Zebra','36th','The Two Sisters'),
+ (89,'Nettle','86th','The Wart and Whisk'),
+ (90,'Sycamore','89th','The Whirling Dervish'),
+ (91,'Vulture','11th','The Wild Hunt'),
+ (92,'Steel','23rd','Treehouse'),
+ (93,'Yew','5th','Vagabond''s Tavern'),
+ (94,'Anguish','68th','Xendom Tavern'),
+ (95,'Pyrites','70th','Ye Olde Gallows Ale House');
+INSERT OR IGNORE INTO  "transits" ("ID","Column","Row","Name") VALUES (1,'Mongoose','25th','Calliope'),
  (2,'Zelkova','25th','Clio'),
  (3,'Malachite','25th','Erato'),
  (4,'Mongoose','50th','Euterpe'),
@@ -1193,7 +1208,7 @@ INSERT OR IGNORE INTO \"transits\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (
  (7,'Mongoose','75th','Terpsichore'),
  (8,'Zelkova','75th','Thalia'),
  (9,'Malachite','75th','Urania');
-INSERT OR IGNORE INTO \"userbuildings\" (\"ID\",\"Name\",\"Column\",\"Row\") VALUES (1,'Ace''s House of Dumont','Cedar','99th'),
+INSERT OR IGNORE INTO  "userbuildings" ("ID","Name","Column","Row") VALUES (1,'Ace''s House of Dumont','Cedar','99th'),
  (2,'Alatáriël Maenor','Diamond','50th'),
  (3,'Alpha Dragon''s and Lyric''s House of Dragon and Flame','Amethyst','90th'),
  (4,'AmadisdeGaula''s Stellaburgi','Wulfenite','38th'),
@@ -1346,45 +1361,6 @@ COMMIT;
 # Call database initialization
 initialize_database(DB_PATH)
 
-"""
-# -----------------------
-# MySQL Connection Setup
-# -----------------------
-
-# MySQL Server information
-REMOTE_HOST = "completeelectronics.net"
-LOCAL_HOST = "127.0.0.1"
-USER = "rbc_maps"
-PASSWORD = "RBC_Community_Map"
-DATABASE = "city_map"
-
-def connect_to_database():
-    try:
-        connection = pymysql.connect(
-            host=REMOTE_HOST,
-            user=USER,
-            password=PASSWORD,
-            database=DATABASE
-        )
-        logging.info("Connected to remote MySQL instance")
-        return connection
-    except pymysql.MySQLError as err:
-        logging.error("Connection to remote MySQL instance failed: %s", err)
-        try:
-            connection = pymysql.connect(
-                host=LOCAL_HOST,
-                user=USER,
-                password=PASSWORD,
-                database=DATABASE
-            )
-            logging.info("Connected to local MySQL instance")
-            return connection
-        except pymysql.MySQLError as err:
-            logging.error("Connection to local MySQL instance failed: %s", err)
-            return None
-
-database_connection = connect_to_database()
-"""
 # -----------------------
 # Load Data from Database
 # -----------------------
@@ -1633,6 +1609,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Set up the UI components
         self.zoom_level = 3
+        self.load_zoom_level_from_database()
         self.minimap_size = 280
         self.column_start = 0
         self.row_start = 0
@@ -2325,13 +2302,17 @@ class RBCCommunityMap(QMainWindow):
         Opens the Damage Calculator dialog within RBCCommunityMap.
         """
         # Initialize the DamageCalculator dialog with the SQLite database connection
-        damage_calculator = DamageCalculator(sqlite3.connect(DB_PATH))
+        connection = sqlite3.connect(DB_PATH)
+        damage_calculator = DamageCalculator(connection)
 
         # Set the default selection in the combobox to 'No Charisma'
         damage_calculator.charisma_dropdown.setCurrentIndex(0)  # Index 0 corresponds to 'No Charisma'
 
         # Show the DamageCalculator dialog as a modal
         damage_calculator.exec()
+
+        # Close the database connection after use
+        connection.close()
 
     def display_shopping_list(self, shopping_list):
         """
@@ -2963,10 +2944,32 @@ class RBCCommunityMap(QMainWindow):
                 color (QColor): Color to fill the location.
                 label_text (str, optional): Label text to draw at the location. Defaults to None.
             """
-            x0 = (column_index - self.column_start) * block_size
-            y0 = (row_index - self.row_start) * block_size
-            logging.debug(f"Drawing location at column_index={column_index}, row_index={row_index}, "
-                          f"x0={x0}, y0={y0}")
+            logging.debug(f"Location '{label_text}' Initial column_index={column_index}, row_index={row_index}")
+            # Adjust offsets specifically for edge cases
+            adjusted_column_index = column_index - 1 if column_index == 1 else column_index
+            adjusted_row_index = row_index - 1 if row_index == 1 else row_index
+
+            # Calculate cell position on the minimap grid
+            x0 = (adjusted_column_index - self.column_start) * block_size
+            y0 = (adjusted_row_index - self.row_start) * block_size
+
+            # Edge cases: Ensure edge locations draw correctly at the map edges
+            if column_index == 1:
+                adjusted_column_index = column_index
+                x0 = (column_index - self.column_start) * block_size
+            if row_index == 1:
+                adjusted_row_index = row_index
+                y0 = (row_index - self.row_start) * block_size
+
+            # Ensure the adjusted location is within bounds
+            if x0 < 0 or y0 < 0 or x0 >= self.minimap_size or y0 >= self.minimap_size:
+                logging.debug(
+                    f"Skipping drawing location '{label_text}' at column_index={column_index}, row_index={row_index}, "
+                    f"x0={x0}, y0={y0} (out of bounds)")
+                return
+
+            logging.debug(f"Drawing location '{label_text}' at column_index={column_index}, row_index={row_index}, "
+                          f"x0={x0}, y0={y0}, color={color.name()}")
 
             # Draw a smaller rectangle within the cell
             inner_margin = block_size // 4
@@ -3004,7 +3007,7 @@ class RBCCommunityMap(QMainWindow):
                 row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index <= -1 or column_index >= 201 or row_index <= -1 or row_index >= 201:
+                if column_index <= 0 or column_index >= 201 or row_index <= 0 or row_index >= 201:
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -3035,42 +3038,33 @@ class RBCCommunityMap(QMainWindow):
             column_index = self.columns.get(col_name)
             row_index = self.rows.get(row_name)
             if column_index is not None and row_index is not None:
-                # Adjust bank coordinates by +1 to match the tavern and transit coordinate system
+                # Add +1,+1 offset specifically for banks
                 adjusted_column_index = column_index + 1
                 adjusted_row_index = row_index + 1
                 draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
+        # Draw other locations without the offset
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["tavern"], name)
-            else:
-                logging.warning(f"Skipping tavern '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.transits_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["transit"], name)
-            else:
-                logging.warning(f"Skipping transit '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["user_building"], name)
-            else:
-                logging.warning(f"Skipping user building '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["shop"], name)
-            else:
-                logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
                 draw_location(column_index, row_index, self.color_mappings["guild"], name)
-            else:
-                logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
@@ -3257,6 +3251,7 @@ class RBCCommunityMap(QMainWindow):
         """
         if self.zoom_level > 3:
             self.zoom_level -= 2  # Reduce by 2 to keep zoom levels odd-numbered
+            self.save_zoom_level_to_database()  # Save the updated zoom level
             self.website_frame.page().toHtml(self.process_html)
 
     def zoom_out(self):
@@ -3265,29 +3260,79 @@ class RBCCommunityMap(QMainWindow):
         """
         if self.zoom_level < 7:  # Adjusted max level to improve readability
             self.zoom_level += 2  # Increase by 2 to keep zoom levels odd-numbered
+            self.save_zoom_level_to_database()  # Save the updated zoom level
             self.website_frame.page().toHtml(self.process_html)
+
+    def save_zoom_level_to_database(self):
+        """
+        Save the current zoom level to the settings table in the database.
+        """
+        try:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+            query = """
+            INSERT INTO settings (setting_name, setting_value)
+            VALUES ('minimap_zoom', ?)
+            ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
+            """
+            cursor.execute(query, (self.zoom_level, self.zoom_level))
+            connection.commit()
+            logging.debug(f"Zoom level saved to database: {self.zoom_level}")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save zoom level to database: {e}")
+        finally:
+            connection.close()
+
+    def load_zoom_level_from_database(self):
+        """
+        Load the saved zoom level from the settings table in the database.
+        If no value is found, set it to the default (3).
+        """
+        try:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+            query = "SELECT setting_value FROM settings WHERE setting_name = 'minimap_zoom';"
+            result = cursor.execute(query).fetchone()
+            if result:
+                self.zoom_level = int(result[0])
+                logging.debug(f"Zoom level loaded from database: {self.zoom_level}")
+            else:
+                self.zoom_level = 3  # Default zoom level
+                logging.debug("No saved zoom level found. Defaulting to 3.")
+        except sqlite3.Error as e:
+            self.zoom_level = 3  # Fallback default zoom level
+            logging.error(f"Failed to load zoom level from database: {e}")
+        finally:
+            connection.close()
 
     def recenter_minimap(self):
         """
-        Recenter the minimap so that the character's location is at the center cell.
+        Recenter the minimap so that the character's location is at the center cell,
+        including visible but non-traversable areas beyond the traversable range.
         """
-        # Ensure character_x and character_y are up to date
         if not hasattr(self, 'character_x') or not hasattr(self, 'character_y'):
             logging.error("Character position not set. Cannot recenter minimap.")
             return
 
-        # Calculate the center offset based on the current zoom level
-        center_offset = (self.zoom_level - 1) // 2
+        # Calculate zoom offset (-1 for 5x5, -2 for 7x7, etc.)
+        zoom_offset = (self.zoom_level - 4) // 2
 
-        # Set `column_start` and `row_start` to keep the character centered, clamping to map boundaries
-        self.column_start = max(-1, min(self.character_x - center_offset, 201 - self.zoom_level + 1))
-        self.row_start = max(-1, min(self.character_y - center_offset, 201 - self.zoom_level + 1))
+        # Calculate starting positions to center the character
+        column_start = self.character_x - zoom_offset
+        row_start = self.character_y - zoom_offset
 
-        # Log the values for debugging
+        # Allow visible but non-traversable cells up to 203,203 for 7x7 zoom
+        column_start = max(-1, min(column_start, 203 - self.zoom_level))
+        row_start = max(-1, min(row_start, 203 - self.zoom_level))
+
         logging.debug(f"Recentered minimap: character_x={self.character_x}, character_y={self.character_y}, "
-                      f"column_start={self.column_start}, row_start={self.row_start}")
+                      f"column_start={column_start}, row_start={row_start}, zoom_level={self.zoom_level}")
 
-        # Update the minimap display after recentering
+        # Update minimap start positions
+        self.column_start = column_start
+        self.row_start = row_start
+
+        # Refresh the minimap
         self.update_minimap()
 
     def go_to_location(self):
@@ -3314,6 +3359,50 @@ class RBCCommunityMap(QMainWindow):
 
         # Update the minimap after setting the new location
         self.update_minimap()
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Map global click position to minimap's local coordinates
+            local_position = self.minimap_label.mapFromGlobal(event.globalPosition().toPoint())
+            click_x, click_y = local_position.x(), local_position.y()
+
+            # Validate click is within the minimap
+            if 0 <= click_x < self.minimap_label.width() and 0 <= click_y < self.minimap_label.height():
+                # Calculate relative coordinates and block size
+                block_size = self.minimap_size // self.zoom_level
+                relative_x = click_x
+                relative_y = click_y
+
+                # Determine clicked cell
+                clicked_column = self.column_start + (relative_x // block_size)
+                clicked_row = self.row_start + (relative_y // block_size)
+
+                # Calculate new center positions
+                center_offset = self.zoom_level // 2
+
+                # Allow extended bounds
+                min_start = -(self.zoom_level // 2)
+                max_start = 201 + (self.zoom_level // 2) - self.zoom_level
+
+                new_column_start = clicked_column - center_offset
+                new_row_start = clicked_row - center_offset
+
+                # Clamp to extended valid ranges
+                new_column_start = max(min_start, min(new_column_start, max_start))
+                new_row_start = max(min_start, min(new_row_start, max_start))
+
+                # Update minimap start positions
+                self.column_start = new_column_start
+                self.row_start = new_row_start
+
+                # Debug logs
+                logging.debug(f"Click at ({click_x}, {click_y}) -> Cell: ({clicked_column}, {clicked_row})")
+                logging.debug(f"New minimap start: column={self.column_start}, row={self.row_start}")
+
+                # Update the minimap display
+                self.update_minimap()
+            else:
+                logging.debug(f"Click ({click_x}, {click_y}) is outside the minimap bounds.")
 
     def open_set_destination_dialog(self):
         """
@@ -3515,7 +3604,7 @@ class RBCCommunityMap(QMainWindow):
         """
         QMessageBox.about(self, "About RBC City Map",
                           "RBC City Map Application\n\n"
-                          "Version 0.8.2\n\n"
+                          "Version 0.9.0\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
                           "Development team shown in credits.\n\n\n"
@@ -3537,7 +3626,7 @@ class RBCCommunityMap(QMainWindow):
             "Linux Compatibility: Josh \"Blaskewitts\" Corse, Fern Lovebond\n\n"
             "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n\n\n"
             "Special Thanks:\n\n"
-            "Cain \"Leprichaun\" McBride for the LIAM\u00B2 program \nthat inspired this program\n\n"
+            "Cain \"Leprechaun\" McBride for the LIAM\u00B2 program \nthat inspired this program\n\n"
             "Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retrieved\n\n"
             "Everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
             "Anders for RBNav and the help along the way\n\n\n\n"
@@ -3583,24 +3672,20 @@ class RBCCommunityMap(QMainWindow):
         credits_dialog.exec()
 
     # -----------------------
-    # Database Viewer Class
+    # Database Viewer
     # -----------------------
     def open_database_viewer(self):
         """
         Open the database viewer to browse and inspect data from the RBC City Map database.
 
         This method connects to the SQLite database, fetches the data from specified tables,
-        and displays it in a new DatabaseViewer window. Ensures a fresh connection each time.
+        and displays it in a new DatabaseViewer window.
         """
         try:
             # Create a new SQLite database connection every time the viewer is opened
             database_connection = sqlite3.connect(DB_PATH)
 
-            if not database_connection:
-                QMessageBox.critical(self, "Error", "Failed to connect to the database.")
-                return
-
-            # Show the database viewer, passing the new SQLite connection
+            # Show the database viewer, passing the new connection
             self.database_viewer = DatabaseViewer(database_connection)
             self.database_viewer.show()
 
@@ -3613,14 +3698,14 @@ class RBCCommunityMap(QMainWindow):
         Fetch data from the specified table and return it as a list of tuples, including column names.
 
         Args:
-            cursor: MySQL cursor object.
+            cursor: SQLite cursor object.
             table_name: Name of the table to fetch data from.
 
         Returns:
             Tuple: (List of column names, List of table data)
         """
-        cursor.execute(f"DESCRIBE `{table_name}`")
-        column_names = [col[0] for col in cursor.fetchall()]
+        cursor.execute(f"PRAGMA table_info(`{table_name}`)")
+        column_names = [col[1] for col in cursor.fetchall()]
 
         cursor.execute(f"SELECT * FROM `{table_name}`")
         data = cursor.fetchall()
@@ -3643,7 +3728,7 @@ class DatabaseViewer(QMainWindow):
         Initialize the DatabaseViewer with the provided table data.
 
         Args:
-            db_connection: The established database connection.
+            db_connection: The established SQLite database connection.
         """
         super().__init__()
         self.setWindowTitle('SQLite Database Viewer')
@@ -3654,11 +3739,11 @@ class DatabaseViewer(QMainWindow):
         self.setCentralWidget(self.tab_widget)
 
         self.db_connection = db_connection
-        self.sqlite_cursor = self.db_connection.cursor()
+        self.cursor = self.db_connection.cursor()
 
-        # Query to get all table names from sqlite_master
-        self.sqlite_cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = self.sqlite_cursor.fetchall()
+        # Query to get all table names
+        self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = self.cursor.fetchall()
 
         for (table_name,) in tables:
             column_names, data = self.get_table_data(table_name)
@@ -3674,11 +3759,13 @@ class DatabaseViewer(QMainWindow):
         Returns:
             A tuple containing a list of column names and the data.
         """
-        # Use quotes to handle reserved keywords or special characters in table names
-        self.sqlite_cursor.execute(f"SELECT * FROM \"{table_name}\"")
-        data = self.sqlite_cursor.fetchall()
+        # Use PRAGMA to get column information and SELECT to fetch data
+        self.cursor.execute(f"PRAGMA table_info(`{table_name}`)")
+        column_names = [col[1] for col in self.cursor.fetchall()]
 
-        column_names = [i[0] for i in self.sqlite_cursor.description]
+        self.cursor.execute(f"SELECT * FROM `{table_name}`")
+        data = self.cursor.fetchall()
+
         return column_names, data
 
     def add_table_tab(self, table_name, column_names, data):
@@ -3708,7 +3795,7 @@ class DatabaseViewer(QMainWindow):
         """
         Ensure the database connection is closed when the application is closed.
         """
-        self.sqlite_cursor.close()
+        self.cursor.close()
         self.db_connection.close()
         event.accept()
 
@@ -3913,15 +4000,15 @@ class ThemeCustomizationDialog(QDialog):
 # -----------------------
 class AVITDScraper:
     """
-    A scraper class for 'A View in the Dark' to update guilds and shops data in the database.
+    A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
     """
 
     def __init__(self):
         """
-        Initialize the scraper with the required headers and SQLite database connection.
+        Initialize the scraper with the required headers and database connection.
         """
         self.url = "https://aviewinthedark.net/"
-        self.connection = sqlite3.connect(DB_PATH)  # Establish SQLite database connection
+        self.connection = sqlite3.connect(DB_PATH)  # SQLite connection
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
@@ -3932,7 +4019,7 @@ class AVITDScraper:
 
     def scrape_guilds_and_shops(self):
         """
-        Scrape the guilds and shops data from the website and update the database.
+        Scrape the guilds and shops data from the website and update the SQLite database.
         """
         logging.info("Starting to scrape guilds and shops.")
         response = requests.get(self.url, headers=self.headers)
@@ -3948,7 +4035,7 @@ class AVITDScraper:
         # Display results in the console (for debugging purposes)
         self.display_results(guilds, shops, guilds_next_update, shops_next_update)
 
-        # Update the database with scraped data
+        # Update the SQLite database with scraped data
         self.update_database(guilds, "guilds", guilds_next_update)
         self.update_database(shops, "shops", shops_next_update)
         logging.info("Finished scraping and updating the database.")
@@ -3995,11 +4082,11 @@ class AVITDScraper:
 
     def extract_next_update_time(self, soup, section_name):
         """
-        Extract the next update time for a specific section (e.g., 'Guilds', 'Shops') from the HTML.
+        Extract the next update time for a specific section (guilds or shops).
 
         Args:
             soup (BeautifulSoup): Parsed HTML content.
-            section_name (str): The name of the section to search for (e.g., 'Guilds', 'Shops').
+            section_name (str): The name of the section (e.g., 'Guilds', 'Shops').
 
         Returns:
             str: The next update time in 'YYYY-MM-DD HH:MM:SS' format or 'NA' if not found.
@@ -4055,7 +4142,7 @@ class AVITDScraper:
 
     def update_database(self, data, table, next_update):
         """
-        Update the database with the scraped data.
+        Update the SQLite database with the scraped data.
 
         Args:
             data (list): List of tuples containing the name, column, and row of each entry.
@@ -4072,7 +4159,7 @@ class AVITDScraper:
         try:
             logging.debug(f"Setting all {table} entries' Row and Column to 'NA'.")
             cursor.execute(f"UPDATE {table} SET `Column`='NA', `Row`='NA', `next_update`=?", (next_update,))
-        except sqlite3.OperationalError as e:
+        except sqlite3.Error as e:
             logging.error(f"Failed to reset {table} entries to 'NA': {e}")
             return
 
@@ -4085,7 +4172,7 @@ class AVITDScraper:
                     f"UPDATE {table} SET `Column`=?, `Row`=?, `next_update`=? WHERE `Name`=?",
                     (column, row, next_update, name)
                 )
-            except sqlite3.OperationalError as e:
+            except sqlite3.Error as e:
                 logging.error(f"Failed to update {table} entry '{name}': {e}")
 
         self.connection.commit()
@@ -4094,7 +4181,7 @@ class AVITDScraper:
 
     def close_connection(self):
         """
-        Close the database connection.
+        Close the SQLite database connection.
         """
         if self.connection:
             self.connection.close()
@@ -4279,32 +4366,37 @@ class set_destination_dialog(QDialog):
         logging.info("Updating comboboxes.")
         self.show_notification("Updating Shop and Guild Data. Please wait...")
 
+        # Run the scraper to update data if available
         if hasattr(self.parent, 'AVITD_scraper') and self.parent.AVITD_scraper:
             self.parent.AVITD_scraper.scrape_guilds_and_shops()
 
-        # Reload data from the database
-        self.parent.columns, self.parent.rows, self.parent.banks_coordinates, \
-            self.parent.taverns_coordinates, self.parent.transits_coordinates, \
-            self.parent.user_buildings_coordinates, self.parent.color_mappings, \
-            self.parent.shops_coordinates, self.parent.guilds_coordinates, \
-            self.parent.places_of_interest_coordinates = load_data(DB_PATH)
+        # Reload data from the SQLite database
+        try:
+            updated_data = load_data()
+            self.parent.columns, self.parent.rows, self.parent.banks_coordinates, \
+                self.parent.taverns_coordinates, self.parent.transits_coordinates, \
+                self.parent.user_buildings_coordinates, self.parent.color_mappings, \
+                self.parent.shops_coordinates, self.parent.guilds_coordinates, \
+                self.parent.places_of_interest_coordinates = updated_data
 
-        # Populate dropdowns with updated data
-        self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown,
-                               [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
-        self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
-        self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
-        self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
-        self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
-        self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
+            # Populate dropdowns with updated data
+            self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
+            self.populate_dropdown(self.bank_dropdown,
+                                   [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
+            self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
+            self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
+            self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
+            self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
+            self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
 
-        # Call update_minimap to redraw the map with the new data
-        if hasattr(self.parent, 'update_minimap') and callable(self.parent.update_minimap):
-            logging.info("Updating minimap with new data.")
-            self.parent.update_minimap()
+            # Call update_minimap to redraw the map with the new data
+            if hasattr(self.parent, 'update_minimap') and callable(self.parent.update_minimap):
+                logging.info("Updating minimap with new data.")
+                self.parent.update_minimap()
 
-        logging.info("Comboboxes updated successfully.")
+            logging.info("Comboboxes updated successfully.")
+        except Exception as e:
+            logging.error(f"Failed to update comboboxes: {e}")
 
     def show_notification(self, message):
         logging.info("Displaying notification: %s", message)
@@ -4867,7 +4959,7 @@ class DamageCalculator(QDialog):
 # Powers Reference Tool
 # -----------------------
 class PowersDialog(QDialog):
-    def __init__(self, DB_PATH):
+    def __init__(self,DB_PATH):
         """
         Initialize the PowersDialog with an SQLite connection using the global DB_PATH.
         """
