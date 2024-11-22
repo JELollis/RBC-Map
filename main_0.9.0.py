@@ -3607,7 +3607,7 @@ class RBCCommunityMap(QMainWindow):
         """
         Open the RBC Website in the system's default web browser.
         """
-        webbrowser.open('http://lollis-home.tailbf7f28.ts.net/viewpage.php?page_id=1')
+        webbrowser.open('https://lollis-home.ddns.net/viewpage.php?page_id=1')
 
     def show_about_dialog(self):
         """
