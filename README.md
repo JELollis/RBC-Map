@@ -1,4 +1,4 @@
-# RBC City Map Application
+# RBC Community Map Application
 
 This project is an attempt to create an interactive map coded in Python for use with **Vampires! The Dark Alleyway**, located at [RavenBlack City](https://quiz.ravenblack.net/blood.pl).
 
