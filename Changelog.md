@@ -85,121 +85,107 @@
   - Enhanced distance calculations for more accurate AP costs.
   - Updated information frame to display AP costs for nearest locations and destinations.
 
-### Version 0.6.2
+#### Version 0.6.2
 - **Improved Import Handling**: Added better handling for module imports with an automated installation option for missing dependencies.
 - **Database Connection**: Enhanced the logic for connecting to both local and remote MySQL databases with fallback mechanisms.
 - **Error Handling**: Implemented more robust error handling during the initialization phase.
 
-### Version 0.6.3
+#### Version 0.6.3
 - **Character Management**: Added features to manage characters, including adding, modifying, and deleting characters. The character data is now stored using `pickle`.
 - **UI Enhancements**: Updated the UI to include a character list and management buttons, with a new feature to select characters from a list and log in automatically.
 - **Website Button**: Added a button for future website integration, with a "Coming Soon" popup for now.
 
-### Version 0.7.0
+#### Version 0.7.0
 - **Theme Customization**: Introduced a new feature for customizing the application theme, including saving and loading theme settings.
 - **Database Viewer**: Added a database viewer utility for viewing and managing data tables directly within the application.
 - **Enhanced Logging**: Implemented a more comprehensive logging setup, including log files for debugging and tracking usage.
 
-### Version 0.7.1
+#### Version 0.7.1
 - **Credits and About Dialogs**: Added detailed "About" and "Credits" dialogs with scrolling animations and detailed acknowledgments.
 - **Menu Actions**: Expanded the menu with new actions for opening Discord, the RBC website, and viewing application details.
 - **Edge Case Handling**: Improved handling of edge cases on the map, such as interactions at the very edges of the grid.
 
-### Version 0.7.2
+#### Version 0.7.2
 - **Intersection Naming**: Updated the intersection naming logic to handle cases where locations are at the edge of the map, ensuring consistent and accurate labels.
 - **SQLite Cookie Storage**: Implemented an SQLite-based cookie storage system for managing session cookies within the application.
 - **User Interface Updates**: Enhanced various UI components, including a more dynamic and responsive map view, improved character management, and additional customization options.
 
-### Version 0.7.3
+#### Version 0.7.3
 - **Scraping and Data Updates**: Added automated scraping and data updates for guilds and shops when the "Update Data" button is clicked.
-	-The scraping process now runs before updating comboboxes with the latest data.
-	-Improved logic to handle missing or outdated data during the scraping process.
--	**Bug Fixes**: Addressed various bugs related to data handling and UI updates.
+  - The scraping process now runs before updating comboboxes with the latest data.
+  - Improved logic to handle missing or outdated data during the scraping process.
+- **Bug Fixes**: Addressed various bugs related to data handling and UI updates.
 - **Performance Improvements**: Optimized data loading and scraping processes for faster updates.
 
----
+#### Version 0.8.0
+- **Major New Features**:
+  - **Enhanced Data Loading and Management**: Comprehensive loading from MySQL, including coordinates for `banks`, `taverns`, `transits`, `user_buildings`, `shops`, `guilds`, and `places_of_interest`.
+  - **Coin Management and Cookie Persistence**: Introduced SQLite databases for cookies (`cookies.db`) and coins (`coins.db`), with coin tracking for bank balances, deposits, withdrawals, and in-game actions.
+  - **Web Scraping Enhancements**: Expanded `AVITDScraper` to fetch guild and shop update timestamps, supporting automatic updates.
+  - **UI and Minimap Enhancements**: Improved minimap rendering with dynamic scaling, zoom controls, and lines to nearest locations.
+  - **Theme Customization**: Added `ThemeCustomizationDialog` for custom UI and minimap color settings.
+  - **Character Management and Persistence**: Enhanced character list with persistent last active character and auto-login.
+  - **Improved Console Logging**: Added JavaScript console logging injection for webview debugging.
+- **Known Issues**:
+  - Occasional map display overlap when zoomed out.
+  - Delays in loading data with remote database connections.
 
-### Version 0.8.0
+#### Version 0.8.1
+- **General Enhancements**: Expanded functionality with advanced error handling and structured logging.
+- **Database & Session Management**: Centralized data in `sessions/rbc_map_data.db` for characters, coins, destinations, cookies, and themes.
+- **Map & Minimap Features**: Added dynamic minimap labels, destination management with AP costs, and transit route info.
+- **User Interface & Theme Customization**: Enhanced theming system with persistent settings and improved UI layout.
+- **Coin and Resource Tracking**: Integrated coin parsing from HTML with persistent storage.
+- **Error Logging and Debugging**: Detailed logging for all major operations and JavaScript console messages.
+- **File Structure and Code Organization**: Modularized code with directory setup for logs, sessions, and images.
 
-**Major New Features**:
-**Enhanced Data Loading and Management**:
--	Comprehensive loading from MySQL, including coordinates for `banks`, `taverns`, `transits`, `user_buildings`, `shops`, `guilds`, and `places_of_interest`.
--	Improved data handling in functions like `load_data` and `connect_to_database` to support these entities.
+#### Version 0.8.2
+- **Database Transition**: Fully transitioned from MySQL and separate SQLite databases (`cookies.db`, `coins.db`) to a unified SQLite database (`rbc_map_data.db`).
+  - Updated all data loading and storage to use the single SQLite database.
+  - Removed pickle-based character storage in favor of SQLite tables.
+- **Shopping List Tool**: Introduced `ShoppingListTool` for generating item lists with cost calculations.
+  - Supports shop selection, charisma-based pricing, and quantity management.
+  - Integrates with character coin data from the database.
+- **UI Improvements**: Added browser navigation buttons (back, forward, refresh) above the webview.
+- **Bug Fixes**: Resolved issues with minimap rendering at extreme zoom levels.
 
-**Coin Management and Cookie Persistence**:
--	Introduced SQLite databases for cookies (`cookies.db`) and coins (`coins.db`), including initialization functions `initialize_cookie_db` and `initialize_coins_db`.
-   **Coin Tracking**: The `extract_coins_from_html` function was enhanced to track coins for different activities, including bank balances, deposits, withdrawals, and coins gained or lost from in-game actions.
--	Persistent session and character data through SQLite cookies database.
+#### Version 0.9.0
+- **Major Features**:
+  - **Damage Calculator**: Added `DamageCalculator` dialog for calculating weapon needs based on target BP.
+    - Supports charisma-based pricing and displays total cost.
+  - **Powers Reference Tool**: Introduced `PowersDialog` for viewing power details and setting guild destinations.
+    - Displays power name, guild, cost, quest info, and skill info, with nearest guild location support.
+  - **CSS Customization**: Added `CSSCustomizationDialog` for webview styling with color and image options.
+    - Saves customizations to SQLite and applies them dynamically.
+- **Minimap Enhancements**: Improved rendering with grid lines, better edge case handling, and dynamic text scaling.
+- **Menu Bar Expansion**: Added tools menu with options for database viewer, shopping list, damage calculator, and powers reference.
+- **Character Login**: Enhanced auto-login with JavaScript form submission and last active character persistence.
+- **Known Issues**: Minor delays in CSS application on webview reload.
 
-**Web Scraping Enhancements**:
--	Expanded `AVITDScraper` to fetch guild and shop update timestamps, supporting automatic updates with `update_guilds` and `update_shops`.
--	`get_next_update_times` function retrieves update times for guilds and shops from the database, with timestamp calculations to determine when to scrape new data.
+#### Version 0.9.1
+- **Performance Optimizations**: Optimized database queries and minimap updates for faster performance.
+- **Recent Destinations**: Added support for saving and displaying up to 10 recent destinations per character.
+- **UI Refinements**: Improved info frame styling with consistent colors and word wrapping.
+- **Bug Fixes**: Fixed coin tracking inaccuracies and improved error handling in `AVITDScraper`.
 
-**UI and Minimap Enhancements**:
--	Improved **minimap rendering** for banks, taverns, transits, guilds, shops, and user buildings with specific color mappings.
--	Added `draw_minimap` method to handle dynamic scaling based on zoom, with labels for locations and intersection names.
-   **Zoom Controls**: `zoom_in` and `zoom_out` functions dynamically adjust the view, redrawing the minimap with specific block and font sizes.
-   **Nearest Locations**: Functions to draw lines from the user's current location to the nearest bank, tavern, and transit.
-
-**Theme Customization**:
-   **Theme Management**: Introduced a `ThemeCustomizationDialog` with methods to save and load theme settings (`save_theme_settings`, `load_theme_settings`, `apply_theme`).
--	Customizable UI theme, including background color, text color, button color, and specific colors for minimap elements.
-
-**Character Management and Persistence**:
-   **Character List Enhancements**: Manage multiple characters with options to add, modify, and delete characters stored in `characters.pkl`.
--	Persistent storage of the last active character with automatic login functionality.
-
-**Improved Console Logging**:
-   **JavaScript Logging Injection**: Injects console logging from the embedded web page for enhanced debugging and error tracking.
-
-**Known Issues**:
--	Occasional map display overlap when zoomed out.
--	Delays in loading data when relying on remote database connections.
-
----
-
-### Version 0.8.1
-
-**General Enhancements**:
--	Expanded the functionality of the **RBC Community Map** to include various user and map management features.
--	Introduced advanced error handling and structured logging, including directory setup for logs, sessions, and images.
-
-**Database & Session Management**:
-**SQLite Database Integration**: Centralized data management in `sessions/rbc_map_data.db` to handle characters, coins, destinations, recent destinations, cookies, color mappings, and theme settings.
-**Character Management Enhancements**:
--	Updated to support multiple characters with database-based tracking, including auto-login functionality for the last active character.
--	First-run character creation flow that initializes a new character with default settings.
-**Cookie Persistence**: Cookies are now stored in SQLite for persistent sessions, loaded on application start, and synced with the in-app web engine.
-
-**Map & Minimap Features**:
-**Dynamic Minimap Rendering**:
--	Introduced dynamic scaling for minimap labels based on the zoom level.
--	Added the `draw_minimap` function with refined logic for rendering various points of interest, such as banks, taverns, and transits, with color-coded labels.
--	Improved minimap display by applying colors and labels with word-wrapping support for intersection names.
-**Navigation Enhancements**:
--	Enabled destination management through a dialog box, allowing users to set and save destinations with a visual indicator.
--	Included a feature to display Action Points (AP) cost for travel to set destinations, with transit costs factored in.
-
-**User Interface & Theme Customization**:
-**Theming System**:
--	Introduced the `ThemeCustomizationDialog` for user-defined themes, allowing custom color settings for the app UI and saving them to SQLite for persistence.
--	`apply_theme` method applies saved theme settings to all UI components dynamically.
-**Enhanced Layout**:
--	Organized a side panel with sections for closest location details, zoom controls, and navigation buttons.
--	Additional UI controls like "Go" buttons, zoom buttons, and action buttons for `Refresh`, `Discord`, and `Website`.
-  
-**Coin and Resource Tracking**:
-**Coin Management**:
--	Integrated `extract_coins_from_html` method to parse and update coin balances directly from HTML, handling bank deposits, withdrawals, hunting rewards, and transit fees.
--	Coin data is saved in the SQLite database, ensuring that changes persist across sessions.
-
-**Error Logging and Debugging**:
-**Enhanced Logging**:
--	Set up detailed logging across the application, including logging for database operations, theme application, character selection, and webview actions.
--	Integrated JavaScript console logging for the embedded web view, capturing and displaying JavaScript console messages within the application.
-
-**File Structure and Code Organization**:
--	Modularized the code for easier maintenance, separating different features into methods within `RBCCommunityMap`.
--	Established a directory structure with `sessions`, `images`, `logs`, and `settings` folders, with initialization functions to ensure the application creates these folders if missing.
+#### Version 0.10.0
+- **General Enhancements**:
+  - **Version Display**: Updated `show_about_dialog` to display `version_number` (0.10.0) for better version tracking.
+  - **Documentation**: Refactored docstring with detailed class and function descriptions for open-source clarity.
+- **Minimap Features**:
+  - Enhanced `draw_minimap` with grid-based rendering and refined location offsets (e.g., +1,+1 for banks).
+  - Added support for clicking the minimap to recenter on any location.
+- **Tools Integration**: Fully integrated shopping list, damage calculator, and powers reference into the workflow.
+  - Shopping list now displays pocket and bank coins alongside the total cost.
+  - Damage calculator uses static pricing from Discount Magic with charisma adjustments.
+- **Database Enhancements**: Added tables for `shop_items`, `powers`, and `recent_destinations` with initial data.
+- **Webview Improvements**: Improved `extract_coins_from_html` to handle additional in-game actions (e.g., robbing, receiving coins).
+- **Theme Customization**: Extended to include minimap-specific colors (e.g., set_destination, transit routes).
+- **Bug Fixes**:
+  - Fixed overlap issues in minimap labels at high zoom levels.
+  - Resolved rare crashes during character switching.
+- **Known Issues**:
+  - Occasional lag when scraping large datasets from "A View in the Dark".
+  - CSS customization may not apply instantly on some webview reloads.
 
 ---
