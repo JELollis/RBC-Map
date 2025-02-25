@@ -19,3 +19,6 @@ testing/fernet_key.py
 Version Control/__pycache__/variables.cpython-312.pyc
 /Version Control/logs
 /Version Control/sessions
+/MySQL Dump/
+*.xlsx
+
