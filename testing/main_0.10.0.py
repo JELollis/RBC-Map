@@ -2009,8 +2009,11 @@ class RBCCommunityMap(QMainWindow):
 
         # Initialize the QWebEngineView before setting up the browser controls
         self.website_frame = QWebEngineView(self.web_profile)
+        # Disable GPU-related features
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebGLEnabled, False)
+        self.website_frame.settings().setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)
+        self.website_frame.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)  # Keep JS enabled
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
 
         # Create the browser controls layout at the top of the webview
