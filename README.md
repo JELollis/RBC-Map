@@ -9,91 +9,97 @@ This project is an attempt to create an interactive map coded in Python for use 
 ## Features
 
 ### 1) Minimap Features
-  - **Track Current Location**: Automatically track the current location based on the game’s right frame.
-  - **Nearest Points of Interest**:
-    - **Red Line**: Drawn to the nearest transit station.
-    - **Blue Line**: Drawn to the nearest bank.
-    - **Orange Line**: Drawn to the nearest pub.
-  - **Zoom Levels**: Display a 3x3 (default), 5x5, 7x7, or 9x9 grid around the player’s position.
-  - **Manual Centering**:
-    - **Click to Center**: Click on a square in the minimap grid to center it.
-    - **Dropdown Selection**: Select a location using the dropdowns below the map and click "Go" to center the minimap on that location.
-  - **Destination Tracking**:
-    - **Set Destination**: Click "Set Destination" to mark the destination on the map.
-    - **Green Line**: Paints a green line on the map to the destination.
-  - **Customizable Themes**: Personalize the minimap and interface themes for a more customized experience.
+- **Track Current Location**: Automatically track the current location based on the game’s right frame.
+- **Nearest Points of Interest**:
+  - **Red Line**: Drawn to the nearest transit station.
+  - **Blue Line**: Drawn to the nearest bank.
+  - **Orange Line**: Drawn to the nearest pub.
+- **Zoom Levels**: Display a 3x3 (default), 5x5, 7x7, or 9x9 grid around the player’s position.
+- **Manual Centering**:
+  - **Click to Center**: Click on a square in the minimap grid to center it.
+  - **Dropdown Selection**: Select a location using the dropdowns below the map and click "Go" to center the minimap on that location.
+- **Destination Tracking**:
+  - **Set Destination**: Click "Set Destination" to mark the destination on the map.
+  - **Green Line**: Paints a green line on the map to the destination.
+- **Customizable Themes**: Personalize the minimap and interface themes for a more customized experience.
 
 ![Minimap Theme](Screenshots/Minimap%20Theme.png "Minimap Theme")
 
 ---
 
 ### 2) Character Management
-  - **Quick Switch**: Store login credentials to quickly and easily switch between characters.
-  - **Local Data Storage**:
-    - User data is securely stored in a local SQLite database.
-    - No user data is stored on external servers.
+- **Quick Switch**: Store login credentials to quickly and easily switch between characters.
+- **Local Data Storage**:
+  - User data is securely stored in a local SQLite database.
+  - No user data is stored on external servers.
 
 ![New User Dialog](Screenshots/New%20User%20Dialog.png "New User Dialog")
 
 ---
 
-### 3) Shopping List Tool
-  - Create and manage shopping lists for in-game items.
-  - Automatically calculate total costs for required items.
-  - View available coins and plan purchases accordingly.
+### 3) Keybinding Support (NEW in v0.10.3)
+- **WASD and Arrow Key Movement**: Toggle between **WASD** and **Arrow Key** navigation.
+- **Persistent Settings**: Keybinding configuration is stored in SQLite for consistency across sessions.
+
+---
+
+### 4) Shopping List Tool
+- Create and manage shopping lists for in-game items.
+- Automatically calculate total costs for required items.
+- View available coins and plan purchases accordingly.
 
 ![Shopping List Tool](Screenshots/Shopping%20List%20Tool.png "Shopping List Tool")
 
 ---
 
-### 4) Database Viewer
-  - A utility to interact with the underlying data tables.
-  - Provides detailed views and management options for advanced users.
+### 5) CSS Customization Tool (Updated in v0.10.3)
+- **Modify Interface Styling**: Customize the UI with CSS modifications.
+- **New Features**: **Box Shadow, Font Selection, and Background Image Support**.
+- **Live Preview**: See CSS changes in real-time before applying them.
+![CSS Customization Tool](Screenshots/CSS%20Customization%20Dialog.png "CSS Customization Tool")
+---
+
+### 6) Database Viewer
+- A utility to interact with the underlying data tables.
+- Provides detailed views and management options for advanced users.
 
 ![Database Viewer](Screenshots/Database%20Viewer.png "Database Viewer")
 
 ---
 
-### 5) Damage Calculator
-  - Calculate the amount of damage needed to reduce a target to staking level.
-  - Analyze various combinations of items and their effects.
+### 7) Damage Calculator
+- Calculate the amount of damage needed to reduce a target to staking level.
+- Analyze various combinations of items and their effects.
 
 ![Damage Calculator](Screenshots/Damage%20Calculator.png "Damage Calculator")
 
 ---
 
-### 6) Power Information
-  - View detailed information about the powers available in the game, including their descriptions, costs, and effects.
+### 8) Power Information
+- View detailed information about the powers available in the game, including their descriptions, costs, and effects.
 
 ![Power Information](Screenshots/Power%20Information.png "Power Information")
 
 ---
 
-### 7) Interface and Theme Customization
-  - Customize the application's interface with personalized themes, including the minimap and main interface elements.
+### 9) Interface and Theme Customization
+- Customize the application's interface with personalized themes, including the minimap and main interface elements.
 
 ![Interface Theme](Screenshots/Interface%20Theme.png "Interface Theme")
 
 ---
 
-### 8) Keyboard Controls (NEW)
-  - **W, A, S, D Movement**: Navigate the minimap using the keyboard.
-  - **Set Destination**: Quickly mark a location and track its path.
-  - **Zoom Controls**: Adjust the minimap view without using the mouse.
-
----
-
-## Recent Updates (v0.10.2)
-- **WASD Movement Support**:
-  - Users can now navigate the minimap using **W, A, S, D** keys for smoother movement.
-- **Character Selection Enhancements**:
-  - Improved UI consistency and selection handling.
+## Recent Updates (v0.10.3)
+- **Keybinding Support**:
+  - Users can now toggle between **WASD** and **Arrow Key** movement.
+  - Persistent storage in SQLite for keybind preferences.
+- **CSS Customization Enhancements**:
+  - Added **Box Shadow, Font Selection, and Background Image Support**.
+  - Improved layout and usability for a cleaner interface.
+- **Minimap Grid Fixes**:
+  - Improved alignment and color handling for destination markers.
 - **Performance Optimizations**:
-  - Optimized **database queries** for faster loading times.
-  - Improved **memory handling** during web scraping.
-- **Bug Fixes & Refinements**:
-  - Resolved **coordinate tracking inconsistencies**.
-  - Fixed rare crashes related to **destination setting**.
+  - Various database and UI speed improvements.
 
 ---
 
@@ -102,7 +108,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 This project is hosted on GitHub: [RBC-Map GitHub Repository](https://github.com/JELollis/RBC-Map). Contributions and feedback are always welcome!
 
 ### License
-The RBC City Map Application is licensed under the Apache License 2.0. See the `LICENSE` file for full terms.
+The RBC City Map Application is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 ---
 
@@ -115,10 +121,10 @@ The RBC City Map Application is licensed under the Apache License 2.0. See the `
 - **Design and Layout**: Shuvi, Blair Wilson (Ikunnaprinsess)
 
 #### Special Thanks:
-- Cain "Leprechaun" McBride for **LIAM²**, which inspired this project.
-- Cliff Burton for **A View in the Dark**, a key data source.
-- Everyone contributing to the **RavenBlack Wiki**.
-- Anders for **RBNav** and ongoing support.
+- [**LIAM²**](http://liam2.leprichaunproductions.com/home.php) by Cain "Leprechaun" McBride, which inspired this project.
+- [**A View in the Dark**](https://aviewinthedark.net/) by Cliff Burton, providing the source for shops and guilds data.
+- [**RavenBlack Wiki**](https://ravenblack.city/) contributors.
+- **Anders** for **RBNav** and ongoing support.
 
 ---
 
