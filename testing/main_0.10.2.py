@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.10.0
+# Filename: main_0.10.2
 
 # Copyright 2024 RBC Community Map Team
 #
@@ -217,12 +217,13 @@ To install all required modules, run the following command:
  pip install requests bs4 PySide6 PySide6-WebEngine
 """
 
-import importlib.util
-import math
-import os
 # -----------------------
 # Imports Handling
 # -----------------------
+
+import importlib.util
+import math
+import os
 import sys
 
 # List of required modules
@@ -270,18 +271,21 @@ import webbrowser
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
+    QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
     QTextEdit
 )
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, QShortcut, QKeySequence
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
 from PySide6.QtCore import Slot as pyqtSlot
+from PySide6.QtWidgets import QMainWindow, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
+#import PySide6.QtCore
+
 import sqlite3
 
 # -----------------------
@@ -329,7 +333,7 @@ def setup_logging():
 # Call the logging setup function to initialize logging configuration
 setup_logging()
 
-version_number = "0.10.0"  # Update with your app version
+version_number = "0.10.2"  # Update with your app version
 logging.info(f"Launching app version {version_number}")
 
 # -----------------------
@@ -479,6 +483,8 @@ CREATE TABLE IF NOT EXISTS `userbuildings` (
 `Row` TEXT NOT NULL,
 PRIMARY KEY (`ID`)
 );
+INSERT OR IGNORE INTO settings (setting_name, setting_value)
+        VALUES ('keybind_config', 1);
 INSERT OR IGNORE INTO `banks` ("ID","Column","Row","Name") VALUES (1,'Aardvark','82nd','OmniBank'),
  (2,'Alder','40th','OmniBank'),
  (3,'Alder','80th','OmniBank'),
@@ -679,22 +685,46 @@ INSERT OR IGNORE INTO `banks` ("ID","Column","Row","Name") VALUES (1,'Aardvark',
  (198,'Zelkova','23rd','OmniBank'),
  (199,'Zelkova','73rd','OmniBank'),
  (200,'Zinc','74th','OmniBank');
-INSERT OR IGNORE INTO "color_mappings" ("id","type","color") VALUES (1,'bank','blue'),
- (2,'tavern','orange'),
- (3,'transit','red'),
- (4,'user_building','purple'),
- (5,'alley','grey'),
- (6,'default','black'),
- (7,'border','white'),
- (9,'edge','blue'),
- (10,'shop','green'),
- (11,'guild','yellow'),
- (12,'placesofinterest','purple'),
- (13,'background','#d4d4d4'),
- (14,'text_color','#000000'),
- (15,'button_color','#b1b1b1'),
- (30,'set_destination','#1a7f7a'),
- (31,'set_destination_transit','#046380');
+INSERT OR IGNORE INTO `color_mappings` (`id`, `type`, `color`) VALUES
+(1, 'bank', '#0000ff'),
+(2, 'tavern', '#887700'),
+(3, 'transit', '#880000'),
+(4, 'user_building', '#660022'),
+(5, 'alley', '#888888'),
+(6, 'default', '#000000'),
+(7, 'border', 'white'),
+(8, 'edge', '#0000ff'),
+(9, 'shop', '#004488'),
+(10, 'guild', '#ff0000'),
+(11, 'placesofinterest', '#660022'),
+(12, 'background', '#000000'),
+(13, 'text_color', '#dddddd'),
+(14, 'button_color', '#b1b1b1'),
+(15, 'cityblock', '#0000dd'),
+(16, 'intersect', '#008800'),
+(17, 'street', '#444444'),
+(18, 'human_bg', 'black'),
+(19, 'vhuman_bg', 'black'),
+(20, 'phuman_bg', 'black'),
+(21, 'whuman_bg', 'black'),
+(22, 'object_color', 'yellow'),
+(23, 'mo_bg', 'yellow'),
+(24, 'textad_bg', '#002211'),
+(25, 'hiscore_border', '#668877'),
+(26, 'hiscore_first_row', '#004400'),
+(27, 'table_at_bg', '#333333'),
+(28, 'sb_bg', '#555533'),
+(29, 'set_destination', '#1a7f7a'),
+(30, 'set_destination_transit', '#046380'),
+(31, 'headline_text', '#ff0000'),
+(32, 'link_text', '#999999'),
+(33, 'table_border', 'white'),
+(34, 'battle_border', 'none'),
+(35, 'pansy', '#ff8888'),
+(36, 'cloak', '#00ffff'),
+(37, 'rich', '#ffff44'),
+(38, 'mh_bg', 'transparent'),
+(39, 'mh_text', 'white');
 INSERT OR IGNORE INTO  "columns" ("ID","Name","Coordinate") VALUES 
 ('1', 'WCL', '0'),
 ('2', 'Western City Limits', '0'),
@@ -1594,16 +1624,23 @@ def load_data(DB_PATH):
             row_coord = rows.get(row_name, 0) + 1
             places_of_interest_coordinates[name] = (col_coord, row_coord)
 
+        cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
+        color_mappings = {type_: QColor(color) for type_, color in cursor.fetchall()}
+
+        cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
+        row = cursor.fetchone()
+        keybind_config = int(row[0]) if row else 1  # Default to WASD (1)
+
         connection.close()
         return (
-            columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates
+            columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config
         )
     except sqlite3.Error as e:
         logging.error("Failed to load data from database: %s", e)
         raise
 
 # Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
-columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data(DB_PATH)
+columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config = load_data(DB_PATH)
 
 # -----------------------
 # Webview Cookie Database
@@ -1705,6 +1742,7 @@ def clear_cookie_db():
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
+
 class RBCCommunityMap(QMainWindow):
     """
     Main application class for the RBC Community Map.
@@ -1746,7 +1784,7 @@ class RBCCommunityMap(QMainWindow):
         self.setup_cookie_handling()
 
         # Load initial data
-        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates = load_data(DB_PATH)
+        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates, self.keybind_config = load_data(DB_PATH)
 
         # Set up the UI components
         self.zoom_level = 3
@@ -1769,16 +1807,129 @@ class RBCCommunityMap(QMainWindow):
         if not self.characters:
             self.firstrun_character_creation()
 
+        # Load remaining data and UI
         self.load_destination()
         self.setup_ui_components()
         self.setup_console_logging()
+        self.setup_keybind_toggle()  # Add keybind toggle to menu
         self.show()
         self.update_minimap()
         self.load_last_active_character()
 
-    # -----------------------
-    # Load and apply customized UI Theme
-    # -----------------------
+        # Keybinding setup
+        self.keybind_config = self.load_keybind_config()  # Load WASD/Arrow config
+        self.setup_keybindings()  # Set up WASD/Arrow key shortcuts
+        self.setFocusPolicy(Qt.StrongFocus)  # Ensure main window can receive focus
+        self.website_frame.setFocusPolicy(Qt.StrongFocus)  # Ensure webview can receive focus
+        self.website_frame.setFocus()  # Set initial focus to webview for keybindings
+
+# -----------------------
+# Keybindings
+# -----------------------
+
+    def load_keybind_config(self):
+        """Load keybind configuration from the database, defaulting to WASD (1)."""
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
+            result = cursor.fetchone()
+        return result[0] if result else 1
+
+    def setup_keybindings(self):
+        """Set up keybindings for grid-based movement."""
+        movement_configs = {
+            1: {  # WASD Mode
+                Qt.Key.Key_W: 1,  # Top-center
+                Qt.Key.Key_A: 3,  # Middle-left
+                Qt.Key.Key_S: 7,  # Bottom-center
+                Qt.Key.Key_D: 5   # Middle-right
+            },
+            2: {  # Arrow Keys Mode
+                Qt.Key.Key_Up: 1,
+                Qt.Key.Key_Left: 3,
+                Qt.Key.Key_Down: 7,
+                Qt.Key.Key_Right: 5
+            }
+        }
+
+        self.movement_keys = movement_configs.get(self.keybind_config, movement_configs[1])
+        logging.info(f"Movement Keys Set: {self.movement_keys}")
+
+        self.clear_existing_keybindings()
+
+        for key, move_index in self.movement_keys.items():
+            shortcut = QShortcut(QKeySequence(key), self.website_frame, context=Qt.ApplicationShortcut)
+            shortcut.activated.connect(lambda idx=move_index: self.move_character(idx))
+
+    def move_character(self, move_index):
+        """Move character to the specified grid position."""
+        logging.debug(f"Move triggered for grid index: {move_index}")
+        js_code = """
+            (function() {
+                // Find all table cells in the movement grid
+                const table = document.querySelector('table table'); // Nested table with grid
+                if (!table) {
+                    console.log('Movement grid table not found');
+                    return 'No table';
+                }
+                const spaces = Array.from(table.querySelectorAll('td'));
+                if (spaces.length !== 9) {
+                    console.log('Expected 9 grid cells, found: ' + spaces.length);
+                    return 'Invalid grid size: ' + spaces.length;
+                }
+                const targetSpace = spaces[%d];
+                if (!targetSpace) {
+                    console.log('Target space not found for index: %d');
+                    return 'No target space';
+                }
+                const form = targetSpace.querySelector('form[action="/blood.pl"][method="POST"]');
+                if (!form) {
+                    console.log('No form found in target space at index: %d');
+                    return 'No form';
+                }
+                const x = form.querySelector('input[name="x"]').value;
+                const y = form.querySelector('input[name="y"]').value;
+                form.submit();
+                console.log('Submitted move to x=' + x + ', y=' + y);
+                return 'Submitted to x=' + x + ', y=' + y;
+            })();
+        """ % (move_index, move_index, move_index)
+        self.website_frame.page().runJavaScript(js_code, lambda result: logging.debug(f"Move result: {result}"))
+        self.website_frame.setFocus()
+
+    def setup_keybind_toggle(self):
+        """Add a menu action to toggle between WASD and Arrow key configurations."""
+        if not hasattr(self, 'menuBar'):
+            self.menuBar().setNativeMenuBar(False)
+        tools_menu = self.menuBar().addMenu("Tools")
+        toggle_action = QAction("Toggle Keybind Config", self)
+        toggle_action.triggered.connect(self.toggle_keybind_config)
+        tools_menu.addAction(toggle_action)
+        logging.info("Keybind toggle action added to Tools menu")
+
+    def toggle_keybind_config(self):
+        """Switch between WASD (1) and Arrow Keys (2) configurations and save to database."""
+        self.keybind_config = 2 if self.keybind_config == 1 else 1
+        mode = 'WASD' if self.keybind_config == 1 else 'Arrow Keys'
+        logging.info(f"Switched to keybind config {self.keybind_config} ({mode})")
+
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE settings SET setting_value = ? WHERE setting_name = 'keybind_config'",
+                          (self.keybind_config,))
+            conn.commit()
+
+        self.setup_keybindings()
+        QMessageBox.information(self, "Keybind Config", f"Switched to {mode}")
+
+    def clear_existing_keybindings(self):
+        """Remove existing shortcuts from website_frame to prevent duplicates."""
+        for shortcut in self.website_frame.findChildren(QShortcut):
+            shortcut.setParent(None)
+
+# -----------------------
+# Load and apply customized UI Theme
+# -----------------------
 
     def load_theme_settings(self):
         """
@@ -1914,9 +2065,10 @@ class RBCCommunityMap(QMainWindow):
         dialog = CSSCustomizationDialog(self)
         dialog.exec()
 
-    # -----------------------
-    # Cookie Handling
-    # -----------------------
+# -----------------------
+# Cookie Handling
+# -----------------------
+
     def setup_cookie_handling(self):
         """
         Set up cookie handling, including loading and saving cookies from the 'cookies' table in rbc_map_data.db.
@@ -1988,9 +2140,9 @@ class RBCCommunityMap(QMainWindow):
         finally:
             connection.close()
 
-    # -----------------------
-    # UI Setup
-    # -----------------------
+# -----------------------
+# UI Setup
+# -----------------------
 
     def setup_ui_components(self):
         """
@@ -2009,9 +2161,16 @@ class RBCCommunityMap(QMainWindow):
 
         # Initialize the QWebEngineView before setting up the browser controls
         self.website_frame = QWebEngineView(self.web_profile)
+
+        # Disable GPU-related features
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, False)
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)  # Keep JS enabled
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+
+        # Add Keybindings
+        self.setup_keybindings()
 
         # Create the browser controls layout at the top of the webview
         self.browser_controls_layout = QHBoxLayout()
@@ -2258,9 +2417,9 @@ class RBCCommunityMap(QMainWindow):
                 self.show()
                 self.update_minimap()
 
-    # -----------------------
-    # Browser Controls Setup
-    # -----------------------
+# -----------------------
+# Browser Controls Setup
+# -----------------------
 
     def go_back(self):
         """Navigate the web browser back to the previous page."""
@@ -2361,9 +2520,9 @@ class RBCCommunityMap(QMainWindow):
         """Zoom out on the web page displayed in the QWebEngineView."""
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
-    # -----------------------
-    # Error Logging
-    # -----------------------
+# -----------------------
+# Error Logging
+# -----------------------
 
     def setup_console_logging(self):
         """
@@ -2403,9 +2562,9 @@ class RBCCommunityMap(QMainWindow):
         print(f"Console message: {message}")
         logging.debug(f"Console message: {message}")
 
-    # -----------------------
-    # Menu Control Items
-    # -----------------------
+# -----------------------
+# Menu Control Items
+# -----------------------
 
     def save_webpage_screenshot(self):
         """
@@ -2481,9 +2640,9 @@ class RBCCommunityMap(QMainWindow):
         powers_dialog = PowersDialog(self, self.character_x, self.character_y, DB_PATH)  # Ensure correct parameters
         powers_dialog.exec()
 
-    # -----------------------
-    # Character Management
-    # -----------------------
+# -----------------------
+# Character Management
+# -----------------------
 
     def load_characters(self):
         """
@@ -2763,15 +2922,14 @@ class RBCCommunityMap(QMainWindow):
         except sqlite3.Error as e:
             logging.error(f"Failed to load last active character from database: {e}")
 
-    # -----------------------
-    # Web View Handling
-    # -----------------------
+# -----------------------
+# Web View Handling
+# -----------------------
 
     def refresh_webview(self):
         """Refresh the webview content."""
         self.website_frame.reload()
 
-    # Add this new method here
     def apply_custom_css(self):
         """Inject the custom CSS into the webview."""
         try:
@@ -2839,42 +2997,86 @@ class RBCCommunityMap(QMainWindow):
 
     def extract_coordinates_from_html(self, html):
         """
-        Extract coordinates from the HTML content.
+        Extract coordinates from the HTML content, prioritizing the player's current location.
 
         Args:
             html (str): HTML content as a string.
 
         Returns:
-            tuple: x and y coordinates.
-
-        Parses the HTML using BeautifulSoup to find the input elements that hold the
-        x and y coordinates. Returns these coordinates if found, otherwise returns None.
+            tuple: x and y coordinates, or (None, None) if not found.
         """
         soup = BeautifulSoup(html, 'html.parser')
-        x_input = soup.find('input', {'name': 'x'})
-        y_input = soup.find('input', {'name': 'y'})
-        if x_input and y_input:
-            try:
-                x_value = int(x_input['value'])
-                y_value = int(y_input['value'])
-                logging.debug(f"Extracted coordinates from input fields: x={x_value}, y={y_value}")
-                return x_value, y_value
-            except ValueError:
-                logging.warning("Invalid coordinate values in input fields.")
-        current_location_td = soup.find('td', {'class': 'street', 'style': 'border: solid 1px white;'})
 
-        if current_location_td:
-            form = current_location_td.find('form')
-            if form:
-                try:
-                    x_value = int(form.find('input', {'name': 'x'})['value'])
-                    y_value = int(form.find('input', {'name': 'y'})['value'])
-                    logging.debug(f"Extracted coordinates from form: x={x_value}, y={y_value}")
-                    return x_value, y_value
-                except ValueError:
-                    logging.warning("Invalid coordinate values in form.")
-        logging.debug("No coordinates found in the HTML content.")
-        return None, None
+        logging.debug("Extracting coordinates from HTML...")
+
+        # Check for city limits
+        city_limit_cells = soup.find_all('td', class_='cityblock')
+        if city_limit_cells:
+            logging.debug(f"Found {len(city_limit_cells)} city limit blocks.")
+
+        # Check for first available coordinates
+        first_x_input = soup.find('input', {'name': 'x'})
+        first_y_input = soup.find('input', {'name': 'y'})
+
+        first_x = int(first_x_input['value']) if first_x_input else None
+        first_y = int(first_y_input['value']) if first_y_input else None
+
+        logging.debug(f"First detected coordinate: x={first_x}, y={first_y}")
+
+        if len(city_limit_cells) >= 4:
+            logging.warning("City limits detected in all four edges. Adjusting coordinates.")
+
+            if first_x is not None and first_y is not None:
+                return -1, -1  # Assign -1,-1 if surrounded by city limits
+            else:
+                return None, None
+
+        # Adjust for Northern Edge (Y=0)
+        if len(city_limit_cells) > 0 and first_y == 0:
+            logging.debug(f"Detected Northern City Limit at y={first_y}")
+            return first_x, -1
+
+        # Adjust for Western Edge (X=0)
+        if len(city_limit_cells) > 0 and first_x == 0:
+            logging.debug(f"Detected Western City Limit at x={first_x}")
+            return -1, first_y
+
+        # If no adjustments, return detected values
+        return first_x, first_y
+
+    def adjust_for_city_limits_with_html(self, x, y, soup):
+        """
+        Adjust coordinates based on city limits in the HTML content.
+
+        Args:
+            x (int): X coordinate.
+            y (int): Y coordinate.
+            soup (BeautifulSoup): Parsed HTML content.
+
+        Returns:
+            tuple: Adjusted x and y coordinates.
+        """
+        logging.debug(f"Adjusting for city limits: Initial x={x}, y={y}")
+
+        # Check if city limits blocks are in the first row
+        city_limits_present = soup.find_all('td', class_='cityblock',
+                                            string=lambda text: text and 'City Limits' in text)
+
+        if city_limits_present:
+            logging.debug(f"Detected city limits in HTML. Adjusting...")
+
+            if x == 0 and y == 0:
+                logging.debug("Detected corner case (0,0). Adjusting to (-1, -1)")
+                return -1, -1
+            elif x == 0:
+                logging.debug(f"Detected west edge at x={x}. Adjusting to (-1, {y})")
+                return -1, y
+            elif y == 0:
+                logging.debug(f"Detected north edge at y={y}. Adjusting to ({x}, -1)")
+                return x, -1
+
+        logging.debug(f"Final adjusted coordinates: x={x}, y={y}")
+        return x, y
 
     def extract_coins_from_html(self, html):
         """
@@ -2952,9 +3154,10 @@ class RBCCommunityMap(QMainWindow):
             conn.commit()
             logging.info(f"Updated coins for character ID {character_id}.")
 
-    # -----------------------
-    # Minimap Drawing and Update
-    # -----------------------
+# -----------------------
+# Minimap Drawing and Update
+# -----------------------
+
     def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations,
@@ -2968,66 +3171,34 @@ class RBCCommunityMap(QMainWindow):
         font_size = max(8, block_size // 4)  # Dynamically adjust font size, with a minimum of 5
         border_size = 1  # Size of the border around each cell
 
-        # Dynamically adjust font size based on block size
         font = painter.font()
         font.setPointSize(font_size)
         painter.setFont(font)
 
-        # Calculate font metrics for centering text
         font_metrics = QFontMetrics(font)
 
         logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "f"zoom_level={self.zoom_level}, block_size={block_size}")
 
-        def draw_location(column_index, row_index, color, label_text=None):
+        def draw_label_box(x, y, width, height, bg_color, text):
             """
-            Draws a location on the minimap with dynamic scaling and border.
-
-            Args:
-                column_index (int): Column index of the location.
-                row_index (int): Row index of the location.
-                color (QColor): Color to fill the location.
-                label_text (str, optional): Label text to draw at the location. Defaults to None.
+            Draws a text label box with a background color, white border, and properly formatted text.
             """
-            #logging.debug(f"Location '{label_text}' Initial column_index={column_index}, row_index={row_index}")
-            # Adjust offsets specifically for edge cases
-            adjusted_column_index = column_index - 1 if column_index == 1 else column_index
-            adjusted_row_index = row_index - 1 if row_index == 1 else row_index
+            # Draw background
+            painter.fillRect(QRect(x, y, width, height), bg_color)
 
-            # Calculate cell position on the minimap grid
-            x0 = (adjusted_column_index - self.column_start) * block_size
-            y0 = (adjusted_row_index - self.row_start) * block_size
+            # Draw white border
+            painter.setPen(QColor('white'))
+            painter.drawRect(QRect(x, y, width, height))
 
-            # Edge cases: Ensure edge locations draw correctly at the map edges
-            if column_index == 1:
-                adjusted_column_index = column_index
-                x0 = (column_index - self.column_start) * block_size
-            if row_index == 1:
-                adjusted_row_index = row_index
-                y0 = (row_index - self.row_start) * block_size
+            # Set font
+            font = painter.font()
+            font.setPointSize(max(4, min(8, block_size // 4)))  # Keep text readable
+            painter.setFont(font)
 
-            # Ensure the adjusted location is within bounds
-            if x0 < 0 or y0 < 0 or x0 >= self.minimap_size or y0 >= self.minimap_size:
-                #logging.debug(f"Skipping drawing location '{label_text}' at column_index={column_index}, row_index={row_index}, "f"x0={x0}, y0={y0} (out of bounds)")
-                return
-
-            #logging.debug(f"Drawing location '{label_text}' at column_index={column_index}, row_index={row_index}, "f"x0={x0}, y0={y0}, color={color.name()}")
-
-            # Draw a smaller rectangle within the cell
-            inner_margin = block_size // 4
-            painter.fillRect(x0 + inner_margin, y0 + inner_margin,
-                             block_size - 2 * inner_margin, block_size - 2 * inner_margin, color)
-
-            if label_text:
-                # Calculate bounding box for text centering
-                text_rect = font_metrics.boundingRect(label_text)
-                # Calculate centered position with boundaries
-                text_x = x0 + (block_size - text_rect.width()) // 2
-                text_y = y0 + (block_size + text_rect.height()) // 2 - font_metrics.descent()
-
-                # Define QRect for wrapping within cell size, ensuring center alignment with bounds
-                wrap_rect = QRect(x0, y0, block_size, block_size)
-                painter.setPen(QColor('white'))
-                painter.drawText(wrap_rect, Qt.AlignCenter | Qt.TextWordWrap, label_text)
+            # Draw text (aligned top-center, allowing wrapping)
+            text_rect = QRect(x, y, width, height)
+            painter.setPen(QColor('white'))
+            painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, text)
 
         # Draw the grid
         for i in range(self.zoom_level):
@@ -3047,7 +3218,7 @@ class RBCCommunityMap(QMainWindow):
                 row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index <= 0 or column_index >= 201 or row_index <= 0 or row_index >= 201:
+                if column_index < 1 or column_index > 200 or row_index < 1 or row_index > 200:
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -3057,114 +3228,129 @@ class RBCCommunityMap(QMainWindow):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["default"])
 
-                # Draw labels only at intersections of named streets
+                # Draw intersection labels with background box
                 if column_name and row_name:
                     label_text = f"{column_name} & {row_name}"
-
-                    # Set the font size dynamically, ensuring it does not exceed the maximum
-                    max_font_size = 8  # Set to desired maximum font size
-                    calculated_font_size = max(4, min(block_size // 3, max_font_size))
-                    font = painter.font()
-                    font.setPointSize(calculated_font_size)
-                    painter.setFont(font)
-
-                    # Define text rectangle and enable word wrapping with center alignment
-                    text_rect = QRect(x0, y0, block_size, block_size)
-                    painter.setPen(QColor('white'))
-                    painter.drawText(text_rect, Qt.AlignCenter | Qt.TextWordWrap, label_text)
+                    label_height = block_size // 3  # Set label height
+                    draw_label_box(x0 + 2, y0 + 2, block_size - 4, label_height, self.color_mappings["intersect"], label_text)
 
         # Draw special locations (banks with correct offsets)
         for (col_name, row_name, _, _) in self.banks_coordinates:
             column_index = self.columns.get(col_name)
             row_index = self.rows.get(row_name)
             if column_index is not None and row_index is not None:
-                # Add +1,+1 offset specifically for banks
                 adjusted_column_index = column_index + 1
                 adjusted_row_index = row_index + 1
-                draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
+                draw_label_box(
+                    (adjusted_column_index - self.column_start) * block_size,
+                    (adjusted_row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["bank"], "BANK"
+                )
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
         # Draw other locations without the offset
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_location(column_index, row_index, self.color_mappings["tavern"], name)
+                draw_label_box(
+                    (column_index - self.column_start) * block_size,
+                    (row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["tavern"], name
+                )
 
         for name, (column_index, row_index) in self.transits_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_location(column_index, row_index, self.color_mappings["transit"], name)
+                draw_label_box(
+                    (column_index - self.column_start) * block_size,
+                    (row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["transit"], name
+                )
 
         for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_location(column_index, row_index, self.color_mappings["user_building"], name)
+                draw_label_box(
+                    (column_index - self.column_start) * block_size,
+                    (row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["user_building"], name
+                )
 
         for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_location(column_index, row_index, self.color_mappings["shop"], name)
+                draw_label_box(
+                    (column_index - self.column_start) * block_size,
+                    (row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["shop"], name
+                )
 
         for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_location(column_index, row_index, self.color_mappings["guild"], name)
+                draw_label_box(
+                    (column_index - self.column_start) * block_size,
+                    (row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["guild"], name
+                )
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
-            else:
-                logging.warning(f"Skipping place of interest '{name}' due to missing coordinates")
+                draw_label_box(
+                    (column_index - self.column_start) * block_size,
+                    (row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["placesofinterest"], name
+                )
 
-        # Get current location
-        current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
+            # Get current location
+            current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
 
-        # Find and draw lines to nearest locations
-        nearest_tavern = self.find_nearest_tavern(current_x, current_y)
-        nearest_bank = self.find_nearest_bank(current_x, current_y)
-        nearest_transit = self.find_nearest_transit(current_x, current_y)
+            # Find and draw lines to nearest locations
+            nearest_tavern = self.find_nearest_tavern(current_x, current_y)
+            nearest_bank = self.find_nearest_bank(current_x, current_y)
+            nearest_transit = self.find_nearest_transit(current_x, current_y)
 
-        # Draw nearest tavern line
-        if nearest_tavern:
-            nearest_tavern_coords = nearest_tavern[0][1]
-            painter.setPen(QPen(QColor('orange'), 3))  # Set pen color to orange and width to 3
-            painter.drawLine(
-                (current_x - self.column_start) * block_size + block_size // 2,
-                (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
-            )
+            # Draw nearest tavern line
+            if nearest_tavern:
+                nearest_tavern_coords = nearest_tavern[0][1]
+                painter.setPen(QPen(QColor('orange'), 3))
+                painter.drawLine(
+                    (current_x - self.column_start) * block_size + block_size // 2,
+                    (current_y - self.row_start) * block_size + block_size // 2,
+                    (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
+                    (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
+                )
 
-        # Draw nearest bank line
-        if nearest_bank:
-            nearest_bank_coords = nearest_bank[0][1]
-            painter.setPen(QPen(QColor('blue'), 3))  # Set pen color to blue and width to 3
-            painter.drawLine(
-                (current_x - self.column_start) * block_size + block_size // 2,
-                (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
-                (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
-            )
+            # Draw nearest bank line
+            if nearest_bank:
+                nearest_bank_coords = nearest_bank[0][1]
+                painter.setPen(QPen(QColor('blue'), 3))
+                painter.drawLine(
+                    (current_x - self.column_start) * block_size + block_size // 2,
+                    (current_y - self.row_start) * block_size + block_size // 2,
+                    (nearest_bank_coords[0] - self.column_start) * block_size + block_size // 2,
+                    (nearest_bank_coords[1] - self.row_start) * block_size + block_size // 2
+                )
 
-        # Draw nearest transit line
-        if nearest_transit:
-            nearest_transit_coords = nearest_transit[0][1]
-            painter.setPen(QPen(QColor('red'), 3))  # Set pen color to red and width to 3
-            painter.drawLine(
-                (current_x - self.column_start) * block_size + block_size // 2,
-                (current_y - self.row_start) * block_size + block_size // 2,
-                (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
-                (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
-            )
+            # Draw nearest transit line
+            if nearest_transit:
+                nearest_transit_coords = nearest_transit[0][1]
+                painter.setPen(QPen(QColor('red'), 3))
+                painter.drawLine(
+                    (current_x - self.column_start) * block_size + block_size // 2,
+                    (current_y - self.row_start) * block_size + block_size // 2,
+                    (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
+                    (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
+                )
 
-        # Draw destination line
-        if self.destination:
-            painter.setPen(QPen(QColor('green'), 3))  # Set pen color to green and width to 3
-            painter.drawLine(
-                (current_x - self.column_start) * block_size + block_size // 2,
-                (current_y - self.row_start) * block_size + block_size // 2,
-                (self.destination[0] - self.column_start) * block_size + block_size // 2,
-                (self.destination[1] - self.row_start) * block_size + block_size // 2
-            )
+            # Draw destination line
+            if self.destination:
+                painter.setPen(QPen(QColor('green'), 3))
+                painter.drawLine(
+                    (current_x - self.column_start) * block_size + block_size // 2,
+                    (current_y - self.row_start) * block_size + block_size // 2,
+                    (self.destination[0] - self.column_start) * block_size + block_size // 2,
+                    (self.destination[1] - self.row_start) * block_size + block_size // 2
+                )
 
-        painter.end()
-        self.minimap_label.setPixmap(pixmap)
+            painter.end()
+            self.minimap_label.setPixmap(pixmap)
 
     def update_minimap(self):
         """
@@ -3218,7 +3404,9 @@ class RBCCommunityMap(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        valid_banks = [(self.columns.get(col, 0), self.rows.get(row, 0)) for col, row, _, _ in self.banks_coordinates]
+        valid_banks = [(self.columns.get(col, 0) + 1, self.rows.get(row, 0) + 1) for col, row, _, _ in
+                       self.banks_coordinates]
+
         if not valid_banks:
             logging.warning("No valid bank locations found.")
             return None
@@ -3241,7 +3429,7 @@ class RBCCommunityMap(QMainWindow):
     def set_destination(self):
         """Open the set destination dialog to select a new destination."""
         dialog = set_destination_dialog(self)
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.accepted:
             self.update_minimap()
 
     def get_current_destination(self):
@@ -3266,9 +3454,9 @@ class RBCCommunityMap(QMainWindow):
             self.destination = None
             logging.info("No destination found in database. Starting with no destination.")
 
-    # -----------------------
-    # Minimap Controls
-    # -----------------------
+# -----------------------
+# Minimap Controls
+# -----------------------
 
     def zoom_in(self):
         """
@@ -3329,11 +3517,17 @@ class RBCCommunityMap(QMainWindow):
             logging.error("Character position not set. Cannot recenter minimap.")
             return
 
+        logging.debug(f"Before recentering: character_x={self.character_x}, character_y={self.character_y}")
+
         # Calculate zoom offset (-1 for 5x5, -2 for 7x7, etc.)
         zoom_offset = (self.zoom_level - 4) // 2
-        self.column_start = max(-1, min(self.character_x - zoom_offset, 203 - self.zoom_level))
-        self.row_start = max(-1, min(self.character_y - zoom_offset, 203 - self.zoom_level))
-        logging.debug(f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
+        logging.debug(f"Zoom Offset: {zoom_offset}")
+
+        self.column_start = max(0, min(self.character_x - zoom_offset, 200 - self.zoom_level))
+        self.row_start = max(0, min(self.character_y - zoom_offset, 200 - self.zoom_level))
+
+        logging.debug(
+            f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
         self.update_minimap()
 
     def go_to_location(self):
@@ -3384,6 +3578,16 @@ class RBCCommunityMap(QMainWindow):
             else:
                 logging.debug(f"Click ({click_x}, {click_y}) is outside the minimap bounds.")
 
+
+    def cycle_character(self, direction):
+        """Cycle through characters in the QListWidget."""
+        current_row = self.character_list.currentRow()
+        new_row = (current_row + direction) % self.character_list.count()
+        if new_row < 0:
+            new_row = self.character_list.count() - 1
+        self.character_list.setCurrentRow(new_row)
+        self.on_character_selected(self.character_list.item(new_row))
+
     def open_set_destination_dialog(self):
         """
         Open the set destination dialog.
@@ -3392,7 +3596,7 @@ class RBCCommunityMap(QMainWindow):
         dialog = set_destination_dialog(self)
 
         # Execute dialog and check for acceptance
-        if dialog.exec() == QDialog.Accepted:
+        if dialog.exec() == QDialog.accepted:
             # Load the newly set destination from the database
             self.load_destination()
 
@@ -3426,9 +3630,9 @@ class RBCCommunityMap(QMainWindow):
             except sqlite3.Error as e:
                 logging.error(f"Failed to save recent destination: {e}")
 
-    # -----------------------
-    # Infobar Management
-    # -----------------------
+# -----------------------
+# Infobar Management
+# -----------------------
 
     def calculate_ap_cost(self, start, end):
         """
@@ -3558,9 +3762,9 @@ class RBCCommunityMap(QMainWindow):
         else:
             return f"{column_name} & {row_name}"
 
-    # -----------------------
-    # Menu Actions
-    # -----------------------
+# -----------------------
+# Menu Actions
+# -----------------------
 
     def open_discord(self):
         """Open the RBC Discord invite link in the system's default web browser."""
@@ -3634,6 +3838,7 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # Database Viewer
     # -----------------------
+
     def open_database_viewer(self):
         """
         Open the database viewer to browse and inspect data from the RBC City Map database.
@@ -3698,6 +3903,7 @@ class RBCCommunityMap(QMainWindow):
 # -----------------------
 # Tools
 # -----------------------
+
 class DatabaseViewer(QMainWindow):
     """
     Main application class for viewing database tables.
@@ -3785,6 +3991,7 @@ class DatabaseViewer(QMainWindow):
 # -----------------------
 # Character Dialog Class
 # -----------------------
+
 class CharacterDialog(QDialog):
     """
     A dialog for adding or modifying a character.
@@ -3839,6 +4046,7 @@ class CharacterDialog(QDialog):
 # -----------------------
 # Theme Customization Dialog
 # -----------------------
+
 class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing the application's theme colors.
@@ -4221,6 +4429,7 @@ class CSSCustomizationDialog(QDialog):
 # -----------------------
 # AVITD Scraper Class
 # -----------------------
+
 class AVITDScraper:
     """
     A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
@@ -4237,7 +4446,7 @@ class AVITDScraper:
         }
 
         # Set up logging
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.basicConfig(level=logging.debug, format='%(asctime)s - %(levelname)s - %(message)s')
         logging.info("AVITDScraper initialized.")
 
     def scrape_guilds_and_shops(self):
@@ -4451,6 +4660,7 @@ class AVITDScraper:
 # -----------------------
 # Set Destination Dialog
 # -----------------------
+
 class set_destination_dialog(QDialog):
     """
     A dialog for setting a destination on the map.
@@ -4857,6 +5067,7 @@ class set_destination_dialog(QDialog):
 # -----------------------
 # Shopping list Tools
 # -----------------------
+
 class ShoppingListTool(QMainWindow):
     def __init__(self, character_name, DB_PATH):
         """
@@ -5111,6 +5322,7 @@ class ShoppingListTool(QMainWindow):
 # -----------------------
 # Damage Calculator Tool
 # -----------------------
+
 class DamageCalculator(QDialog):
     def __init__(self, db_connection):
         super().__init__()
@@ -5235,6 +5447,7 @@ class DamageCalculator(QDialog):
 # -----------------------
 # Powers Reference Tool
 # -----------------------
+
 class PowersDialog(QDialog):
     def __init__(self, parent, character_x, character_y, DB_PATH):
         """Initialize the PowersDialog with character coordinates and SQLite connection."""

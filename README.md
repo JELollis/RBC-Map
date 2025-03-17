@@ -76,22 +76,24 @@ This project is an attempt to create an interactive map coded in Python for use 
 
 ---
 
-## Recent Updates (v0.10.0)
-- **Version Display**: Application now displays version number for better tracking.
-- **Minimap Features**:
-  - Enhanced rendering with better grid alignment and accurate location offsets.
-  - Click-based minimap recentering for improved navigation.
-- **Expanded Tools Integration**:
-  - Shopping List, Damage Calculator, and Powers Reference are now fully integrated.
-  - Improved UI for managing tools more efficiently.
-- **Database Enhancements**:
-  - **Full transition to SQLite**, removing MySQL dependencies.
-  - Added new tables for `shop_items`, `powers`, and `recent_destinations`.
-  - Optimized MySQL-to-SQLite data handling for improved performance.
-- **Theme Customization**:
-  - Added minimap-specific colors, customizable transit route visuals.
-- **Bug Fixes & Stability**:
-  - Improved UI consistency, resolved minor crashes, and enhanced data syncing.
+### 8) Keyboard Controls (NEW)
+  - **W, A, S, D Movement**: Navigate the minimap using the keyboard.
+  - **Set Destination**: Quickly mark a location and track its path.
+  - **Zoom Controls**: Adjust the minimap view without using the mouse.
+
+---
+
+## Recent Updates (v0.10.2)
+- **WASD Movement Support**:
+  - Users can now navigate the minimap using **W, A, S, D** keys for smoother movement.
+- **Character Selection Enhancements**:
+  - Improved UI consistency and selection handling.
+- **Performance Optimizations**:
+  - Optimized **database queries** for faster loading times.
+  - Improved **memory handling** during web scraping.
+- **Bug Fixes & Refinements**:
+  - Resolved **coordinate tracking inconsistencies**.
+  - Fixed rare crashes related to **destination setting**.
 
 ---
 
@@ -121,4 +123,3 @@ The RBC City Map Application is licensed under the Apache License 2.0. See the `
 ---
 
 We hope this tool enhances your experience in RavenBlack City. Thank you for using the RBC City Map application!
-
