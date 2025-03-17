@@ -21,4 +21,5 @@ Version Control/__pycache__/variables.cpython-312.pyc
 /Version Control/sessions
 /MySQL Dump/
 *.xlsx
-
+/testing/*.sql
+/testing/*.txt
