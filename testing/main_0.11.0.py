@@ -110,7 +110,7 @@ Fetches guild and shop location data from "A View in the Dark."
 - **scrape_guilds_and_shops**: Collects shop and guild locations.
 - **update_database**: Updates SQLite with fresh location data.
 
-#### set_destination_dialog (Destination Selection UI)
+#### SetDestinationDialog (Destination Selection UI)
 Allows users to select a travel destination within the city.
 
 - **__init__**: Loads the UI components.
@@ -150,10 +150,10 @@ pip install requests bs4 PySide6 PySide6-WebEngine
 # Imports Handling
 # -----------------------
 
+import math
 import os
 import subprocess
 import sys
-import math
 
 # List of required modules with pip package names (some differ from import names)
 required_modules = {
@@ -263,12 +263,7 @@ import re
 import webbrowser
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
-    QTextEdit, QSpinBox, QFontComboBox
-)
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, QSpinBox, QFontComboBox
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, QShortcut, QKeySequence
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
 from PySide6.QtCore import Slot as pyqtSlot
@@ -277,16 +272,40 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
-from typing import Dict, List, Tuple, Optional
+from typing import List, Tuple, Any
+from collections.abc import KeysView
 import sqlite3
+
+# -----------------------
+# Global Constants
+# -----------------------
+# Database Path
+DB_PATH = 'sessions/rbc_map_data.db'
+
+# Logging Configuration
+LOG_DIR = 'logs'
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+LOG_LEVEL = logging.DEBUG
+VERSION_NUMBER = "0.11.0"
+
+# Keybinding Defaults
+DEFAULT_KEYBINDS = {
+    "move_up": "W",
+    "move_down": "S",
+    "move_left": "A",
+    "move_right": "D",
+    "zoom_in": "PageUp",
+    "zoom_out": "PageDown",
+}
+
+# Required Directories
+REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
 
 # -----------------------
 # Directory Setup
 # -----------------------
 
 # Constants defined at the top of the file (or in a constants section)
-REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
-
 def ensure_directories_exist(directories: list[str] = REQUIRED_DIRECTORIES) -> bool:
     """
     Ensure that the required directories exist, creating them if necessary.
@@ -327,13 +346,6 @@ if not ensure_directories_exist():
 # -----------------------
 # Logging Setup
 # -----------------------
-
-# Constants (assumed defined at the top of the file or in a constants section)
-LOG_DIR = 'logs'
-LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
-LOG_LEVEL = logging.DEBUG
-VERSION_NUMBER = "0.11.0"  # App version constant
-
 def setup_logging(log_dir: str = LOG_DIR, log_level: int = LOG_LEVEL, log_format: str = LOG_FORMAT) -> bool:
     """
     Set up logging configuration to save logs in the specified directory with daily rotation.
@@ -391,10 +403,6 @@ logging.info(f"Launching app version {VERSION_NUMBER}")
 # -----------------------
 # SQLite Setup
 # -----------------------
-
-# Constants (assumed defined at the top of the file or in a constants section)
-DB_PATH = 'sessions/rbc_map_data.db'
-
 def create_tables(conn: sqlite3.Connection) -> None:
     """Create database tables if they don’t exist."""
     cursor = conn.cursor()
@@ -742,8 +750,8 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (2, 'tavern', '#887700'),
             (3, 'transit', '#880000'),
             (4, 'user_building', '#660022'),
-            (5, 'alley', '#888888'),
-            (6, 'default', '#000000'),
+            (5, 'alley', '#000000'),
+            (6, 'default', '#888888'),
             (7, 'border', 'white'),
             (8, 'edge', '#0000ff'),
             (9, 'shop', '#004488'),
@@ -1615,12 +1623,7 @@ elif not initialize_database(DB_PATH):
 # Load Data from Database
 # -----------------------
 
-def load_data(db_path: str = DB_PATH) -> Tuple[
-    Dict[str, int], Dict[str, int], List[Tuple[int, int, Optional[str], Optional[str]]],
-    Dict[str, Tuple[int, int]], Dict[str, Tuple[int, int]], Dict[str, Tuple[int, int]],
-    Dict[str, QColor], Dict[str, Tuple[int, int]], Dict[str, Tuple[int, int]],
-    Dict[str, Tuple[int, int]], int
-]:
+def load_data(db_path: str = DB_PATH) -> tuple[dict[Any, Any], dict[Any, Any], list[tuple[Any, Any, Any]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[Any, QColor], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], int]:
     """
     Load map-related data from the SQLite database efficiently.
 
@@ -1652,10 +1655,10 @@ def load_data(db_path: str = DB_PATH) -> Tuple[
             cursor = conn.cursor()
 
             # Fetch coordinate mappings once
-            cursor.execute("SELECT Name, Coordinate FROM columns")
-            columns = dict(cursor.fetchall())  # Direct dict from name to int coordinate
-            cursor.execute("SELECT Name, Coordinate FROM rows")
-            rows = dict(cursor.fetchall())
+            cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
+            columns = {row[0]: row[1] for row in cursor.fetchall()}  # Directly map to integer coordinate
+            cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
+            rows = {row[0]: row[1] for row in cursor.fetchall()}  # Directly map to integer coordinate
 
             def to_coords(col_name: str, row_name: str) -> Tuple[int, int]:
                 """Convert street names to coordinates with fallback."""
@@ -1664,8 +1667,10 @@ def load_data(db_path: str = DB_PATH) -> Tuple[
                 return (col, row)
 
             # Fetch and process data in a single pass per table
-            cursor.execute("SELECT Column, Row, Name, 'bank' FROM banks")
-            banks_coordinates = [(*to_coords(col, row), name, type_) for col, row, name, type_ in cursor.fetchall()]
+            banks_coordinates = {}
+            cursor.execute("SELECT `Column`, `Row`, Name, ID FROM banks")
+            for col_name, row_name, _, _ in cursor.fetchall():
+                banks_coordinates[f"{col_name} & {row_name}"] = (col_name, row_name)
 
             cursor.execute("SELECT Name, Column, Row FROM taverns")
             taverns_coordinates = {name: to_coords(col, row) for name, col, row in cursor.fetchall()}
@@ -1703,11 +1708,7 @@ def load_data(db_path: str = DB_PATH) -> Tuple[
             keybind_config = int(row[0]) if row else 1  # Default to WASD (1)
 
             logging.debug("Loaded data from database successfully")
-            return (
-                columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates,
-                user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates,
-                places_of_interest_coordinates, keybind_config
-            )
+            return (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config)
 
     except sqlite3.Error as e:
         logging.error(f"Failed to load data from database {db_path}: {e}")
@@ -1732,7 +1733,6 @@ except sqlite3.Error:
 # -----------------------
 # Webview Cookie Database
 # -----------------------
-
 
 def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
     """
@@ -2476,7 +2476,7 @@ class RBCCommunityMap(QMainWindow):
 
         set_destination_button = QPushButton('Set Destination')
         set_destination_button.setFixedSize(button_size, 25)
-        set_destination_button.clicked.connect(self.open_set_destination_dialog)
+        set_destination_button.clicked.connect(self.open_SetDestinationDialog)
         zoom_layout.addWidget(set_destination_button)
 
         left_layout.addLayout(zoom_layout)
@@ -2803,6 +2803,7 @@ class RBCCommunityMap(QMainWindow):
         """Open the CSS customization dialog."""
         dialog = CSSCustomizationDialog(self)
         dialog.exec()
+
 # -----------------------
 # Character Management
 # -----------------------
@@ -3093,7 +3094,7 @@ class RBCCommunityMap(QMainWindow):
         """Refresh the webview content."""
         self.website_frame.reload()
 
-    def apply_custom_css(self):
+    def apply_custom_css(self, css=""):
         """Inject the custom CSS into the webview."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
@@ -3380,16 +3381,19 @@ class RBCCommunityMap(QMainWindow):
                 column_name = next((name for name, coord in self.columns.items() if coord == column_index), None)
                 row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
-                # Draw cell background color
+                # Draw cell background color to match in-game city grid
                 if column_index < 1 or column_index > 200 or row_index < 1 or row_index > 200:
+                    # Map edges (border)
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
-                                     block_size - 2 * border_size, self.color_mappings["edge"])
-                elif (column_index % 2 == 1) or (row_index % 2 == 1):
+                                     block_size - 2 * border_size, QColor(self.color_mappings["edge"]))
+                elif column_index % 2 == 0 or row_index % 2 == 0:
+                    # If either coordinate is even → Streets (Gray)
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
-                                     block_size - 2 * border_size, self.color_mappings["alley"])
+                                     block_size - 2 * border_size, QColor(self.color_mappings["street"]))
                 else:
+                    # Both coordinates odd → City Blocks (Black)
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
-                                     block_size - 2 * border_size, self.color_mappings["default"])
+                                     block_size - 2 * border_size, QColor(self.color_mappings["alley"]))
 
                 # Draw intersection labels with background box
                 if column_name and row_name:
@@ -3398,12 +3402,16 @@ class RBCCommunityMap(QMainWindow):
                     draw_label_box(x0 + 2, y0 + 2, block_size - 4, label_height, self.color_mappings["intersect"], label_text)
 
         # Draw special locations (banks with correct offsets)
-        for (col_name, row_name, _, _) in self.banks_coordinates:
-            column_index = self.columns.get(col_name)
-            row_index = self.rows.get(row_name)
-            if column_index is not None and row_index is not None:
-                adjusted_column_index = column_index + 1
-                adjusted_row_index = row_index + 1
+        for bank_key in self.banks_coordinates.keys():
+            if " & " in bank_key:  # Ensure it's in the correct format
+                col_name, row_name = bank_key.split(" & ")
+                col = self.columns.get(col_name, 0)
+                row = self.rows.get(row_name, 0)
+
+            if col is not None and row is not None:
+                adjusted_column_index = col + 1
+                adjusted_row_index = row + 1
+
                 draw_label_box(
                     (adjusted_column_index - self.column_start) * block_size,
                     (adjusted_row_index - self.row_start) * block_size,
@@ -3482,13 +3490,13 @@ class RBCCommunityMap(QMainWindow):
 
             # Draw nearest bank line
             if nearest_bank:
-                nearest_bank_coords = nearest_bank[0][1]
+                nearest_bank_coords = nearest_bank  # Already a (col, row) tuple
                 painter.setPen(QPen(QColor('blue'), 3))
                 painter.drawLine(
                     (current_x - self.column_start) * block_size + block_size // 2,
                     (current_y - self.row_start) * block_size + block_size // 2,
-                    (nearest_bank_coords[0] - self.column_start) * block_size + block_size // 2,
-                    (nearest_bank_coords[1] - self.row_start) * block_size + block_size // 2
+                    (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
+                    (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
                 )
 
             # Draw nearest transit line
@@ -3556,25 +3564,24 @@ class RBCCommunityMap(QMainWindow):
         """
         return self.find_nearest_location(x, y, list(self.taverns_coordinates.values()))
 
-    def find_nearest_bank(self, x, y):
-        """
-        Find the nearest bank to the given coordinates.
+    def find_nearest_bank(self, current_x, current_y):
+        min_distance = float("inf")
+        nearest_bank = None
 
-        Args:
-            x (int): X coordinate.
-            y (int): Y coordinate.
+        for bank_key, (col_name, row_name) in self.banks_coordinates.items():
+            if isinstance(bank_key, str):  # Convert from street name format if necessary
+                col_name, row_name = bank_key.split(" & ")
 
-        Returns:
-            list: List of distances and corresponding coordinates.
-        """
-        valid_banks = [(self.columns.get(col, 0) + 1, self.rows.get(row, 0) + 1) for col, row, _, _ in
-                       self.banks_coordinates]
+            col = self.columns.get(col_name, 0)
+            row = self.rows.get(row_name, 0)
 
-        if not valid_banks:
-            logging.warning("No valid bank locations found.")
-            return None
+            if col and row:
+                distance = abs(col - current_x) + abs(row - current_y)
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_bank = (col, row)  # Return actual coordinates
 
-        return self.find_nearest_location(x, y, valid_banks)
+        return nearest_bank  # Returns (x, y) tuple
 
     def find_nearest_transit(self, x, y):
         """
@@ -3591,7 +3598,7 @@ class RBCCommunityMap(QMainWindow):
 
     def set_destination(self):
         """Open the set destination dialog to select a new destination."""
-        dialog = set_destination_dialog(self)
+        dialog = SetDestinationDialog(self)
         if dialog.exec() == QDialog.accepted:
             self.update_minimap()
 
@@ -3685,12 +3692,13 @@ class RBCCommunityMap(QMainWindow):
         # Calculate zoom offset (-1 for 5x5, -2 for 7x7, etc.)
         zoom_offset = (self.zoom_level - 4) // 2
         logging.debug(f"Zoom Offset: {zoom_offset}")
+        logging.debug(f"Debug: char_y={self.character_y}, row_start={self.row_start}, zoom_offset={zoom_offset}")
+        logging.debug(f"Clamping min: {min(self.character_y - zoom_offset, 200 - self.zoom_level)}")
 
-        self.column_start = max(0, min(self.character_x - zoom_offset, 200 - self.zoom_level))
-        self.row_start = max(0, min(self.character_y - zoom_offset, 200 - self.zoom_level))
+        self.column_start = max(0, min(self.character_x - zoom_offset, max(198, 202 - self.zoom_level)))
+        self.row_start = max(0, min(self.character_y - zoom_offset, max(198, 202- self.zoom_level)))
 
-        logging.debug(
-            f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
+        logging.debug(f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
         self.update_minimap()
 
     def go_to_location(self):
@@ -3751,12 +3759,12 @@ class RBCCommunityMap(QMainWindow):
         self.character_list.setCurrentRow(new_row)
         self.on_character_selected(self.character_list.item(new_row))
 
-    def open_set_destination_dialog(self):
+    def open_SetDestinationDialog(self):
         """
         Open the set destination dialog.
         Opens a dialog that allows the user to set a destination and updates the minimap if confirmed.
         """
-        dialog = set_destination_dialog(self)
+        dialog = SetDestinationDialog(self)
 
         # Execute dialog and check for acceptance
         if dialog.exec() == QDialog.accepted:
@@ -3819,7 +3827,7 @@ class RBCCommunityMap(QMainWindow):
         # Closest Bank
         nearest_bank = self.find_nearest_bank(current_x, current_y)
         if nearest_bank:
-            bank_coords = nearest_bank[0][1]
+            bank_coords = nearest_bank  # No need for `[0][1]`
             adjusted_bank_coords = (bank_coords[0] + 1, bank_coords[1] + 1)
             bank_ap_cost = self.calculate_ap_cost((current_x, current_y), adjusted_bank_coords)
             bank_intersection = self.get_intersection_name(adjusted_bank_coords)
@@ -3931,7 +3939,7 @@ class RBCCommunityMap(QMainWindow):
 
     def open_discord(self):
         """Open the RBC Discord invite link in the system's default web browser."""
-        webbrowser.open('https://discord.gg/nwEa8FaTDS')
+        webbrowser.open('https://discord.gg/BnPQAp5MZf')
 
     def open_website(self):
         """Open the RBC Website in the system's default web browser."""
@@ -3998,10 +4006,6 @@ class RBCCommunityMap(QMainWindow):
 
         credits_dialog.exec()
 
-    # -----------------------
-    # Database Viewer
-    # -----------------------
-
     def open_database_viewer(self):
         """
         Open the database viewer to browse and inspect data from the RBC City Map database.
@@ -4067,24 +4071,27 @@ class RBCCommunityMap(QMainWindow):
 # Tools
 # -----------------------
 
-class DatabaseViewer:
+class DatabaseViewer(QDialog):
     """
     Graphical interface for viewing SQLite database tables in a tabbed layout.
     """
 
-    def __init__(self, db_connection) -> None:
+    def __init__(self, db_connection, parent=None) -> None:
         """
         Initialize the DatabaseViewer with a database connection.
 
         Args:
             db_connection: Active SQLite database connection.
+            parent: Parent widget (default is None).
         """
-        super().__init__()
+        super().__init__(parent)  # Ensure it gets QDialog properties
         self.setWindowTitle('SQLite Database Viewer')
         self.setGeometry(100, 100, 800, 600)
 
+        # Main layout
+        layout = QVBoxLayout(self)
         self.tab_widget = QTabWidget()
-        self.setCentralWidget(self.tab_widget)
+        layout.addWidget(self.tab_widget)
 
         self.db_connection = db_connection
         self.cursor = db_connection.cursor()
@@ -4161,7 +4168,7 @@ class DatabaseViewer:
 # Character Dialog Class
 # -----------------------
 
-class CharacterDialog:
+class CharacterDialog(QDialog):
     """
     Dialog for adding or editing a character’s name and password.
     """
@@ -4227,7 +4234,7 @@ class CharacterDialog:
 # Theme Customization Dialog
 # -----------------------
 
-class ThemeCustomizationDialog:
+class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing application theme colors for UI and minimap elements.
     """
@@ -4338,25 +4345,32 @@ class ThemeCustomizationDialog:
         except Exception as e:
             logging.error(f"Failed to apply theme to dialog: {e}")
             self.setStyleSheet("")  # Reset on failure
+
 # -----------------------
 # CSS Customization Dialog
 # -----------------------
 
 class CSSCustomizationDialog(QDialog):
-    def __init__(self, parent=None):
+    """
+    Dialog for customizing CSS settings for the UI.
+    """
+
+    def __init__(self, parent=None) -> None:
+        """
+        Initialize the CSS customization dialog.
+
+        Args:
+            parent: Parent widget (optional).
+        """
         super().__init__(parent)
         self.setWindowTitle("CSS Customization")
         self.setMinimumSize(600, 400)
         self.parent = parent
 
-        # Initialize database table
         self.initialize_css_table()
 
-        # Tab widget for organizing sections
-        self.tab_widget = QTabWidget()
+        self.tab_widget = QTabWidget(self)
         self.tabs = {}
-
-        # Add tabs with all CSS elements from the website
         self.add_tab("General", [
             "BODY", "H1", "DIV", "P", "A", "FORM", "UL", "DIV.spacey", ".head", "DIV.asubhead", "DIV.sb"
         ])
@@ -4372,34 +4386,29 @@ class CSSCustomizationDialog(QDialog):
             "SPAN.vhuman", "SPAN.phuman", "SPAN.whuman", "SPAN.object", "P.ans", "UL.possessions",
             ".pansy", ".cloak", ".rich", ".mh"
         ])
-        self.add_tab("Miscellaneous", [
-            "#mo"
-        ])
+        self.add_tab("Miscellaneous", ["#mo"])
 
-        # Control buttons
         button_layout = QHBoxLayout()
-        self.save_button = QPushButton("Save and Apply")
+        self.save_button = QPushButton("Save and Apply", self)
         self.save_button.clicked.connect(self.save_and_apply_changes)
-        self.upload_button = QPushButton("Upload CSS File")
+        self.upload_button = QPushButton("Upload CSS File", self)
         self.upload_button.clicked.connect(self.upload_css_file)
-        self.clear_button = QPushButton("Clear All Customizations")
+        self.clear_button = QPushButton("Clear All Customizations", self)
         self.clear_button.clicked.connect(self.clear_all_customizations)
-
         button_layout.addWidget(self.save_button)
         button_layout.addWidget(self.upload_button)
         button_layout.addWidget(self.clear_button)
 
-        # Main layout
         main_layout = QVBoxLayout(self)
         main_layout.addWidget(self.tab_widget)
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
-        # Load existing customizations
         self.load_existing_customizations()
+        logging.debug("CSS customization dialog initialized")
 
-    def initialize_css_table(self):
-        """Initialize the custom_css table in the database."""
+    def initialize_css_table(self) -> None:
+        """Initialize or verify the custom_css table in the database."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
@@ -4410,279 +4419,212 @@ class CSSCustomizationDialog(QDialog):
                     )
                 """)
                 conn.commit()
-                logging.info("Custom CSS table initialized or verified.")
+            logging.debug("Custom CSS table verified")
         except sqlite3.Error as e:
-            logging.error(f"Error initializing custom_css table: {e}")
+            logging.error(f"Failed to initialize custom_css table: {e}")
 
-    def add_tab(self, title, css_items):
-        """Add a new tab for a specific category of CSS customizations with properly aligned headers."""
-        tab = QWidget()
+    def add_tab(self, title: str, css_items: list[str]) -> None:
+        """Add a tab for CSS customization with aligned headers and controls."""
+        tab = QWidget(self)
         main_layout = QVBoxLayout(tab)
-
-        # Grid Layout for Headers and Rows
         grid_layout = QGridLayout()
 
-        # Define column headers and explicit widths
-        headers = ["Element", "Pick Image", "Pick Color", "Font", "Size", "Border", "Radius", "Box Shadow",
-                   "Custom CSS", "Reset"]
-        column_widths = [150, 100, 100, 120, 50, 60, 60, 100, 180, 80]
-
-        # Add headers to the grid (Row 0)
+        headers = ["Element", "Image", "Color", "Font", "Size", "Border", "Radius", "Shadow", "Custom CSS", "Reset"]
+        column_widths = [150, 80, 80, 120, 50, 60, 60, 80, 180, 80]
         for col, (header, width) in enumerate(zip(headers, column_widths)):
-            label = QLabel(header)
+            label = QLabel(header, tab)
             label.setAlignment(Qt.AlignCenter)
             label.setStyleSheet("font-weight: bold; padding: 5px; border-bottom: 2px solid gray;")
             label.setFixedWidth(width)
-            label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             grid_layout.addWidget(label, 0, col)
             grid_layout.setColumnMinimumWidth(col, width)
-            grid_layout.setColumnStretch(col, 0)
 
-        # Add CSS items (Starting from Row 1)
-        for row, item in enumerate(css_items, start=1):
-            label = QLabel(item)
+        for row, item in enumerate(css_items, 1):
+            label = QLabel(item, tab)
             label.setFixedWidth(column_widths[0])
+            preview = QLabel(tab)
+            preview.setFixedSize(50, 20)
+            preview.setStyleSheet("border: 1px solid black;")
 
-            # Add a preview label to display selected color/image
-            preview_label = QLabel()
-            preview_label.setFixedSize(50, 20)
-            preview_label.setStyleSheet("border: 1px solid black;")
+            image_btn = QPushButton("Pick", tab)
+            image_btn.clicked.connect(lambda _, i=item, p=preview: self.pick_image(i, p))
+            color_btn = QPushButton("Pick", tab)
+            color_btn.clicked.connect(lambda _, i=item, p=preview: self.pick_color(i, p))
+            font_combo = QFontComboBox(tab)
+            font_combo.currentFontChanged.connect(lambda f, i=item: self.save_css_item(i, f'font-family: {f.family()};'))
+            size_spin = QSpinBox(tab)
+            size_spin.setRange(8, 32)
+            size_spin.setValue(14)
+            size_spin.valueChanged.connect(lambda s, i=item: self.save_css_item(i, f'font-size: {s}px;'))
+            border_spin = QSpinBox(tab)
+            border_spin.setRange(0, 10)
+            border_spin.valueChanged.connect(lambda w, i=item: self.save_css_item(i, f'border-width: {w}px;'))
+            radius_spin = QSpinBox(tab)
+            radius_spin.setRange(0, 50)
+            radius_spin.valueChanged.connect(lambda r, i=item: self.save_css_item(i, f'border-radius: {r}px;'))
+            shadow_btn = QPushButton("Set", tab)
+            shadow_btn.clicked.connect(lambda _, i=item: self.pick_box_shadow(i))
+            css_input = QLineEdit(tab)
+            css_input.setPlaceholderText("Custom CSS...")
+            css_input.textChanged.connect(lambda t, i=item: self.save_css_item(i, t))
+            reset_btn = QPushButton("Reset", tab)
+            reset_btn.clicked.connect(lambda _, i=item, p=preview: self.reset_css_item(i, p))
 
-            image_button = QPushButton("Pick Image")
-            image_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_image(i, p))
-
-            color_button = QPushButton("Pick Color")
-            color_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_color(i, p))
-
-            font_family_input = QFontComboBox()
-            font_family_input.currentFontChanged.connect(
-                lambda font, i=item: self.save_css_item(i, f'font-family: {font.family()};'))
-
-            font_size_input = QSpinBox()
-            font_size_input.setRange(8, 32)
-            font_size_input.setValue(14)
-            font_size_input.valueChanged.connect(lambda size, i=item: self.save_css_item(i, f'font-size: {size}px;'))
-
-            border_width_input = QSpinBox()
-            border_width_input.setRange(0, 10)
-            border_width_input.setValue(1)
-            border_width_input.valueChanged.connect(
-                lambda width, i=item: self.save_css_item(i, f'border-width: {width}px;'))
-
-            border_radius_input = QSpinBox()
-            border_radius_input.setRange(0, 50)
-            border_radius_input.setValue(0)
-            border_radius_input.valueChanged.connect(
-                lambda radius, i=item: self.save_css_item(i, f'border-radius: {radius}px;'))
-
-            shadow_button = QPushButton("Box Shadow")
-            shadow_button.clicked.connect(lambda _, i=item: self.pick_box_shadow(i))
-
-            css_input = QLineEdit()
-            css_input.setPlaceholderText("Enter custom CSS...")
-            css_input.textChanged.connect(lambda text, i=item: self.save_css_item(i, text))
-
-            reset_button = QPushButton("Reset")
-            reset_button.clicked.connect(lambda _, i=item, p=preview_label: self.reset_css_item(i, p))
-
-            # Add widgets to the grid, ensuring alignment
             grid_layout.addWidget(label, row, 0)
-            grid_layout.addWidget(image_button, row, 1)
-            grid_layout.addWidget(color_button, row, 2)
-            grid_layout.addWidget(preview_label, row, 3)  # Display the preview box
-            grid_layout.addWidget(font_family_input, row, 4)
-            grid_layout.addWidget(font_size_input, row, 5)
-            grid_layout.addWidget(border_width_input, row, 6)
-            grid_layout.addWidget(border_radius_input, row, 7)
-            grid_layout.addWidget(shadow_button, row, 8)
-            grid_layout.addWidget(css_input, row, 9)
-            grid_layout.addWidget(reset_button, row, 10)
+            grid_layout.addWidget(image_btn, row, 1)
+            grid_layout.addWidget(color_btn, row, 2)
+            grid_layout.addWidget(font_combo, row, 3)
+            grid_layout.addWidget(size_spin, row, 4)
+            grid_layout.addWidget(border_spin, row, 5)
+            grid_layout.addWidget(radius_spin, row, 6)
+            grid_layout.addWidget(shadow_btn, row, 7)
+            grid_layout.addWidget(css_input, row, 8)
+            grid_layout.addWidget(reset_btn, row, 9)
+            grid_layout.addWidget(preview, row, 10)  # Preview last for alignment
 
-        # Apply final layout adjustments
-        grid_widget = QWidget()
-        grid_widget.setLayout(grid_layout)
-
-        main_layout.addWidget(grid_widget)
-        tab.setLayout(main_layout)
+        main_layout.addWidget(QWidget(tab, layout=grid_layout))
         self.tab_widget.addTab(tab, title)
         self.tabs[title] = tab
+        logging.debug(f"Added tab '{title}' with {len(css_items)} items")
 
-    def pick_box_shadow(self, css_item):
-        """Opens a dialog to set box-shadow values."""
-        shadow_dialog = QDialog(self)
-        shadow_dialog.setWindowTitle("Box Shadow Settings")
-        shadow_layout = QVBoxLayout()
+    def pick_box_shadow(self, css_item: str) -> None:
+        """Open a dialog to configure box-shadow for a CSS item."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Box Shadow Settings")
+        layout = QVBoxLayout(dialog)
 
-        h_offset = QSpinBox()
-        h_offset.setRange(-20, 20)
-        h_offset.setValue(0)
+        h_offset = QSpinBox(dialog); h_offset.setRange(-20, 20)
+        v_offset = QSpinBox(dialog); v_offset.setRange(-20, 20)
+        blur = QSpinBox(dialog); blur.setRange(0, 30); blur.setValue(5)
+        spread = QSpinBox(dialog); spread.setRange(0, 30)
+        color_btn = QPushButton("Pick Color", dialog)
+        color = QColor('gray')
+        color_btn.clicked.connect(lambda: [setattr(color_btn, 'color', QColorDialog.getColor()),
+                                          color_btn.setStyleSheet(f"background-color: {color_btn.color.name()}")])
+        apply_btn = QPushButton("Apply", dialog)
+        apply_btn.clicked.connect(lambda: [self.save_css_item(css_item,
+            f'box-shadow: {h_offset.value()}px {v_offset.value()}px {blur.value()}px {spread.value()}px {color_btn.color.name()};'),
+            dialog.accept()])
 
-        v_offset = QSpinBox()
-        v_offset.setRange(-20, 20)
-        v_offset.setValue(0)
+        layout.addWidget(QLabel("H Offset", dialog)); layout.addWidget(h_offset)
+        layout.addWidget(QLabel("V Offset", dialog)); layout.addWidget(v_offset)
+        layout.addWidget(QLabel("Blur", dialog)); layout.addWidget(blur)
+        layout.addWidget(QLabel("Spread", dialog)); layout.addWidget(spread)
+        layout.addWidget(color_btn); layout.addWidget(apply_btn)
+        dialog.exec()
 
-        blur_radius = QSpinBox()
-        blur_radius.setRange(0, 30)
-        blur_radius.setValue(5)
-
-        spread_radius = QSpinBox()
-        spread_radius.setRange(0, 30)
-        spread_radius.setValue(0)
-
-        color_picker = QPushButton("Pick Shadow Color")
-        color = QColorDialog.getColor()
-        color_picker.clicked.connect(lambda: color_picker.setStyleSheet(f"background-color: {color.name()}"))
-
-        apply_button = QPushButton("Apply")
-        apply_button.clicked.connect(lambda: self.save_css_item(
-            css_item,
-            f'box-shadow: {h_offset.value()}px {v_offset.value()}px {blur_radius.value()}px {spread_radius.value()}px {color.name()};'
-        ))
-
-        shadow_layout.addWidget(QLabel("Horizontal Offset"))
-        shadow_layout.addWidget(h_offset)
-        shadow_layout.addWidget(QLabel("Vertical Offset"))
-        shadow_layout.addWidget(v_offset)
-        shadow_layout.addWidget(QLabel("Blur Radius"))
-        shadow_layout.addWidget(blur_radius)
-        shadow_layout.addWidget(QLabel("Spread Radius"))
-        shadow_layout.addWidget(spread_radius)
-        shadow_layout.addWidget(color_picker)
-        shadow_layout.addWidget(apply_button)
-
-        shadow_dialog.setLayout(shadow_layout)
-        shadow_dialog.exec_()
-
-    def pick_color(self, css_item, preview_label):
-        """Open a color picker dialog for a specific CSS item."""
+    def pick_color(self, css_item: str, preview: QLabel) -> None:
+        """Pick a color and update the CSS item."""
         color = QColorDialog.getColor()
         if color.isValid():
             value = f"background-color: {color.name()};"
             self.save_css_item(css_item, value)
-            preview_label.setStyleSheet(f"background-color: {color.name()}; border: 1px solid black;")
-            logging.info(f"Selected color {color.name()} for {css_item}")
+            preview.setStyleSheet(value)
+            logging.debug(f"Set color {color.name()} for '{css_item}'")
 
-    def pick_image(self, css_item, preview_label):
-        """Open a file dialog to select an image for a specific CSS item."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image File", "", "Images (*.png *.jpg *.jpeg *.bmp)")
+    def pick_image(self, css_item: str, preview: QLabel) -> None:
+        """Pick an image file and apply it as a background."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if file_path:
             value = f"background-image: url('file:///{file_path}'); background-size: cover;"
             self.save_css_item(css_item, value)
-            preview_label.setStyleSheet(value)
-            logging.info(f"Selected image {file_path} for {css_item}")
+            preview.setStyleSheet(value)
+            logging.debug(f"Set image {file_path} for '{css_item}'")
 
-    def save_css_item(self, css_item, value):
-        """Save the customization for a specific CSS item to the database."""
+    def save_css_item(self, css_item: str, value: str) -> None:
+        """Save a CSS customization to the database."""
+        if not value.strip():
+            return
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT OR REPLACE INTO custom_css (element, value)
-                    VALUES (?, ?)
-                """, (css_item, value))
+                cursor.execute("INSERT OR REPLACE INTO custom_css (element, value) VALUES (?, ?)", (css_item, value))
                 conn.commit()
-                logging.info(f"Saved CSS item '{css_item}' with value '{value}' to database.")
+            logging.debug(f"Saved CSS for '{css_item}': {value}")
         except sqlite3.Error as e:
-            logging.error(f"Error saving CSS item: {e}")
+            logging.error(f"Failed to save CSS for '{css_item}': {e}")
 
-    def load_existing_customizations(self):
-        """Load existing CSS customizations and update UI preview labels."""
+    def load_existing_customizations(self) -> None:
+        """Load and apply existing CSS customizations to the UI."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT element, value FROM custom_css")
-                customizations = cursor.fetchall()
+                customizations = dict(cursor.fetchall())
 
-            for element, value in customizations:
-                for tab_title, tab_widget in self.tabs.items():
-                    layout = tab_widget.layout()
-                    for i in range(layout.count()):
-                        item_layout = layout.itemAt(i)
-                        if item_layout and item_layout.layout() is not None:  # Check if it's a layout
-                            sub_layout = item_layout.layout()
-                            label = sub_layout.itemAt(0).widget()
-                            preview = sub_layout.itemAt(1).widget()
-                            if label.text() == element:
-                                preview.setStyleSheet(value)
-                                break
-            logging.info(f"Loaded {len(customizations)} existing CSS customizations.")
+            for tab_title, tab in self.tabs.items():
+                grid = tab.layout().itemAt(0).widget().layout()
+                for row in range(1, grid.rowCount()):
+                    label = grid.itemAtPosition(row, 0).widget()
+                    preview = grid.itemAtPosition(row, 10).widget()
+                    if label.text() in customizations:
+                        preview.setStyleSheet(customizations[label.text()])
+            logging.debug(f"Loaded {len(customizations)} CSS customizations")
         except sqlite3.Error as e:
-            logging.error(f"Error loading customizations: {e}")
+            logging.error(f"Failed to load CSS customizations: {e}")
 
-    def save_and_apply_changes(self):
-        """Save changes and apply CSS to the webview."""
-        logging.info("Saving and applying CSS customizations...")
-        self.generate_custom_css()  # Ensure CSS is saved to the database
-        self.apply_custom_css()  # Call the updated method without passing custom_css
-        if self.parent:
+    def save_and_apply_changes(self) -> None:
+        """Save changes and apply CSS to the parent webview."""
+        css = self.parent.generate_custom_css()
+        if css and self.parent:
+            self.apply_custom_css(css)
             self.parent.website_frame.reload()
         self.accept()
-        logging.info("CSS customizations saved and applied.")
+        logging.info("CSS changes saved and applied")
 
-    def apply_custom_css(self, css=None):
-        """Inject the custom CSS into the webview via the parent."""
+    def apply_custom_css(self, css: str | None = None) -> None:
+        """Apply CSS to the parent webview (proxy to parent method)."""
         if self.parent:
-            self.parent.apply_custom_css()  # Call parent's method
+            self.parent.apply_custom_css(css or self.parent.generate_custom_css())
         else:
-            logging.error("Parent not available. Cannot apply CSS.")
+            logging.warning("No parent to apply CSS to")
 
-    def generate_custom_css(self):
-        """Generate a complete CSS string from saved customizations."""
+    def generate_custom_css(self) -> str:
+        """Generate CSS string from database customizations."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT element, value FROM custom_css")
-                customizations = cursor.fetchall()
-                css_string = "\n".join([f"{element} {{ {value} }}" for element, value in customizations])
-                return css_string
+                return "\n".join(f"{elem} {{ {val} }}" for elem, val in cursor.fetchall())
         except sqlite3.Error as e:
-            logging.error(f"Error generating custom CSS: {e}")
+            logging.error(f"Failed to generate CSS: {e}")
             return ""
 
-    def upload_css_file(self):
-        """Upload an external CSS file and apply it."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select CSS File", "", "CSS Files (*.css)")
+    def upload_css_file(self) -> None:
+        """Upload and apply a CSS file."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select CSS", "", "CSS Files (*.css)")
         if file_path:
             try:
-                with open(file_path, "r") as file:
-                    css_content = file.read()
-
-                # Parse CSS into individual rules
-                rules = re.findall(r'([^{]+){([^}]+)}', css_content, re.DOTALL)
-                with sqlite3.connect(DB_PATH) as conn:
+                with open(file_path, "r") as f, sqlite3.connect(DB_PATH) as conn:
+                    css = f.read()
+                    rules = re.findall(r'([^{]+){([^}]+)}', css, re.DOTALL)
                     cursor = conn.cursor()
-                    for selector, properties in rules:
-                        selector = selector.strip()
-                        value = properties.strip()
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO custom_css (element, value)
-                            VALUES (?, ?)
-                        """, (selector, value))
+                    cursor.executemany("INSERT OR REPLACE INTO custom_css (element, value) VALUES (?, ?)",
+                                      [(sel.strip(), prop.strip()) for sel, prop in rules])
                     conn.commit()
-
                 self.load_existing_customizations()
-                self.apply_custom_css(css_content)
+                self.apply_custom_css(css)
                 if self.parent:
                     self.parent.website_frame.reload()
-                logging.info(f"Uploaded and applied CSS file: {file_path}")
-            except Exception as e:
-                logging.error(f"Error uploading CSS file: {e}")
-                QMessageBox.critical(self, "Error", f"Failed to upload CSS file: {e}")
+                logging.info(f"Uploaded CSS file: {file_path}")
+            except (IOError, sqlite3.Error) as e:
+                logging.error(f"Failed to upload CSS file: {e}")
+                QMessageBox.critical(self, "Error", f"Upload failed: {e}")
 
-    def reset_css_item(self, css_item: str, preview_label: QLabel):
-        """Resets a specific CSS element to its default state."""
+    def reset_css_item(self, css_item: str, preview: QLabel) -> None:
+        """Reset a specific CSS item to default."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM custom_css WHERE element = ?", (css_item,))
                 conn.commit()
-            preview_label.setStyleSheet("")
-            logging.info(f"Reset CSS for {css_item}")
+            preview.setStyleSheet("")
+            logging.debug(f"Reset CSS for '{css_item}'")
         except sqlite3.Error as e:
-            logging.error(f"Error resetting CSS for {css_item}: {e}")
+            logging.error(f"Failed to reset CSS for '{css_item}': {e}")
 
-    def clear_all_customizations(self):
-        """Clear all saved CSS customizations."""
+    def clear_all_customizations(self) -> None:
+        """Clear all CSS customizations."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
@@ -4692,10 +4634,10 @@ class CSSCustomizationDialog(QDialog):
             self.apply_custom_css("")
             if self.parent:
                 self.parent.website_frame.reload()
-            logging.info("All CSS customizations cleared.")
+            logging.info("Cleared all CSS customizations")
         except sqlite3.Error as e:
-            logging.error(f"Error clearing customizations: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to clear customizations: {e}")
+            logging.error(f"Failed to clear CSS customizations: {e}")
+            QMessageBox.critical(self, "Error", "Failed to clear customizations")
 
 # -----------------------
 # AVITD Scraper Class
@@ -4703,264 +4645,207 @@ class CSSCustomizationDialog(QDialog):
 
 class AVITDScraper:
     """
-    A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
+    Scraper for 'A View in the Dark' to update guilds and shops data in SQLite.
     """
 
-    def __init__(self):
-        """
-        Initialize the scraper with the required headers and database connection.
-        """
+    def __init__(self) -> None:
+        """Initialize scraper with URL, headers, and database connection."""
         self.url = "https://aviewinthedark.net/"
-        self.connection = sqlite3.connect(DB_PATH)  # SQLite connection
+        try:
+            self.connection = sqlite3.connect(DB_PATH)
+        except sqlite3.Error as e:
+            logging.error(f"Failed to connect to database: {e}")
+            self.connection = None
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
+        logging.debug("AVITDScraper initialized")
 
-        # Set up logging
-        logging.basicConfig(level=logging.debug, format='%(asctime)s - %(levelname)s - %(message)s')
-        logging.info("AVITDScraper initialized.")
+    def scrape_guilds_and_shops(self) -> None:
+        """Scrape guilds and shops data and update the database."""
+        if not self.connection:
+            logging.error("No database connection; aborting scrape")
+            return
 
-    def scrape_guilds_and_shops(self):
-        """
-        Scrape the guilds and shops data from the website and update the SQLite database.
-        """
-        logging.info("Starting to scrape guilds and shops.")
-        response = requests.get(self.url, headers=self.headers)
-        logging.debug(f"Received response: {response.status_code}")
-
-        soup = BeautifulSoup(response.text, 'html.parser')
+        logging.info("Starting guilds and shops scrape")
+        try:
+            response = requests.get(self.url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+        except requests.RequestException as e:
+            logging.error(f"Failed to fetch {self.url}: {e}")
+            return
 
         guilds = self.scrape_section(soup, "the guilds")
         shops = self.scrape_section(soup, "the shops")
-        guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
-        shops_next_update = self.extract_next_update_time(soup, 'Shops')
+        guilds_next = self.extract_next_update_time(soup, 'Guilds')
+        shops_next = self.extract_next_update_time(soup, 'Shops')
 
-        # Display results in the console (for debugging purposes)
-        self.display_results(guilds, shops, guilds_next_update, shops_next_update)
+        self.display_results(guilds, shops, guilds_next, shops_next)
+        self.update_database(guilds, "guilds", guilds_next)
+        self.update_database(shops, "shops", shops_next)
+        logging.info("Scrape and database update completed")
 
-        # Update the SQLite database with scraped data
-        self.update_database(guilds, "guilds", guilds_next_update)
-        self.update_database(shops, "shops", shops_next_update)
-        logging.info("Finished scraping and updating the database.")
-
-    def scrape_section(self, soup, section_image_alt):
+    def scrape_section(self, soup: BeautifulSoup, section_alt: str) -> list[tuple[str, str, str]]:
         """
-        Scrape a specific section (guilds or shops) from the website.
+        Scrape a section (guilds or shops) from the parsed HTML.
 
         Args:
-            soup (BeautifulSoup): Parsed HTML content.
-            section_image_alt (str): The alt text of the section image to locate the section.
+            soup: Parsed HTML content.
+            section_alt: Alt text of the section image.
 
         Returns:
-            list: A list of tuples containing the name, column, and row of each entry.
+            List of (name, column, row) tuples.
         """
-        logging.debug(f"Scraping section: {section_image_alt}")
         data = []
-        section_image = soup.find('img', alt=section_image_alt)
-        if not section_image:
-            logging.warning(f"No data found for {section_image_alt}.")
+        section_img = soup.find('img', alt=section_alt)
+        if not section_img:
+            logging.warning(f"Section '{section_alt}' not found")
             return data
 
-        table = section_image.find_next('table')
-        rows = table.find_all('tr', class_=['odd', 'even'])
+        table = section_img.find_next('table')
+        if not table:
+            logging.warning(f"No table found for '{section_alt}'")
+            return data
 
-        for row in rows:
-            columns = row.find_all('td')
-            if len(columns) < 2:
-                logging.debug(f"Skipping row due to insufficient columns: {row}")
+        for row in table.find_all('tr', class_=['odd', 'even']):
+            cols = row.find_all('td')
+            if len(cols) < 2:
+                logging.debug(f"Skipping malformed row in '{section_alt}': {row.text}")
                 continue
 
-            name = columns[0].text.strip()
-            location = columns[1].text.strip().replace("SE of ", "").strip()
-
+            name = cols[0].text.strip()
+            location = cols[1].text.strip().replace("SE of ", "")
             try:
-                column, row = location.split(" and ")
-                data.append((name, column, row))
-                logging.debug(f"Extracted data - Name: {name}, Column: {column}, Row: {row}")
+                col, row = location.split(" and ")
+                data.append((name, col, row))
+                logging.debug(f"Scraped {section_alt}: {name} at {col}, {row}")
             except ValueError:
-                logging.warning(f"Location format unexpected for {name}: {location}")
+                logging.warning(f"Invalid location format for '{name}': {location}")
 
-        logging.info(f"Scraped {len(data)} entries from {section_image_alt}.")
+        logging.debug(f"Scraped {len(data)} items from '{section_alt}'")
         return data
 
-    def extract_next_update_time(self, soup, section_name):
+    def extract_next_update_time(self, soup: BeautifulSoup, section_name: str) -> str:
         """
-        Extract the next update time for a specific section (guilds or shops).
+        Extract the next update time for a section.
 
         Args:
-            soup (BeautifulSoup): Parsed HTML content.
-            section_name (str): The name of the section (e.g., 'Guilds', 'Shops').
+            soup: Parsed HTML content.
+            section_name: Section name ('Guilds' or 'Shops').
 
         Returns:
-            str: The next update time in 'YYYY-MM-DD HH:MM:SS' format or 'NA' if not found.
+            Next update time in 'YYYY-MM-DD HH:MM:SS' or 'NA'.
         """
-        logging.debug(f"Extracting next update time for section: {section_name}")
-
-        # Find all divs with the 'next_change' class
-        section_divs = soup.find_all('div', class_='next_change')
-
-        # Iterate through the divs to find the matching section
-        for div in section_divs:
+        for div in soup.find_all('div', class_='next_change'):
             if section_name in div.text:
-                # Search for the time pattern
                 match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
                 if match:
-                    # Parse time components
-                    days = int(match.group(1))
-                    hours = int(match.group(2))
-                    minutes = int(match.group(3))
-                    seconds = int(match.group(4))
-
-                    # Calculate the next update time
-                    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
-                    logging.debug(f"Next update time for {section_name}: {next_update}")
-
-                    # Return the formatted date-time string
+                    days, hours, mins, secs = map(int, match.groups())
+                    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=mins, seconds=secs)
                     return next_update.strftime('%Y-%m-%d %H:%M:%S')
-
-        # Return 'NA' if no match is found
-        logging.warning(f"No next update time found for {section_name}.")
+        logging.debug(f"No update time found for '{section_name}'")
         return 'NA'
 
-    def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
+    def display_results(self, guilds: list, shops: list, guilds_next: str, shops_next: str) -> None:
         """
-        Display the results of the scraping in the console for debugging purposes.
+        Log scraped results for debugging.
 
         Args:
-            guilds (list): List of scraped guild data.
-            shops (list): List of scraped shop data.
-            guilds_next_update (str): The next update time for guilds.
-            shops_next_update (str): The next update time for shops.
+            guilds: List of guild data.
+            shops: List of shop data.
+            guilds_next: Guilds next update time.
+            shops_next: Shops next update time.
         """
-        logging.info(f"Guilds Next Update: {guilds_next_update}")
-        logging.info(f"Shops Next Update: {shops_next_update}")
+        logging.debug(f"Guilds Next Update: {guilds_next}")
+        logging.debug(f"Shops Next Update: {shops_next}")
+        logging.debug(f"Guilds ({len(guilds)}): {', '.join(g[0] for g in guilds)}")
+        logging.debug(f"Shops ({len(shops)}): {', '.join(s[0] for s in shops)}")
 
-        logging.info("Guilds Data:")
-        for guild in guilds:
-            logging.info(f"Name: {guild[0]}, Column: {guild[1]}, Row: {guild[2]}")
-
-        logging.info("Shops Data:")
-        for shop in shops:
-            logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
-
-    def update_database(self, data, table, next_update):
+    def update_database(self, data: list[tuple[str, str, str]], table: str, next_update: str) -> None:
         """
-        Update the SQLite database with the scraped data.
+        Update the database with scraped data.
 
         Args:
-            data (list): List of tuples containing the name, column, and row of each entry.
-            table (str): The table name ('guilds' or 'shops') to update.
-            next_update (str): The next update time to be stored in the database.
+            data: List of (name, column, row) tuples.
+            table: Target table ('guilds' or 'shops').
+            next_update: Next update time.
         """
         if not self.connection:
-            logging.error("Failed to connect to the database.")
             return
 
         cursor = self.connection.cursor()
-
-        # Step 1: Set all entries' Row and Column to 'NA', except Peacekeeper's Missions for guilds
         try:
-            logging.debug(
-                f"Setting all {table} entries' Row and Column to 'NA', except Peacekeeper's Missions for guilds.")
+            # Reset all entries to 'NA' except Peacekeeper's Missions for guilds
+            reset_query = f"UPDATE {table} SET `Column`='NA', `Row`='NA', `next_update`=? WHERE Name NOT LIKE 'Peacekkeepers Mission%' AND Name NOT IN ('Peacekeeper\\'s Mission 1', 'Peacekeeper\\'s Mission 2', 'Peacekeeper\\'s Mission 3')" if table == "guilds" else f"UPDATE {table} SET `Column`='NA', `Row`='NA', `next_update`=?"
+            cursor.execute(reset_query, (next_update,))
+
+            # Update or insert scraped data
+            upsert_query = f"""
+                INSERT INTO {table} (Name, `Column`, `Row`, `next_update`)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(Name) DO UPDATE SET `Column`=excluded.`Column`, `Row`=excluded.`Row`, `next_update`=excluded.`next_update`
+            """
+            filtered_data = [(n, c, r, next_update) for n, c, r in data if "Peacekkeepers Mission" not in n or table == "guilds"]
+            cursor.executemany(upsert_query, filtered_data)
+
+            # Ensure Peacekeeper’s Missions persist in guilds
             if table == "guilds":
-                cursor.execute(f"""
-                    UPDATE {table}
-                    SET `Column`='NA', `Row`='NA', `next_update`=?
-                    WHERE Name NOT LIKE 'Peacekkeepers Mission%'
-                """, (next_update,))
-            else:  # If updating 'shops', clear all without exception
-                cursor.execute(f"""
-                    UPDATE {table}
-                    SET `Column`='NA', `Row`='NA', `next_update`=?
-                """, (next_update,))
-        except sqlite3.Error as e:
-            logging.error(f"Failed to reset {table} entries to 'NA': {e}")
-            return
-
-        # Step 2: Insert or update entries, excluding Peacekeeper's Missions in shops
-        for name, column, row in data:
-            if table == "shops" and "Peacekkeepers Mission" in name:
-                logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
-                continue  # Skip Peacekeeper's Missions when updating shops
-
-            try:
-                logging.debug(
-                    f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
-                cursor.execute(f"""
-                    INSERT INTO {table} (Name, `Column`, `Row`, `next_update`)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(Name) DO UPDATE SET
-                        `Column`=excluded.`Column`,
-                        `Row`=excluded.`Row`,
-                        `next_update`=excluded.`next_update`
-                """, (name, column, row, next_update))
-            except sqlite3.Error as e:
-                logging.error(f"Failed to update {table} entry '{name}': {e}")
-
-        # Step 3: Ensure Peacekeeper’s Missions Always Remain in Guilds Table Only
-        if table == "guilds":
-            try:
-                logging.debug("Ensuring Peacekeeper's Mission locations remain constant in guilds table.")
-                cursor.executemany("""
-                    INSERT INTO guilds (Name, `Column`, `Row`, `next_update`)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(Name) DO UPDATE SET
-                        `Column`=excluded.`Column`,
-                        `Row`=excluded.`Row`,
-                        `next_update`=excluded.`next_update`
-                """, [
+                peacekeepers = [
                     ("Peacekkeepers Mission 1", "Emerald", "67th", next_update),
                     ("Peacekkeepers Mission 2", "Unicorn", "33rd", next_update),
                     ("Peacekkeepers Mission 3", "Emerald", "33rd", next_update),
-                ])
-            except sqlite3.Error as e:
-                logging.error(f"Failed to persist Peacekeeper's Missions in guilds: {e}")
+                ]
+                cursor.executemany(upsert_query, peacekeepers)
 
-        self.connection.commit()
-        cursor.close()
-        logging.info(f"Database updated for {table}.")
+            self.connection.commit()
+            logging.debug(f"Updated {table} with {len(filtered_data)} entries")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to update {table}: {e}")
+            self.connection.rollback()
+        finally:
+            cursor.close()
 
-    def close_connection(self):
-        """
-        Close the SQLite database connection.
-        """
+    def close_connection(self) -> None:
+        """Close the database connection."""
         if self.connection:
-            self.connection.close()
-            logging.info("Database connection closed.")
+            try:
+                self.connection.close()
+                logging.debug("Database connection closed")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to close connection: {e}")
+            finally:
+                self.connection = None
 
 # -----------------------
 # Set Destination Dialog
 # -----------------------
 
-class set_destination_dialog(QDialog):
-    """
-    A dialog for setting a destination on the map.
-    """
+class SetDestinationDialog(QDialog):
+    """Dialog for setting a destination on the map."""
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, parent: QWidget = None) -> None:
+        """
+        Initialize the Set Destination dialog.
+
+        Args:
+            parent: Reference to RBCCommunityMap.
+        """
+        super().__init__(parent)  # Ensures QDialog is properly initialized
         self.setWindowTitle("Set Destination")
         self.resize(200, 250)
-        self.parent = parent  # Access to parent methods and properties
-        logging.info("Initialized set_destination_dialog")
+        self.parent = parent
+        logging.debug("SetDestinationDialog initialized")
 
-        # Main layout setup
         main_layout = QVBoxLayout(self)
+        dropdown_style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
 
-        # Define the style with a border for dropdowns
-        dropdown_style = """
-            QComboBox {
-                border: 2px solid #5F6368;
-                padding: 5px;
-                border-radius: 4px;
-            }
-        """
-
-        # Dropdown for recent destinations
+        # Recent destinations
         self.recent_destinations_dropdown = QComboBox()
+        self.recent_destinations_dropdown.setStyleSheet(dropdown_style)
         self.populate_recent_destinations()
 
-        # Dropdowns for selecting destinations
+        # Predefined destination dropdowns
         dropdown_layout = QFormLayout()
         self.tavern_dropdown = QComboBox()
         self.bank_dropdown = QComboBox()
@@ -4969,19 +4854,15 @@ class set_destination_dialog(QDialog):
         self.guild_dropdown = QComboBox()
         self.poi_dropdown = QComboBox()
         self.user_building_dropdown = QComboBox()
+        for dropdown in (
+            self.tavern_dropdown, self.bank_dropdown, self.transit_dropdown,
+            self.shop_dropdown, self.guild_dropdown, self.poi_dropdown,
+            self.user_building_dropdown
+        ):
+            dropdown.setStyleSheet(dropdown_style)
 
-        # Populate dropdowns with values from the data sources
-        self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
-        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
-        self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
-        self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
-        self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
-        self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
-        self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
-
-        logging.info("Populated destination dropdowns.")
-
-        dropdown_layout.addRow("Recent Destinations:", self.recent_destinations_dropdown)
+        self._populate_initial_dropdowns()
+        dropdown_layout.addRow("Recent:", self.recent_destinations_dropdown)
         dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
         dropdown_layout.addRow("Bank:", self.bank_dropdown)
         dropdown_layout.addRow("Transit:", self.transit_dropdown)
@@ -4990,400 +4871,279 @@ class set_destination_dialog(QDialog):
         dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
         dropdown_layout.addRow("User Building:", self.user_building_dropdown)
 
-        # Custom location entry
-        custom_location_layout = QHBoxLayout()
+        # Custom location
+        custom_layout = QHBoxLayout()
         self.columns_dropdown = QComboBox()
         self.rows_dropdown = QComboBox()
         self.directional_dropdown = QComboBox()
-
-        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys())
-        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys())
+        for dropdown in (self.columns_dropdown, self.rows_dropdown, self.directional_dropdown):
+            dropdown.setStyleSheet(dropdown_style)
+        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys() if self.parent else [])
+        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys() if self.parent else [])
         self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
+        custom_layout.addWidget(QLabel("ABC Street:"))
+        custom_layout.addWidget(self.columns_dropdown)
+        custom_layout.addWidget(QLabel("123 Street:"))
+        custom_layout.addWidget(self.rows_dropdown)
+        custom_layout.addWidget(QLabel("Direction:"))
+        custom_layout.addWidget(self.directional_dropdown)
 
-        custom_location_layout.addWidget(QLabel("ABC Street:"))
-        custom_location_layout.addWidget(self.columns_dropdown)
-        custom_location_layout.addWidget(QLabel("123 Street:"))
-        custom_location_layout.addWidget(self.rows_dropdown)
-        custom_location_layout.addWidget(QLabel("Direction:"))
-        custom_location_layout.addWidget(self.directional_dropdown)
+        # Buttons
+        button_layout = QGridLayout()
+        set_btn = QPushButton("Set")
+        set_btn.clicked.connect(self.set_destination)
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(self.clear_destination)
+        update_btn = QPushButton("Update Data")
+        update_btn.clicked.connect(self.update_comboboxes)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(set_btn, 0, 0)
+        button_layout.addWidget(clear_btn, 0, 1)
+        button_layout.addWidget(update_btn, 1, 0)
+        button_layout.addWidget(cancel_btn, 1, 1)
 
         main_layout.addLayout(dropdown_layout)
-        main_layout.addLayout(custom_location_layout)
-
-        # Control buttons
-        button_layout = QGridLayout()
-        set_button = QPushButton("Set Destination")
-        set_button.clicked.connect(self.set_destination)
-        clear_button = QPushButton("Clear Destination")
-        clear_button.clicked.connect(self.clear_destination)
-        update_button = QPushButton("Update Data")
-        update_button.clicked.connect(self.update_comboboxes)
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.reject)
-
-        button_layout.addWidget(set_button, 0, 0)
-        button_layout.addWidget(clear_button, 0, 1)
-        button_layout.addWidget(update_button, 1, 0)
-        button_layout.addWidget(cancel_button, 1, 1)
-
+        main_layout.addLayout(custom_layout)
         main_layout.addLayout(button_layout)
+        self.setLayout(main_layout)  # Ensure QDialog layout is set
 
-    def populate_recent_destinations(self):
-        """
-        Populate the recent destinations dropdown for the selected character.
-        """
-        logging.info("Populating recent destinations.")
+    def _populate_initial_dropdowns(self) -> None:
+        """Populate predefined destination dropdowns with initial data."""
+        if not self.parent:
+            logging.warning("No parent; skipping dropdown population")
+            return
+        self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
+        self.populate_dropdown(self.bank_dropdown,[f"{col} & {row}" for col, row, *_ in self.parent.banks_coordinates.values()])
+        self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
+        self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
+        self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
+        self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
+        self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
+        logging.debug("Initial dropdowns populated")
+
+    def populate_recent_destinations(self) -> None:
+        """Populate recent destinations dropdown for the selected character."""
         self.recent_destinations_dropdown.clear()
         self.recent_destinations_dropdown.addItem("Select a recent destination")
+        if not self.parent or not self.parent.selected_character:
+            logging.debug("No parent or character selected; skipping recent destinations")
+            return
 
         character_id = self.parent.selected_character.get('id')
-
-        connection = sqlite3.connect(DB_PATH)
-        cursor = connection.cursor()
-
         try:
-            # Fetch recent destinations for the character
-            cursor.execute(
-                "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
-                (character_id,)
-            )
-            recent_destinations = cursor.fetchall()
-            logging.info(f"Fetched {len(recent_destinations)} recent destinations for character {character_id}.")
-
-            # Process each recent destination
-            for col, row in recent_destinations:
-                try:
-                    # Convert to integers if they aren't already
-                    col = int(col)
-                    row = int(row)
-                except ValueError:
-                    logging.error("Non-integer values for col/row: col=%s, row=%s", col, row)
-                    continue
-
-                # Round coordinates to the nearest odd number (unless boundary)
-                rounded_col = col if col in (0, 200) else (col if col % 2 != 0 else col - 1)
-                rounded_row = row if row in (0, 200) else (row if row % 2 != 0 else row - 1)
-                logging.debug("Rounded col=%d to %d and row=%d to %d", col, rounded_col, row, rounded_row)
-
-                # Fetch street names
-                cursor.execute("SELECT Name FROM `columns` WHERE Coordinate = ?", (rounded_col,))
-                col_name = cursor.fetchone()
-                col_name = col_name[0] if col_name else f"Column {rounded_col}"
-
-                cursor.execute("SELECT Name FROM `rows` WHERE Coordinate = ?", (rounded_row,))
-                row_name = cursor.fetchone()
-                row_name = row_name[0] if row_name else f"Row {rounded_row}"
-
-                # Check for a named building at this location across all relevant tables
-                building_name = None
-                for table in ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]:
-                    cursor.execute(
-                        f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?",
-                        (col_name, row_name)
-                    )
-                    result = cursor.fetchone()
-                    if result:
-                        building_name = result[0]
-                        break
-
-                # Format display name
-                display_name = f"{col_name} & {row_name}"
-                if building_name:
-                    display_name += f" - {building_name}"
-
-                self.recent_destinations_dropdown.addItem(display_name, (col, row))
-                logging.info(f"Added recent destination: {display_name}")
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
+                    (character_id,)
+                )
+                for col, row in cursor.fetchall():
+                    col_name = next((k for k, v in self.parent.columns.items() if v == col), f"Column {col}")
+                    row_name = next((k for k, v in self.parent.rows.items() if v == row), f"Row {row}")
+                    building_name = self._get_building_name(cursor, col_name, row_name)
+                    display = f"{col_name} & {row_name}" + (f" - {building_name}" if building_name else "")
+                    self.recent_destinations_dropdown.addItem(display, (col, row))
+                logging.debug(f"Loaded {self.recent_destinations_dropdown.count() - 1} recent destinations")
         except sqlite3.Error as e:
-            logging.error(f"Error fetching recent destinations: {e}")
-        finally:
-            connection.close()
+            logging.error(f"Failed to load recent destinations: {e}")
 
-    def populate_dropdown(self, dropdown, items):
-        logging.info("Populating dropdown with %d items.", len(items))
+    def _get_building_name(self, cursor: sqlite3.Cursor, col: str, row: str) -> str | None:
+        """Get building name at given coordinates."""
+        tables = ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]
+        for table in tables:
+            cursor.execute(f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?", (col, row))
+            if result := cursor.fetchone():
+                return result[0]
+        return None
+
+    def populate_dropdown(self, dropdown: QComboBox, items: list | KeysView) -> None:
+        """Populate a dropdown with items."""
         dropdown.clear()
         dropdown.addItem("Select a destination")
-        dropdown.addItems(items)
+        dropdown.addItems([str(item) for item in items])
+        logging.debug(f"Populated dropdown with {len(items)} items")
 
-    def update_comboboxes(self):
-        logging.info("Updating comboboxes.")
-        self.show_notification("Updating Shop and Guild Data. Please wait...")
-
-        # Run the scraper to update data if available
-        if hasattr(self.parent, 'AVITD_scraper') and self.parent.AVITD_scraper:
+    def update_comboboxes(self) -> None:
+        """Update dropdowns with fresh data from scraper and database."""
+        self.show_notification("Updating data... Please wait")
+        if self.parent and hasattr(self.parent, 'AVITD_scraper'):
             self.parent.AVITD_scraper.scrape_guilds_and_shops()
-
-        # Reload data from the SQLite database
         try:
             updated_data = load_data(DB_PATH)
             self.parent.columns, self.parent.rows, self.parent.banks_coordinates, \
-                self.parent.taverns_coordinates, self.parent.transits_coordinates, \
-                self.parent.user_buildings_coordinates, self.parent.color_mappings, \
-                self.parent.shops_coordinates, self.parent.guilds_coordinates, \
-                self.parent.places_of_interest_coordinates = updated_data
-
-            # Populate dropdowns with updated data
-            self.populate_dropdown(self.tavern_dropdown, self.parent.taverns_coordinates.keys())
-            self.populate_dropdown(self.bank_dropdown,
-                                   [f"{col} & {row}" for (col, row, _, _) in self.parent.banks_coordinates])
-            self.populate_dropdown(self.transit_dropdown, self.parent.transits_coordinates.keys())
-            self.populate_dropdown(self.shop_dropdown, self.parent.shops_coordinates.keys())
-            self.populate_dropdown(self.guild_dropdown, self.parent.guilds_coordinates.keys())
-            self.populate_dropdown(self.poi_dropdown, self.parent.places_of_interest_coordinates.keys())
-            self.populate_dropdown(self.user_building_dropdown, self.parent.user_buildings_coordinates.keys())
-
-            # Call update_minimap to redraw the map with the new data
-            if hasattr(self.parent, 'update_minimap') and callable(self.parent.update_minimap):
-                logging.info("Updating minimap with new data.")
-                self.parent.update_minimap()
-
-            logging.info("Comboboxes updated successfully.")
+            self.parent.taverns_coordinates, self.parent.transits_coordinates, \
+            self.parent.user_buildings_coordinates, self.parent.color_mappings, \
+            self.parent.shops_coordinates, self.parent.guilds_coordinates, \
+            self.parent.places_of_interest_coordinates, _ = updated_data[:10]  # Ignore keybind_config
+            self._populate_initial_dropdowns()
+            self.parent.update_minimap()
+            logging.info("Dropdowns updated successfully")
         except Exception as e:
-            logging.error(f"Failed to update comboboxes: {e}")
+            logging.error(f"Failed to update dropdowns: {e}")
+            self.show_error_dialog("Update Failed", str(e))
 
-    def show_notification(self, message):
-        logging.info("Displaying notification: %s", message)
+    def show_notification(self, message: str) -> None:
+        """Show a temporary notification."""
         dialog = QDialog(self)
         dialog.setWindowTitle("Notification")
         dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-
-        layout = QVBoxLayout()
-        message_label = QLabel(message)
-        layout.addWidget(message_label)
-        dialog.setLayout(layout)
-
-        QTimer.singleShot(5000, dialog.accept)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(message, dialog))
         dialog.setFixedSize(300, 100)
+        QTimer.singleShot(5000, dialog.accept)
         dialog.exec()
+        logging.debug(f"Notification shown: {message}")
 
-    def clear_destination(self):
-        if not self.parent.selected_character:
-            logging.warning("No character selected for clearing destination.")
+    def clear_destination(self) -> None:
+        """Clear the current destination for the selected character."""
+        if not self.parent or not self.parent.selected_character:
+            logging.warning("No character selected to clear destination")
+            return
+        character_id = self.parent.selected_character['id']
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM destinations WHERE character_id = ?", (character_id,))
+                conn.commit()
+            self.parent.destination = None
+            self.parent.update_minimap()
+            logging.info(f"Cleared destination for character {character_id}")
+            self.accept()
+        except sqlite3.Error as e:
+            logging.error(f"Failed to clear destination: {e}")
+
+    def set_destination(self) -> None:
+        """Set the selected destination for the current character."""
+        if not self.parent or not self.parent.selected_character:
+            self.show_error_dialog("No Character", "Please select a character first")
+            return
+        coords = self.get_selected_destination()
+        if not coords:
+            self.show_error_dialog("No Destination", "Please select a valid destination")
             return
 
         character_id = self.parent.selected_character['id']
-        connection = sqlite3.connect(DB_PATH)
-        cursor = connection.cursor()
         try:
-            cursor.execute('DELETE FROM destinations WHERE character_id = ?', (character_id,))
-            connection.commit()
-            logging.info(f"Cleared destination for character {character_id}")
-
-            self.parent.destination = None
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp) VALUES (?, ?, ?, datetime('now'))",
+                              (character_id, coords[0], coords[1]))
+                if not cursor.execute("SELECT 1 FROM recent_destinations WHERE character_id = ? AND col = ? AND row = ?",
+                                     (character_id, coords[0], coords[1])).fetchone():
+                    cursor.execute("INSERT INTO recent_destinations (character_id, col, row, timestamp) VALUES (?, ?, ?, datetime('now'))",
+                                  (character_id, coords[0], coords[1]))
+                conn.commit()
+            self.parent.destination = coords
             self.parent.update_minimap()
-        except sqlite3.Error as e:
-            logging.error(f"Failed to clear destination for character {character_id}: {e}")
-        finally:
-            connection.close()
-
-        self.accept()
-
-    def set_destination(self):
-        logging.info("Attempting to set destination.")
-
-        # Retrieve the selected destination coordinates
-        destination_coords = self.get_selected_destination()
-
-        if not destination_coords:
-            logging.warning("No valid destination selected.")
-            # Show a dialog to the user if no destination is selected
-            self.show_error_dialog("No destination selected", "Please select a valid destination from the list.")
-            return
-
-        if self.parent.selected_character:
-            character_id = self.parent.selected_character['id']
-            logging.info(f"Setting destination for character {character_id} to {destination_coords}")
-
-            connection = sqlite3.connect(DB_PATH)
-            cursor = connection.cursor()
-            try:
-                # First, check if the destination already exists in recent destinations
-                cursor.execute('''
-                    SELECT 1 FROM recent_destinations WHERE character_id = ? AND col = ? AND row = ?
-                ''', (character_id, destination_coords[0], destination_coords[1]))
-                existing_destination = cursor.fetchone()
-
-                if existing_destination:
-                    logging.info("Destination already exists in recent destinations. Not adding again.")
-                else:
-                    # If not, add it to the recent destinations
-                    cursor.execute('''
-                        INSERT INTO recent_destinations (character_id, col, row, timestamp)
-                        VALUES (?, ?, ?, datetime('now'))
-                    ''', (character_id, destination_coords[0], destination_coords[1]))
-                    connection.commit()
-                    logging.info(f"Added destination to recent destinations: {destination_coords}")
-
-                # Now, update or insert the destination as the current destination
-                cursor.execute("SELECT id FROM destinations WHERE character_id = ?", (character_id,))
-                existing_destination = cursor.fetchone()
-
-                if existing_destination:
-                    cursor.execute('''
-                        UPDATE destinations
-                        SET col = ?, row = ?, timestamp = datetime('now')
-                        WHERE character_id = ?
-                    ''', (destination_coords[0], destination_coords[1], character_id))
-                else:
-                    cursor.execute('''
-                        INSERT INTO destinations (character_id, col, row, timestamp)
-                        VALUES (?, ?, ?, datetime('now'))
-                    ''', (character_id, destination_coords[0], destination_coords[1]))
-
-                connection.commit()
-                logging.info(f"Destination set successfully for character {character_id} at {destination_coords}.")
-
-                self.parent.destination = destination_coords
-                self.parent.update_minimap()
-            except sqlite3.Error as e:
-                logging.error(f"Failed to set destination for character {character_id}: {e}")
-            finally:
-                connection.close()
-
+            logging.info(f"Set destination for character {character_id} to {coords}")
             self.accept()
-        else:
-            logging.warning("No character selected. Destination not set.")
-            self.show_error_dialog("No character selected", "Please select a character to set the destination.")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to set destination: {e}")
 
-    def get_selected_destination(self):
-        logging.info("Retrieving selected destination.")
+    def get_selected_destination(self) -> tuple[int, int] | None:
+        """Retrieve coordinates of the selected destination."""
+        if (recent := self.recent_destinations_dropdown.currentText()) != "Select a recent destination":
+            return self.recent_destinations_dropdown.currentData()
 
-        # Check recent destinations dropdown first
-        recent_selection = self.recent_destinations_dropdown.currentText()
-        if recent_selection and recent_selection != "Select a recent destination":
-            # Fetch the coordinates stored with the dropdown item
-            coords = self.recent_destinations_dropdown.currentData()
-            logging.info(f"Selected recent destination: {recent_selection} with coordinates {coords}")
-            return coords
-
-        # Dropdowns with predefined coordinates
-        selected_dropdowns = [
+        dropdowns = [
             (self.tavern_dropdown, self.parent.taverns_coordinates),
             (self.transit_dropdown, self.parent.transits_coordinates),
             (self.shop_dropdown, self.parent.shops_coordinates),
             (self.guild_dropdown, self.parent.guilds_coordinates),
             (self.poi_dropdown, self.parent.places_of_interest_coordinates),
-            (self.user_building_dropdown, self.parent.user_buildings_coordinates)
+            (self.user_building_dropdown, self.parent.user_buildings_coordinates),
         ]
+        for dropdown, data in dropdowns:
+            if (sel := dropdown.currentText()) != "Select a destination":
+                return data[sel]
 
-        # Check each dropdown for a valid selection
-        for dropdown, data in selected_dropdowns:
-            selection = dropdown.currentText()
-            if selection and selection != "Select a destination":
-                coords = data.get(selection)
-                logging.info(f"Selected destination: {selection} with coordinates {coords}")
-                return coords
+        if (bank := self.bank_dropdown.currentText()) != "Select a destination":
+            col_name, row_name = bank.split(" & ")
+            col = self.parent.columns.get(col_name.strip())
+            row = self.parent.rows.get(row_name.strip())
+            if col is not None and row is not None:
+                return col + 1, row + 1
 
-        # Special handling for banks
-        bank_selection = self.bank_dropdown.currentText()
-        if bank_selection and bank_selection != "Select a destination":
-            # Parse the bank's "ABC Street & 123 Street" format
-            col_name, row_name = bank_selection.split(" & ")
-
-            # Look up column and row coordinates using parent data (columns and rows tables)
-            col_coord = self.parent.columns.get(col_name.strip())
-            row_coord = self.parent.rows.get(row_name.strip())
-
-            if col_coord is not None and row_coord is not None:
-                # Apply +1 offset for cell directly SE of intersection
-                logging.info("Selected bank destination: %s with coordinates (%d, %d)", bank_selection, col_coord + 1,
-                             row_coord + 1)
-                return col_coord + 1, row_coord + 1
-
-        # Custom location entry
         col = self.parent.columns.get(self.columns_dropdown.currentText())
         row = self.parent.rows.get(self.rows_dropdown.currentText())
         if col is not None and row is not None:
-            logging.info("Custom destination selected: Column %s, Row %s", col, row)
             return col, row
 
-        logging.warning("No valid destination selected.")
+        logging.debug("No valid destination selected")
         return None
 
-    def set_external_destination(self, col, row, guild_name):
-        """Set a destination externally and update the UI accordingly."""
-        logging.info("External destination set: %s at (%s, %s)", guild_name, col, row)
-
-        # Store the destination internally
-        self.external_destination = (col, row, guild_name)
-
-        # Ensure the destination is recognized properly
+    def set_external_destination(self, col: int, row: int, guild_name: str) -> None:
+        """Set a destination externally."""
         self.recent_destinations_dropdown.clear()
         self.recent_destinations_dropdown.addItem(f"{guild_name} - {col}, {row}", (col, row))
-
-        # Ensure it gets selected
-        self.recent_destinations_dropdown.setCurrentIndex(1)
-
-        # Enable the Set Destination button
+        self.recent_destinations_dropdown.setCurrentIndex(0)  # Select the added item
         self.set_destination()
+        logging.info(f"External destination set: {guild_name} at ({col}, {row})")
 
-    def show_error_dialog(self, title, message):
-        # Create a dialog box to display the error message
-        error_dialog = QDialog(self)
-        error_dialog.setWindowTitle(title)
-        error_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-
-        layout = QVBoxLayout()
-        message_label = QLabel(message)
-        layout.addWidget(message_label)
-
-        # Adding a button to close the dialog
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(error_dialog.accept)
-        layout.addWidget(close_button)
-
-        error_dialog.setLayout(layout)
-        error_dialog.setFixedSize(300, 100)  # Set a fixed size for the dialog
-        error_dialog.exec()
+    def show_error_dialog(self, title: str, message: str) -> None:
+        """Show an error dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(message, dialog))
+        close_btn = QPushButton("Close", dialog)
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        dialog.setFixedSize(300, 100)
+        dialog.exec()
+        logging.debug(f"Error dialog shown: {title} - {message}")
 
 # -----------------------
-# Shopping list Tools
+# Shopping List Tools
 # -----------------------
 
-class ShoppingListTool(QMainWindow):
-    def __init__(self, character_name, DB_PATH):
+class ShoppingListTool(QDialog):
+    """Tool for managing a character’s shopping list with SQLite-backed shop data."""
+
+    def __init__(self, character_name: str, db_path: str, parent=None) -> None:
         """
-        Initialize the Shopping List Tool with SQLite database support.
+        Initialize the Shopping List Tool.
 
         Args:
-            character_name (str): Name of the character using the tool.
-            DB_PATH (str): Path to the SQLite database.
+            character_name: Name of the character using the tool.
+            db_path: Path to the SQLite database.
+            parent: Parent widget (default is None).
         """
-        super().__init__()
+        super().__init__(parent)  # Ensure it gets QDialog properties
         self.setWindowTitle("Shopping List Tool")
         self.setGeometry(100, 100, 600, 400)
         self.character_name = character_name
-        self.DB_PATH = DB_PATH  # Central SQLite DB path
-
-        # Initialize SQLite connection
-        self.sqlite_connection = sqlite3.connect(self.DB_PATH)
-        self.sqlite_cursor = self.sqlite_connection.cursor()
-
-        # Initialize shopping list total
+        self.DB_PATH = db_path
         self.list_total = 0
 
-        # Setting up UI
+        try:
+            self.sqlite_connection = sqlite3.connect(self.DB_PATH)
+            self.sqlite_cursor = self.sqlite_connection.cursor()
+        except sqlite3.Error as e:
+            logging.error(f"Failed to connect to database: {e}")
+            self.sqlite_connection = None
+            self.sqlite_cursor = None
+
         self.setup_ui()
+        if self.sqlite_connection:
+            self.populate_shop_dropdown()
+        logging.debug(f"ShoppingListTool initialized for {character_name}")
 
-        # Load data from SQLite (shop info)
-        self.populate_shop_dropdown()
+    def setup_ui(self) -> None:
+        """Set up the UI elements and layout."""
+        layout = QVBoxLayout(self)  # Use QVBoxLayout for QDialog
 
-    def setup_ui(self):
-        # Initialize UI elements
-        self.shop_combobox = QComboBox(self)
-        self.charisma_combobox = QComboBox(self)
-        self.charisma_combobox.currentIndexChanged.connect(self.load_items)
-        self.available_items_list = QListWidget(self)
-        self.shopping_list = QListWidget(self)
-
-        # Add options to charisma combobox
+        self.shop_combobox = QComboBox()
+        self.charisma_combobox = QComboBox()
         self.charisma_combobox.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
+        self.available_items_list = QListWidget()
+        self.shopping_list = QListWidget()
+        self.add_item_button = QPushButton("Add Item")
+        self.remove_item_button = QPushButton("Remove Item")
+        self.total_label = QLabel(f"List total: 0 Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
 
-        # Buttons
-        self.add_item_button = QPushButton("Add Item", self)
-        self.remove_item_button = QPushButton("Remove Item", self)
-
-        # Layout setup
-        layout = QVBoxLayout()
         layout.addWidget(QLabel("Select Shop:"))
         layout.addWidget(self.shop_combobox)
         layout.addWidget(QLabel("Select Charisma Level:"))
@@ -5394,362 +5154,346 @@ class ShoppingListTool(QMainWindow):
         layout.addWidget(QLabel("Shopping List:"))
         layout.addWidget(self.shopping_list)
         layout.addWidget(self.remove_item_button)
-
-        # Create a label to display the total of the shopping list, coins in pocket, and bank balance
-        self.total_label = QLabel(
-            f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}"
-        )
         layout.addWidget(self.total_label)
 
-        central_widget = QWidget(self)
-        central_widget.setLayout(layout)
-        self.setCentralWidget(central_widget)
+        self.setLayout(layout)  # Set the layout for QDialog
 
+        # Signal connections
         self.add_item_button.clicked.connect(self.add_item)
         self.remove_item_button.clicked.connect(self.remove_item)
-
-        # Load items when shop or charisma level changes
         self.shop_combobox.currentIndexChanged.connect(self.load_items)
-        self.charisma_combobox.currentIndexChanged.connect(self.update_shopping_list_prices)
+        self.charisma_combobox.currentIndexChanged.connect(self._update_all)
 
-        # Load items initially
-        self.load_items()
-
-    def add_item(self):
-        """
-        Add the selected item from the available items list to the shopping list.
-        """
-        selected_item = self.available_items_list.currentItem()
-        if selected_item:
-            item_text = selected_item.text()
-            item_name, item_price = item_text.split(" - ")
-            item_price = int(item_price.split(" Coins")[0])
-
-            # Prompt user for the quantity
-            quantity, ok = QInputDialog.getInt(self, "Enter Quantity", f"How many {item_name} to add?", 1, 1)
-            if ok:
-                # Check if the item is already in the shopping list
-                for i in range(self.shopping_list.count()):
-                    existing_item_text = self.shopping_list.item(i).text()
-                    existing_item_name = existing_item_text.split(" - ")[0]
-                    if existing_item_name == item_name:
-                        # Update the quantity if the item is already present
-                        existing_quantity = int(existing_item_text.split(" - ")[2].split("x")[0])
-                        self.shopping_list.item(i).setText(
-                            f"{item_name} - {item_price} Coins - {existing_quantity + quantity}x"
-                        )
-                        self.update_total()
-                        return
-
-                # If the item is not in the list, add it with the entered quantity
-                self.shopping_list.addItem(f"{item_name} - {item_price} Coins - {quantity}x")
-                self.update_total()
-
-    def remove_item(self):
-        """
-        Prompt for quantity to remove from the selected item in the shopping list.
-        """
-        selected_item = self.shopping_list.currentItem()
-        if selected_item:
-            item_text = selected_item.text()
-            item_name, item_price, item_quantity = item_text.split(" - ")
-            item_price = int(item_price.split(" Coins")[0])
-            item_quantity = int(item_quantity.split("x")[0])
-
-            # Prompt the user for the quantity to remove
-            quantity_to_remove, ok = QInputDialog.getInt(self, "Enter Quantity", f"How many {item_name} to remove?", 1, 1, item_quantity)
-            if ok:
-                new_quantity = item_quantity - quantity_to_remove
-                if new_quantity > 0:
-                    # Update the item's quantity in the list without re-adding "Coins"
-                    self.shopping_list.currentItem().setText(f"{item_name} - {item_price} Coins - {new_quantity}x")
-                else:
-                    # Remove the item if the quantity reaches zero
-                    self.shopping_list.takeItem(self.shopping_list.row(selected_item))
-
-                self.update_total()
-
-    def populate_shop_dropdown(self):
-        """
-        Populate the shop dropdown with available shops from the SQLite database.
-        """
+    def populate_shop_dropdown(self) -> None:
+        """Populate the shop dropdown with data from SQLite."""
+        if not self.sqlite_cursor:
+            return
         try:
             self.sqlite_cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
-            shops = self.sqlite_cursor.fetchall()
-            for shop in shops:
-                self.shop_combobox.addItem(shop[0])
-        except sqlite3.Error as err:
-            print(f"Error fetching shop names: {err}")
-    def load_items(self):
-        """
-        Load items from the selected shop and charisma level into the available items list.
-        """
+            shops = [row[0] for row in self.sqlite_cursor.fetchall()]
+            self.shop_combobox.addItems(shops)
+            logging.debug(f"Populated shop dropdown with {len(shops)} shops")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to populate shop dropdown: {e}")
+
+    def load_items(self) -> None:
+        """Load available items based on selected shop and charisma level."""
+        if not self.sqlite_cursor or not self.shop_combobox.currentText():
+            self.available_items_list.clear()
+            return
+
         self.available_items_list.clear()
         shop_name = self.shop_combobox.currentText()
-        charisma_level = self.charisma_combobox.currentText()
-
-        # Determine the price column based on charisma level
         price_column = {
             "No Charisma": "base_price",
             "Charisma 1": "charisma_level_1",
             "Charisma 2": "charisma_level_2",
             "Charisma 3": "charisma_level_3"
-        }.get(charisma_level, "base_price")
+        }.get(self.charisma_combobox.currentText(), "base_price")
 
-        # Load items for the selected shop and charisma level from MySQL
-        query = f"""
-        SELECT item_name, {price_column}
-        FROM shop_items
-        WHERE shop_name = ?
-        """
-        self.sqlite_cursor.execute(query, (shop_name,))
-        items = self.sqlite_cursor.fetchall()
+        try:
+            self.sqlite_cursor.execute(
+                f"SELECT item_name, {price_column} FROM shop_items WHERE shop_name = ?",
+                (shop_name,)
+            )
+            for name, price in self.sqlite_cursor.fetchall():
+                self.available_items_list.addItem(f"{name} - {price} Coins")
+            logging.debug(f"Loaded {self.available_items_list.count()} items for {shop_name}")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load items: {e}")
 
-        for item in items:
-            item_name = item[0]
-            price = item[1]
-            self.available_items_list.addItem(f"{item_name} - {price} Coins")
+    def add_item(self) -> None:
+        """Add an item from available items to the shopping list."""
+        if not (item := self.available_items_list.currentItem()):
+            return
 
-    def update_shopping_list_prices(self):
-        """
-        Update the prices in the shopping list based on the selected charisma level.
-        """
-        shop_name = self.shop_combobox.currentText()
-        charisma_level = self.charisma_combobox.currentText()
+        name, price_str = item.text().split(" - ")
+        price = int(price_str.split(" Coins")[0])
+        quantity, ok = QInputDialog.getInt(self, "Quantity", f"How many {name}?", 1, 1)
+        if not ok:
+            return
 
-        # Determine the price column based on charisma level
-        price_column = {
-            "No Charisma": "base_price",
-            "Charisma 1": "charisma_level_1",
-            "Charisma 2": "charisma_level_2",
-            "Charisma 3": "charisma_level_3"
-        }.get(charisma_level, "base_price")
-
-        # Update prices for each item in the shopping list
         for i in range(self.shopping_list.count()):
-            item_text = self.shopping_list.item(i).text()
-            item_name = item_text.split(" - ")[0]
-            quantity = int(item_text.split(" - ")[2].split("x")[0])
+            if (existing := self.shopping_list.item(i).text()).startswith(f"{name} - "):
+                curr_qty = int(existing.split(" - ")[2].split("x")[0])
+                self.shopping_list.item(i).setText(f"{name} - {price} Coins - {curr_qty + quantity}x")
+                self.update_total()
+                return
 
-            # Query for the updated price from MySQL
-            query = f"""
-            SELECT {price_column}
-            FROM shop_items
-            WHERE item_name = ? AND shop_name = ?
-            """
-            self.sqlite_cursor.execute(query, (item_name, shop_name))
-            result = self.sqlite_cursor.fetchone()
-
-            if result:
-                updated_price = result[0]
-                self.shopping_list.item(i).setText(f"{item_name} - {updated_price} Coins - {quantity}x")
-
+        self.shopping_list.addItem(f"{name} - {price} Coins - {quantity}x")
         self.update_total()
+        logging.debug(f"Added {name} x{quantity} to shopping list")
 
-    def update_total(self):
-        """
-        Update the total cost of the shopping list and display it.
-        """
-        self.list_total = 0
-        for index in range(self.shopping_list.count()):
-            item_text = self.shopping_list.item(index).text()
-            item_price = int(item_text.split(" - ")[1].split(" Coins")[0])
-            item_quantity = int(item_text.split(" - ")[2].split("x")[0])
-            self.list_total += item_price * item_quantity
+    def remove_item(self) -> None:
+        """Remove or reduce quantity of an item from the shopping list."""
+        if not (item := self.shopping_list.currentItem()):
+            return
 
-        # Update the label with the correct total, considering the coins in pocket and bank
+        name, price_str, qty_str = item.text().split(" - ")
+        price = int(price_str.split(" Coins")[0])
+        curr_qty = int(qty_str.split("x")[0])
+        qty_to_remove, ok = QInputDialog.getInt(self, "Remove", f"How many {name}?", 1, 1, curr_qty)
+        if not ok:
+            return
+
+        new_qty = curr_qty - qty_to_remove
+        if new_qty > 0:
+            item.setText(f"{name} - {price} Coins - {new_qty}x")
+        else:
+            self.shopping_list.takeItem(self.shopping_list.row(item))
+        self.update_total()
+        logging.debug(f"Removed {qty_to_remove}x {name} from shopping list")
+
+    def _update_all(self) -> None:
+        """Update both available items and shopping list prices."""
+        self.load_items()
+        self.update_shopping_list_prices()
+
+    def update_shopping_list_prices(self) -> None:
+        """Update prices in the shopping list based on charisma level."""
+        if not self.sqlite_cursor or not self.shop_combobox.currentText():
+            return
+
+        shop_name = self.shop_combobox.currentText()
+        price_column = {
+            "No Charisma": "base_price",
+            "Charisma 1": "charisma_level_1",
+            "Charisma 2": "charisma_level_2",
+            "Charisma 3": "charisma_level_3"
+        }.get(self.charisma_combobox.currentText(), "base_price")
+
+        try:
+            items = {self.shopping_list.item(i).text().split(" - ")[0]: i for i in range(self.shopping_list.count())}
+            if items:
+                self.sqlite_cursor.execute(
+                    f"SELECT item_name, {price_column} FROM shop_items WHERE shop_name = ? AND item_name IN ({','.join('?' * len(items))})",
+                    (shop_name, *items.keys())
+                )
+                for name, price in self.sqlite_cursor.fetchall():
+                    i = items[name]
+                    qty = int(self.shopping_list.item(i).text().split(" - ")[2].split("x")[0])
+                    self.shopping_list.item(i).setText(f"{name} - {price} Coins - {qty}x")
+            self.update_total()
+            logging.debug(f"Updated prices for {len(items)} shopping list items")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to update shopping list prices: {e}")
+
+    def update_total(self) -> None:
+        """Update and display the total cost of the shopping list."""
+        self.list_total = sum(
+            int(item.text().split(" - ")[1].split(" Coins")[0]) * int(item.text().split(" - ")[2].split("x")[0])
+            for item in [self.shopping_list.item(i) for i in range(self.shopping_list.count())]
+        )
         self.total_label.setText(
             f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}"
         )
 
-    def coins_in_pocket(self):
-        """
-        Retrieve the number of coins in the pocket for the given character from the SQLite DB.
-        """
-        cursor = self.sqlite_connection.cursor()
-        cursor.execute("SELECT id FROM characters WHERE name = ?", (self.character_name,))
-        character_id = cursor.fetchone()
-
-        if character_id:
-            cursor.execute("SELECT pocket FROM coins WHERE character_id = ?", (character_id[0],))
-            result = cursor.fetchone()
+    def coins_in_pocket(self) -> int:
+        """Retrieve coins in pocket for the character."""
+        if not self.sqlite_cursor:
+            return 0
+        try:
+            self.sqlite_cursor.execute("SELECT pocket FROM coins WHERE character_id = (SELECT id FROM characters WHERE name = ?)",
+                                     (self.character_name,))
+            result = self.sqlite_cursor.fetchone()
             return result[0] if result else 0
-        return 0
+        except sqlite3.Error as e:
+            logging.error(f"Failed to fetch pocket coins: {e}")
+            return 0
 
-    def coins_in_bank(self):
-        """
-        Retrieve the number of coins in the bank for the given character from the SQLite DB.
-        """
-        cursor = self.sqlite_connection.cursor()
-        cursor.execute("SELECT id FROM characters WHERE name = ?", (self.character_name,))
-        character_id = cursor.fetchone()
-
-        if character_id:
-            cursor.execute("SELECT bank FROM coins WHERE character_id = ?", (character_id[0],))
-            result = cursor.fetchone()
+    def coins_in_bank(self) -> int:
+        """Retrieve coins in bank for the character."""
+        if not self.sqlite_cursor:
+            return 0
+        try:
+            self.sqlite_cursor.execute("SELECT bank FROM coins WHERE character_id = (SELECT id FROM characters WHERE name = ?)",
+                                     (self.character_name,))
+            result = self.sqlite_cursor.fetchone()
             return result[0] if result else 0
-        return 0
+        except sqlite3.Error as e:
+            logging.error(f"Failed to fetch bank coins: {e}")
+            return 0
+
+    def closeEvent(self, event) -> None:
+        """Close the SQLite connection when the window closes."""
+        if self.sqlite_connection:
+            try:
+                self.sqlite_connection.close()
+                logging.debug("SQLite connection closed")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to close connection: {e}")
+        event.accept()
 
 # -----------------------
 # Damage Calculator Tool
 # -----------------------
 
 class DamageCalculator(QDialog):
-    def __init__(self, db_connection):
-        super().__init__()
+    """Dialog for calculating weapons needed to reduce a target BP."""
+
+    def __init__(self, db_connection: sqlite3.Connection, parent=None) -> None:
+        """
+        Initialize the Damage Calculator.
+
+        Args:
+            db_connection: SQLite database connection (unused currently).
+            parent: Parent widget (default is None).
+        """
+        super().__init__(parent)  # Ensure it gets QDialog properties
         self.db_connection = db_connection
-        self.charisma_level = 0  # Default charisma level
+        self.charisma_level = 0
         self.setWindowTitle("Damage Calculator")
         self.setMinimumWidth(400)
 
-        # Main layout for the dialog
-        main_layout = QVBoxLayout()
+        main_layout = QVBoxLayout(self)  # Use QVBoxLayout for QDialog
 
-        # Target BP input
+        # Target BP
         bp_layout = QHBoxLayout()
-        bp_label = QLabel("Target BP:")
+        bp_layout.addWidget(QLabel("Target BP:"))
         self.bp_input = QLineEdit()
-        self.bp_input.setValidator(QIntValidator(0, 100000000))  # Allow only integer input
-        bp_layout.addWidget(bp_label)
+        self.bp_input.setValidator(QIntValidator(0, 100000000))
         bp_layout.addWidget(self.bp_input)
         main_layout.addLayout(bp_layout)
 
-        # Charisma level selection
+        # Charisma level
         charisma_layout = QHBoxLayout()
-        charisma_label = QLabel("Charisma Level:")
+        charisma_layout.addWidget(QLabel("Charisma Level:"))
         self.charisma_dropdown = QComboBox()
         self.charisma_dropdown.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
         self.charisma_dropdown.currentIndexChanged.connect(self.update_charisma_level)
-        charisma_layout.addWidget(charisma_label)
         charisma_layout.addWidget(self.charisma_dropdown)
         main_layout.addLayout(charisma_layout)
 
-        # Weapons needed display
+        # Results
         self.result_display = QTextEdit()
         self.result_display.setReadOnly(True)
         self.result_display.setPlaceholderText("Weapons needed will be displayed here.")
         main_layout.addWidget(self.result_display)
 
-        # Total cost display
         self.total_cost_label = QLabel("Total Cost: 0 Coins")
         main_layout.addWidget(self.total_cost_label)
 
         # Calculate button
-        self.calculate_button = QPushButton("Calculate")
-        self.calculate_button.clicked.connect(self.calculate_damage)
-        main_layout.addWidget(self.calculate_button)
+        calc_button = QPushButton("Calculate")
+        calc_button.clicked.connect(self.calculate_damage)
+        main_layout.addWidget(calc_button)
 
-        # Set the layout for the dialog
-        self.setLayout(main_layout)
+        self.setLayout(main_layout)  # Set the layout for QDialog
 
-        # Static prices for Discount Magic at different charisma levels
+        # Static prices [No Charisma, Charisma 1, Charisma 2, Charisma 3]
         self.discount_magic_prices = {
             "Vial of Holy Water": [1400, 1357, 1302, 1260],
             "Garlic Spray": [700, 678, 651, 630],
             "Wooden Stake": [2800, 2715, 2604, 2520],
         }
+        logging.debug("DamageCalculator initialized")
 
-    def update_charisma_level(self):
-        # Update charisma level from dropdown selection
+    def update_charisma_level(self) -> None:
+        """Update charisma level based on dropdown selection."""
         self.charisma_level = self.charisma_dropdown.currentIndex()
+        logging.debug(f"Charisma level set to {self.charisma_level}")
 
-    def calculate_damage(self):
-        # Clear previous results
+    def calculate_damage(self) -> None:
+        """Calculate weapons needed to reduce target BP to 0."""
         self.result_display.clear()
-
         try:
-            # Get target BP from input
             target_bp = int(self.bp_input.text())
+            if target_bp <= 0:
+                raise ValueError("BP must be positive")
         except ValueError:
-            self.result_display.setText("Please enter a valid BP value.")
+            self.result_display.setText("Please enter a valid positive BP value")
+            logging.warning("Invalid BP input")
             return
 
-        if target_bp <= 0:
-            self.result_display.setText("BP must be greater than 0.")
-            return
-
-        results = []
-        total_cost = 0
-        remaining_bp = target_bp
-        total_hits = 0
-
-        # Load prices for weapons based on charisma level
         vial_cost = self.discount_magic_prices["Vial of Holy Water"][self.charisma_level]
         spray_cost = self.discount_magic_prices["Garlic Spray"][self.charisma_level]
         stake_cost = self.discount_magic_prices["Wooden Stake"][self.charisma_level]
 
-        # Step 1: Calculate the number of Vial of Holy Water hits needed to reduce BP to <= 1350
+        remaining_bp = target_bp
+        total_cost = 0
+        total_hits = 0
+        results = []
+
+        # Vials until BP <= 1350
         vial_hits = 0
         while remaining_bp > 1350:
-            damage = math.floor(remaining_bp * 0.6)  # Vial of Holy Water does BP * 0.6 damage
+            damage = math.floor(remaining_bp * 0.6)
             remaining_bp -= damage
             vial_hits += 1
             total_cost += vial_cost
             total_hits += 1
+        if vial_hits:
+            results.append(f"Discount Magic - Vial of Holy Water - Qty: {vial_hits} - Total Cost: {vial_hits * vial_cost:,} coins")
 
-        if vial_hits > 0:
-            results.append(
-                f"Discount Magic - Vial of Holy Water - Qty: {vial_hits} - Total Cost: {vial_hits * vial_cost:,} coins")
-
-        # Step 2: Calculate the number of Garlic Spray hits needed to reduce BP to <= 200
+        # Sprays until BP <= 200
         spray_hits = 0
         while remaining_bp > 200:
-            remaining_bp -= 75  # Garlic Spray does a fixed average of 75 damage
+            remaining_bp -= 75
             spray_hits += 1
             total_cost += spray_cost
             total_hits += 1
+        if spray_hits:
+            results.append(f"Discount Magic - Garlic Spray - Qty: {spray_hits} - Total Cost: {spray_hits * spray_cost:,} coins")
 
-        if spray_hits > 0:
-            results.append(
-                f"Discount Magic - Garlic Spray - Qty: {spray_hits} - Total Cost: {spray_hits * spray_cost:,} coins")
-
-        # Step 3: Use one Wooden Stake if BP <= 200
-        if remaining_bp <= 200 and remaining_bp > 0:
-            remaining_bp = 0  # Wooden Stake brings BP to 0
+        # Stake if BP <= 200
+        if 0 < remaining_bp <= 200:
             total_cost += stake_cost
             total_hits += 1
             results.append(f"Discount Magic - Wooden Stake - Qty: 1 - Total Cost: {stake_cost:,} coins")
+            remaining_bp = 0
 
-        # Final output for total cost and total hits
+        # Summary
         results.append(f"Totals: Hits: {total_hits} Coins: {total_cost:,}")
         self.result_display.setText("\n".join(results))
         self.total_cost_label.setText(f"Total Cost: {total_cost:,} Coins")
+        logging.debug(f"Calculated for BP {target_bp}: {total_hits} hits, {total_cost} coins")
 
 # -----------------------
 # Powers Reference Tool
 # -----------------------
 
 class PowersDialog(QDialog):
-    def __init__(self, parent, character_x, character_y, DB_PATH):
-        """Initialize the PowersDialog with character coordinates and SQLite connection."""
-        super().__init__(parent)
+    """Dialog displaying power information with destination-setting functionality."""
+
+    def __init__(self, parent: QWidget, character_x: int, character_y: int, db_path: str) -> None:
+        """
+        Initialize the PowersDialog.
+
+        Args:
+            parent: Reference to RBCCommunityMap.
+            character_x: Character's X coordinate.
+            character_y: Character's Y coordinate.
+            db_path: Path to SQLite database.
+        """
+        super().__init__(parent)  # Ensure QDialog properties are inherited
         self.setWindowTitle("Powers Information")
         self.setMinimumSize(600, 400)
-        self.parent = parent  # Reference to RBCCommunityMap
+        self.parent = parent
         self.character_x = character_x
         self.character_y = character_y
-        self.DB_PATH = DB_PATH
+        self.DB_PATH = db_path
 
-        logging.debug("Initializing PowersDialog with coordinates: (%d, %d)", character_x, character_y)
-
-        # SQLite connection
-        self.db_connection = sqlite3.connect(DB_PATH)
+        try:
+            self.db_connection = sqlite3.connect(db_path)
+        except sqlite3.Error as e:
+            logging.error(f"Failed to connect to database: {e}")
+            self.db_connection = None
 
         # Main layout
         main_layout = QHBoxLayout(self)
 
-        # Left panel: Powers list
+        # Powers List
         self.powers_list = QListWidget()
         self.powers_list.itemClicked.connect(self.load_power_info)
         main_layout.addWidget(self.powers_list)
 
-        # Right panel: Details
+        # Details Panel
         self.details_panel = QVBoxLayout()
-        self.power_name_label = self.create_labeled_field("Power")
-        self.guild_label = self.create_labeled_field("Guild")
-        self.cost_label = self.create_labeled_field("Cost")
-        self.quest_info_text = self.create_labeled_field("Quest Info", QTextEdit)
-        self.skill_info_text = self.create_labeled_field("Skill Info", QTextEdit)
+        self.power_name_label = self._create_labeled_field("Power")
+        self.guild_label = self._create_labeled_field("Guild")
+        self.cost_label = self._create_labeled_field("Cost")
+        self.quest_info_text = self._create_labeled_field("Quest Info", QTextEdit)
+        self.skill_info_text = self._create_labeled_field("Skill Info", QTextEdit)
 
         self.set_destination_button = QPushButton("Set Destination")
         self.set_destination_button.setEnabled(False)
@@ -5757,37 +5501,40 @@ class PowersDialog(QDialog):
         self.details_panel.addWidget(self.set_destination_button)
 
         main_layout.addLayout(self.details_panel)
-        self.load_powers()
 
-    def create_labeled_field(self, label_text, widget_type=QLabel):
-        """Helper to create a labeled field with a widget."""
-        layout = self.details_panel
-        label = QLabel(f"<b>{label_text}:</b>")
-        widget = widget_type()
+        # Load powers if DB is available
+        if self.db_connection:
+            self.load_powers()
+
+        self.setLayout(main_layout)  # Set QDialog layout
+        logging.debug(f"PowersDialog initialized at ({character_x}, {character_y})")
+
+    def _create_labeled_field(self, label_text: str, widget_type=QLabel) -> QWidget:
+        """Create a labeled field with a widget."""
+        label = QLabel(f"<b>{label_text}:</b>", self)
+        widget = widget_type(self)
         if isinstance(widget, QTextEdit):
             widget.setReadOnly(True)
-        layout.addWidget(label)
-        layout.addWidget(widget)
+        self.details_panel.addWidget(label)
+        self.details_panel.addWidget(widget)
         return widget
 
-    def load_powers(self):
-        """Load all powers from the database into the list widget."""
+    def load_powers(self) -> None:
+        """Load powers from the database into the list."""
         try:
             with self.db_connection:
                 cursor = self.db_connection.cursor()
-                cursor.execute("SELECT power_id, name FROM powers ORDER BY name ASC")
-                powers = cursor.fetchall()
-            logging.debug("Loaded %d powers from database.", len(powers))
-            for power_id, name in powers:
-                self.powers_list.addItem(name)
+                cursor.execute("SELECT name FROM powers ORDER BY name ASC")
+                for name, in cursor.fetchall():
+                    self.powers_list.addItem(name)
+            logging.debug(f"Loaded {self.powers_list.count()} powers")
         except sqlite3.Error as e:
-            logging.error("Failed to load powers: %s", e)
-            QMessageBox.critical(self, "Database Error", f"Failed to load powers:\n{e}")
+            logging.error(f"Failed to load powers: {e}")
+            QMessageBox.critical(self, "Database Error", "Failed to load powers")
 
-    def load_power_info(self, item):
-        """Load and display detailed information for the selected power."""
+    def load_power_info(self, item: QListWidgetItem) -> None:
+        """Display details for the selected power."""
         power_name = item.text()
-        logging.debug("Loading info for power: %s", power_name)
         try:
             with self.db_connection:
                 cursor = self.db_connection.cursor()
@@ -5795,41 +5542,34 @@ class PowersDialog(QDialog):
                     "SELECT name, guild, cost, quest_info, skill_info FROM powers WHERE name = ?",
                     (power_name,)
                 )
-                power_details = cursor.fetchone()
+                details = cursor.fetchone()
+                if not details:
+                    raise ValueError(f"No details for {power_name}")
 
-                guild_location = None
-                if power_details and power_details[1]:
-                    name, guild, cost, quest_info, skill_info = power_details
-                    if power_name == "Battle Cloak":
-                        self.enable_nearest_peacekeeper_mission()
-                    else:
-                        cursor.execute("SELECT `Column`, `Row` FROM guilds WHERE Name = ?", (guild,))
-                        guild_location = cursor.fetchone()
-
-            if power_details:
-                name, guild, cost, quest_info, skill_info = power_details
-                logging.debug("Power details: %s, Guild: %s, Cost: %s", name, guild, cost)
+                name, guild, cost, quest_info, skill_info = details
                 self.power_name_label.setText(f"<b>Power:</b> {name}")
-                self.guild_label.setText(f"<b>Guild:</b> {guild}")
-                self.cost_label.setText(f"<b>Cost:</b> {cost} coins" if cost else "<b>Cost:</b> Unknown")
+                self.guild_label.setText(f"<b>Guild:</b> {guild or 'Unknown'}")
+                self.cost_label.setText(f"<b>Cost:</b> {cost or 'Unknown'} coins")
                 self.quest_info_text.setPlainText(quest_info or "None")
                 self.skill_info_text.setPlainText(skill_info or "None")
 
-                if guild_location and guild_location[0] != "NA" and guild_location[1] != "NA":
-                    logging.debug("Guild location: %s at (%s, %s)", guild, *guild_location)
-                    self.configure_destination_button(guild, *guild_location)
-                elif power_name != "Battle Cloak":
-                    logging.debug("Guild location not found or unknown.")
+                if power_name == "Battle Cloak":
+                    self._enable_nearest_peacekeeper_mission()
+                elif guild:
+                    cursor.execute("SELECT `Column`, `Row` FROM guilds WHERE Name = ?", (guild,))
+                    if loc := cursor.fetchone():
+                        self._configure_destination_button(guild, loc[0], loc[1])
+                    else:
+                        self.set_destination_button.setEnabled(False)
+                else:
                     self.set_destination_button.setEnabled(False)
-            else:
-                logging.warning("No details for power: %s", power_name)
-                QMessageBox.warning(self, "Not Found", f"No details found for '{power_name}'.")
-        except sqlite3.Error as e:
-            logging.error("Failed to load power details: %s", e)
-            QMessageBox.critical(self, "Database Error", f"Failed to load power details:\n{e}")
+            logging.debug(f"Loaded info for {power_name}")
+        except (sqlite3.Error, ValueError) as e:
+            logging.error(f"Failed to load power info for {power_name}: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to load details for '{power_name}'")
 
-    def enable_nearest_peacekeeper_mission(self):
-        """Enable the Set Destination button with the nearest Peacekeeper's Mission."""
+    def _enable_nearest_peacekeeper_mission(self) -> None:
+        """Enable destination button with the nearest Peacekeeper's Mission."""
         try:
             with self.db_connection:
                 cursor = self.db_connection.cursor()
@@ -5839,92 +5579,74 @@ class PowersDialog(QDialog):
                     "OR (c.`Name` = 'Unicorn' AND r.`Name` = '33rd')"
                 )
                 missions = cursor.fetchall()
-            if not missions:
-                logging.warning("No Peacekeeper's Mission locations found.")
-                return
-
-            closest_mission = min(missions, key=lambda m: max(abs(m[0] - self.character_x), abs(m[1] - self.character_y)))
-            logging.debug("Nearest Peacekeeper's Mission at (%d, %d)", *closest_mission)
-            self.configure_destination_button("Peacekeeper's Mission", *closest_mission)
+            if missions:
+                closest = min(missions, key=lambda m: max(abs(m[0] - self.character_x), abs(m[1] - self.character_y)))
+                self._configure_destination_button("Peacekeeper's Mission", closest[0], closest[1])
+            else:
+                self.set_destination_button.setEnabled(False)
+                logging.debug("No Peacekeeper's Missions found")
         except sqlite3.Error as e:
-            logging.error("Database error in enable_nearest_peacekeeper_mission: %s", e)
+            logging.error(f"Failed to find Peacekeeper's Mission: {e}")
 
-    def configure_destination_button(self, guild, col, row):
-        """Configure the Set Destination button with guild location properties."""
-        self.set_destination_button.setEnabled(col != "NA" and row != "NA")
-        self.set_destination_button.setProperty("guild", guild)
-        self.set_destination_button.setProperty("Column", col)
-        self.set_destination_button.setProperty("Row", row)
+    def _configure_destination_button(self, guild: str, col: str | int, row: str | int) -> None:
+        """Configure the destination button with guild location."""
+        enabled = col != "NA" and row != "NA" and col is not None and row is not None
+        self.set_destination_button.setEnabled(enabled)
+        if enabled:
+            self.set_destination_button.setProperty("guild", guild)
+            self.set_destination_button.setProperty("Column", int(col))
+            self.set_destination_button.setProperty("Row", int(row))
+        logging.debug(f"Destination button {'enabled' if enabled else 'disabled'} for {guild} at ({col}, {row})")
 
-    def set_destination(self):
-        """Set the destination directly in the database and refresh the minimap."""
+    def set_destination(self) -> None:
+        """Set the destination in the database and update the minimap."""
         guild = self.set_destination_button.property("guild")
         col = self.set_destination_button.property("Column")
         row = self.set_destination_button.property("Row")
 
-        logging.debug("Directly setting destination: %s at (%s, %s)", guild, col, row)
-
-        if not guild or col == "NA" or row == "NA":
-            logging.warning("Cannot set destination: Unknown location.")
-            QMessageBox.warning(self, "Error", "This guild's location is unknown.")
-            return
-
-        if not self.parent.selected_character:
-            logging.warning("No character selected. Cannot set destination.")
+        if not guild or not self.parent.selected_character:
+            logging.warning("Missing guild or character for destination")
+            QMessageBox.warning(self, "Error", "No character selected or invalid guild")
             return
 
         character_id = self.parent.selected_character['id']
-        connection = sqlite3.connect(self.DB_PATH)
-        cursor = connection.cursor()
-
         try:
-            # Check if the destination already exists
-            cursor.execute("SELECT id FROM destinations WHERE character_id = ?", (character_id,))
-            existing_destination = cursor.fetchone()
-
-            if existing_destination:
-                cursor.execute('''
-                    UPDATE destinations
-                    SET col = ?, row = ?, timestamp = datetime('now')
-                    WHERE character_id = ?
-                ''', (col, row, character_id))
-            else:
-                cursor.execute('''
-                    INSERT INTO destinations (character_id, col, row, timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                ''', (character_id, col, row))
-
-            connection.commit()
-            logging.info("Database updated: Destination set for character %d at (%d, %d)", character_id, col, row)
-
-            # Immediately update the minimap
+            with sqlite3.connect(self.DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp) "
+                    "VALUES (?, ?, ?, datetime('now'))",
+                    (character_id, col, row)
+                )
+                conn.commit()
             self.parent.destination = (col, row)
             self.parent.update_minimap()
-
-            QMessageBox.information(self, "Destination Set", f"Minimap destination set to {guild} at ({col}, {row})")
-
+            logging.info(f"Destination set for {character_id} to {guild} at ({col}, {row})")
+            QMessageBox.information(self, "Success", f"Destination set to {guild} at ({col}, {row})")
         except sqlite3.Error as e:
-            logging.error("Failed to set destination in database: %s", e)
-            QMessageBox.critical(self, "Database Error", f"Failed to set destination:\n{e}")
-        finally:
-            connection.close()
+            logging.error(f"Failed to set destination: {e}")
+            QMessageBox.critical(self, "Database Error", "Failed to set destination")
 
-    def closeEvent(self, event):
-        """Close the SQLite database connection when the dialog closes."""
+    def closeEvent(self, event) -> None:
+        """Close the database connection on dialog close."""
         if self.db_connection:
-            self.db_connection.close()
+            try:
+                self.db_connection.close()
+                logging.debug("Database connection closed")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to close database: {e}")
         event.accept()
 
 # -----------------------
 # Main Entry Point
 # -----------------------
-def main():
-    """
-    Main function to run the RBC City Map Application.
-    """
+
+def main() -> None:
+    """Run the RBC City Map Application."""
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon('./images/favicon.ico'))  # Set the global favicon
+    app.setWindowIcon(QIcon('./images/favicon.ico'))
     window = RBCCommunityMap()
+    window.show()  # Explicitly show the window
     sys.exit(app.exec())
 
 if __name__ == "__main__":

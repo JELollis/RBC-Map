@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.10.3
+# Filename: main_0.10.2
 
 """
 ======================
@@ -23,7 +23,7 @@ limitations under the License.
 
 """
 =================================
-RBC City Map Application (v0.10.3)
+RBC City Map Application (v0.10.2)
 =================================
 This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
 (set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
@@ -53,7 +53,7 @@ Modules Used:
 - **logging**: Captures logs, errors, and system events.
 
 ================================
-Classes and Methods (v0.10.3)
+Classes and Methods (v0.10.2)
 ================================
 
 #### RBCCommunityMap (Core Application)
@@ -203,7 +203,7 @@ from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
     QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
-    QTextEdit, QSpinBox, QFontComboBox
+    QTextEdit
 )
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, QShortcut, QKeySequence
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
@@ -213,8 +213,6 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
-#import PySide6.QtCore
-
 import sqlite3
 
 # -----------------------
@@ -262,7 +260,7 @@ def setup_logging():
 # Call the logging setup function to initialize logging configuration
 setup_logging()
 
-version_number = "0.10.3"  # Update with your app version
+version_number = "0.10.2"  # Update with your app version
 logging.info(f"Launching app version {version_number}")
 
 # -----------------------
@@ -614,46 +612,22 @@ INSERT OR IGNORE INTO `banks` ("ID","Column","Row","Name") VALUES (1,'Aardvark',
  (198,'Zelkova','23rd','OmniBank'),
  (199,'Zelkova','73rd','OmniBank'),
  (200,'Zinc','74th','OmniBank');
-INSERT OR IGNORE INTO `color_mappings` (`id`, `type`, `color`) VALUES
-(1, 'bank', '#0000ff'),
-(2, 'tavern', '#887700'),
-(3, 'transit', '#880000'),
-(4, 'user_building', '#660022'),
-(5, 'alley', '#888888'),
-(6, 'default', '#000000'),
-(7, 'border', 'white'),
-(8, 'edge', '#0000ff'),
-(9, 'shop', '#004488'),
-(10, 'guild', '#ff0000'),
-(11, 'placesofinterest', '#660022'),
-(12, 'background', '#000000'),
-(13, 'text_color', '#dddddd'),
-(14, 'button_color', '#b1b1b1'),
-(15, 'cityblock', '#0000dd'),
-(16, 'intersect', '#008800'),
-(17, 'street', '#444444'),
-(18, 'human_bg', 'black'),
-(19, 'vhuman_bg', 'black'),
-(20, 'phuman_bg', 'black'),
-(21, 'whuman_bg', 'black'),
-(22, 'object_color', 'yellow'),
-(23, 'mo_bg', 'yellow'),
-(24, 'textad_bg', '#002211'),
-(25, 'hiscore_border', '#668877'),
-(26, 'hiscore_first_row', '#004400'),
-(27, 'table_at_bg', '#333333'),
-(28, 'sb_bg', '#555533'),
-(29, 'set_destination', '#1a7f7a'),
-(30, 'set_destination_transit', '#046380'),
-(31, 'headline_text', '#ff0000'),
-(32, 'link_text', '#999999'),
-(33, 'table_border', 'white'),
-(34, 'battle_border', 'none'),
-(35, 'pansy', '#ff8888'),
-(36, 'cloak', '#00ffff'),
-(37, 'rich', '#ffff44'),
-(38, 'mh_bg', 'transparent'),
-(39, 'mh_text', 'white');
+INSERT OR IGNORE INTO "color_mappings" ("id","type","color") VALUES (1,'bank','blue'),
+ (2,'tavern','orange'),
+ (3,'transit','red'),
+ (4,'user_building','purple'),
+ (5,'alley','grey'),
+ (6,'default','black'),
+ (7,'border','white'),
+ (9,'edge','blue'),
+ (10,'shop','green'),
+ (11,'guild','yellow'),
+ (12,'placesofinterest','purple'),
+ (13,'background','#d4d4d4'),
+ (14,'text_color','#000000'),
+ (15,'button_color','#b1b1b1'),
+ (30,'set_destination','#1a7f7a'),
+ (31,'set_destination_transit','#046380');
 INSERT OR IGNORE INTO  "columns" ("ID","Name","Coordinate") VALUES 
 ('1', 'WCL', '0'),
 ('2', 'Western City Limits', '0'),
@@ -1671,7 +1645,6 @@ def clear_cookie_db():
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
-
 class RBCCommunityMap(QMainWindow):
     """
     Main application class for the RBC Community Map.
@@ -1997,10 +1970,9 @@ class RBCCommunityMap(QMainWindow):
         dialog = CSSCustomizationDialog(self)
         dialog.exec()
 
-# -----------------------
-# Cookie Handling
-# -----------------------
-
+    # -----------------------
+    # Cookie Handling
+    # -----------------------
     def setup_cookie_handling(self):
         """
         Set up cookie handling, including loading and saving cookies from the 'cookies' table in rbc_map_data.db.
@@ -2032,7 +2004,7 @@ class RBCCommunityMap(QMainWindow):
             cookie.setPath(path)
             cookie.setValue(value.encode())
             try:
-                if expiration and isinstance(expiration, int):
+                if expiration and expiration.isdigit():
                     cookie.setExpirationDate(QDateTime.fromSecsSinceEpoch(int(expiration)))
                 else:
                     logging.warning("Invalid expiration value for cookie: %s", expiration)
@@ -2075,7 +2047,6 @@ class RBCCommunityMap(QMainWindow):
 # -----------------------
 # UI Setup
 # -----------------------
-
     def setup_ui_components(self):
         """
         Set up the main user interface for the RBC Community Map application.
@@ -2352,7 +2323,6 @@ class RBCCommunityMap(QMainWindow):
 # -----------------------
 # Browser Controls Setup
 # -----------------------
-
     def go_back(self):
         """Navigate the web browser back to the previous page."""
         self.website_frame.back()
@@ -2426,18 +2396,22 @@ class RBCCommunityMap(QMainWindow):
         # Tools menu
         tools_menu = menu_bar.addMenu('Tools')
 
+        # Database Viewer Tool
         database_viewer_action = QAction('Database Viewer', self)
         database_viewer_action.triggered.connect(self.open_database_viewer)
         tools_menu.addAction(database_viewer_action)
 
+        # Shopping List Tool
         shopping_list_action = QAction('Shopping List Generator', self)
         shopping_list_action.triggered.connect(self.open_shopping_list_tool)
         tools_menu.addAction(shopping_list_action)
 
+        # Damage Calculator Tool
         damage_calculator_action = QAction('Damage Calculator', self)
         damage_calculator_action.triggered.connect(self.open_damage_calculator_tool)
         tools_menu.addAction(damage_calculator_action)
 
+        # Power Reference Tool
         power_reference_action = QAction('Power Reference Tool', self)
         power_reference_action.triggered.connect(self.open_powers_dialog)
         tools_menu.addAction(power_reference_action)
@@ -3106,7 +3080,6 @@ class RBCCommunityMap(QMainWindow):
 # -----------------------
 # Minimap Drawing and Update
 # -----------------------
-
     def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations,
@@ -3120,10 +3093,12 @@ class RBCCommunityMap(QMainWindow):
         font_size = max(8, block_size // 4)  # Dynamically adjust font size, with a minimum of 5
         border_size = 1  # Size of the border around each cell
 
+        # Dynamically adjust font size based on block size
         font = painter.font()
         font.setPointSize(font_size)
         painter.setFont(font)
 
+        # Calculate font metrics for centering text
         font_metrics = QFontMetrics(font)
 
         logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "f"zoom_level={self.zoom_level}, block_size={block_size}")
@@ -3188,11 +3163,14 @@ class RBCCommunityMap(QMainWindow):
             column_index = self.columns.get(col_name)
             row_index = self.rows.get(row_name)
             if column_index is not None and row_index is not None:
+                # Add +1,+1 offset specifically for banks
                 adjusted_column_index = column_index + 1
                 adjusted_row_index = row_index + 1
                 draw_label_box(
                     (adjusted_column_index - self.column_start) * block_size,
-                    (adjusted_row_index - self.row_start) * block_size, block_size, block_size // 3, self.color_mappings["bank"], "BANK")
+                    (adjusted_row_index - self.row_start) * block_size,
+                    block_size, block_size // 3, self.color_mappings["bank"], "BANK"
+                )
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
@@ -3271,8 +3249,8 @@ class RBCCommunityMap(QMainWindow):
                 painter.drawLine(
                     (current_x - self.column_start) * block_size + block_size // 2,
                     (current_y - self.row_start) * block_size + block_size // 2,
-                    (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
-                    (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
+                    (nearest_bank_coords[0] - self.column_start) * block_size + block_size // 2,
+                    (nearest_bank_coords[1] - self.row_start) * block_size + block_size // 2
                 )
 
             # Draw nearest transit line
@@ -3352,7 +3330,7 @@ class RBCCommunityMap(QMainWindow):
             list: List of distances and corresponding coordinates.
         """
         logging.debug(f"Bank Coordinates: {self.banks_coordinates}")
-        valid_banks = [(self.columns.get(col, 0), self.rows.get(row, 0)) for col, row, _, _ in self.banks_coordinates]
+        valid_banks = [(self.columns.get(col, 0) + 1, self.rows.get(row, 0) + 1) for col, row, _, _ in self.banks_coordinates]
         logging.debug(f"Valid_Banks: {valid_banks}")
         if not valid_banks:
             logging.warning("No valid bank locations found.")
@@ -3473,7 +3451,8 @@ class RBCCommunityMap(QMainWindow):
         self.column_start = max(0, min(self.character_x - zoom_offset, 200 - self.zoom_level))
         self.row_start = max(0, min(self.character_y - zoom_offset, 200 - self.zoom_level))
 
-        logging.debug(f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
+        logging.debug(
+            f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
         self.update_minimap()
 
     def go_to_location(self):
@@ -4137,7 +4116,7 @@ class CSSCustomizationDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("CSS Customization")
         self.setMinimumSize(600, 400)
-        self.parent = parent
+        self.parent = parent  # Reference to RBCCommunityMap
 
         # Initialize database table
         self.initialize_css_table()
@@ -4205,143 +4184,40 @@ class CSSCustomizationDialog(QDialog):
             logging.error(f"Error initializing custom_css table: {e}")
 
     def add_tab(self, title, css_items):
-        """Add a new tab for a specific category of CSS customizations with properly aligned headers."""
+        """Add a new tab for a specific category of CSS customizations."""
         tab = QWidget()
-        main_layout = QVBoxLayout(tab)
+        layout = QVBoxLayout(tab)
 
-        # Grid Layout for Headers and Rows
-        grid_layout = QGridLayout()
+        for item in css_items:
+            item_layout = QHBoxLayout()
 
-        # Define column headers and explicit widths
-        headers = ["Element", "Pick Image", "Pick Color", "Font", "Size", "Border", "Radius", "Box Shadow",
-                   "Custom CSS", "Reset"]
-        column_widths = [150, 100, 100, 120, 50, 60, 60, 100, 180, 80]
-
-        # Add headers to the grid (Row 0)
-        for col, (header, width) in enumerate(zip(headers, column_widths)):
-            label = QLabel(header)
-            label.setAlignment(Qt.AlignCenter)
-            label.setStyleSheet("font-weight: bold; padding: 5px; border-bottom: 2px solid gray;")
-            label.setFixedWidth(width)
-            label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            grid_layout.addWidget(label, 0, col)
-            grid_layout.setColumnMinimumWidth(col, width)
-            grid_layout.setColumnStretch(col, 0)
-
-        # Add CSS items (Starting from Row 1)
-        for row, item in enumerate(css_items, start=1):
             label = QLabel(item)
-            label.setFixedWidth(column_widths[0])
+            label.setFixedWidth(200)  # Increased width to accommodate longer selectors
 
-            # Add a preview label to display selected color/image
+            # Preview square
             preview_label = QLabel()
             preview_label.setFixedSize(50, 20)
             preview_label.setStyleSheet("border: 1px solid black;")
 
-            image_button = QPushButton("Pick Image")
-            image_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_image(i, p))
-
             color_button = QPushButton("Pick Color")
             color_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_color(i, p))
 
-            font_family_input = QFontComboBox()
-            font_family_input.currentFontChanged.connect(
-                lambda font, i=item: self.save_css_item(i, f'font-family: {font.family()};'))
+            image_button = None
+            if "TD" in item or "TABLE" in item or "DIV" in item:  # Add image picker for elements that typically use backgrounds
+                image_button = QPushButton("Pick Image")
+                image_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_image(i, p))
+                item_layout.addWidget(image_button)
 
-            font_size_input = QSpinBox()
-            font_size_input.setRange(8, 32)
-            font_size_input.setValue(14)
-            font_size_input.valueChanged.connect(lambda size, i=item: self.save_css_item(i, f'font-size: {size}px;'))
+            item_layout.addWidget(label)
+            item_layout.addWidget(preview_label)
+            item_layout.addWidget(color_button)
 
-            border_width_input = QSpinBox()
-            border_width_input.setRange(0, 10)
-            border_width_input.setValue(1)
-            border_width_input.valueChanged.connect(
-                lambda width, i=item: self.save_css_item(i, f'border-width: {width}px;'))
+            layout.addLayout(item_layout)
 
-            border_radius_input = QSpinBox()
-            border_radius_input.setRange(0, 50)
-            border_radius_input.setValue(0)
-            border_radius_input.valueChanged.connect(
-                lambda radius, i=item: self.save_css_item(i, f'border-radius: {radius}px;'))
-
-            shadow_button = QPushButton("Box Shadow")
-            shadow_button.clicked.connect(lambda _, i=item: self.pick_box_shadow(i))
-
-            css_input = QLineEdit()
-            css_input.setPlaceholderText("Enter custom CSS...")
-            css_input.textChanged.connect(lambda text, i=item: self.save_css_item(i, text))
-
-            reset_button = QPushButton("Reset")
-            reset_button.clicked.connect(lambda _, i=item, p=preview_label: self.reset_css_item(i, p))
-
-            # Add widgets to the grid, ensuring alignment
-            grid_layout.addWidget(label, row, 0)
-            grid_layout.addWidget(image_button, row, 1)
-            grid_layout.addWidget(color_button, row, 2)
-            grid_layout.addWidget(preview_label, row, 3)  # Display the preview box
-            grid_layout.addWidget(font_family_input, row, 4)
-            grid_layout.addWidget(font_size_input, row, 5)
-            grid_layout.addWidget(border_width_input, row, 6)
-            grid_layout.addWidget(border_radius_input, row, 7)
-            grid_layout.addWidget(shadow_button, row, 8)
-            grid_layout.addWidget(css_input, row, 9)
-            grid_layout.addWidget(reset_button, row, 10)
-
-        # Apply final layout adjustments
-        grid_widget = QWidget()
-        grid_widget.setLayout(grid_layout)
-
-        main_layout.addWidget(grid_widget)
-        tab.setLayout(main_layout)
+        layout.addStretch()
+        tab.setLayout(layout)
         self.tab_widget.addTab(tab, title)
         self.tabs[title] = tab
-
-    def pick_box_shadow(self, css_item):
-        """Opens a dialog to set box-shadow values."""
-        shadow_dialog = QDialog(self)
-        shadow_dialog.setWindowTitle("Box Shadow Settings")
-        shadow_layout = QVBoxLayout()
-
-        h_offset = QSpinBox()
-        h_offset.setRange(-20, 20)
-        h_offset.setValue(0)
-
-        v_offset = QSpinBox()
-        v_offset.setRange(-20, 20)
-        v_offset.setValue(0)
-
-        blur_radius = QSpinBox()
-        blur_radius.setRange(0, 30)
-        blur_radius.setValue(5)
-
-        spread_radius = QSpinBox()
-        spread_radius.setRange(0, 30)
-        spread_radius.setValue(0)
-
-        color_picker = QPushButton("Pick Shadow Color")
-        color = QColorDialog.getColor()
-        color_picker.clicked.connect(lambda: color_picker.setStyleSheet(f"background-color: {color.name()}"))
-
-        apply_button = QPushButton("Apply")
-        apply_button.clicked.connect(lambda: self.save_css_item(
-            css_item,
-            f'box-shadow: {h_offset.value()}px {v_offset.value()}px {blur_radius.value()}px {spread_radius.value()}px {color.name()};'
-        ))
-
-        shadow_layout.addWidget(QLabel("Horizontal Offset"))
-        shadow_layout.addWidget(h_offset)
-        shadow_layout.addWidget(QLabel("Vertical Offset"))
-        shadow_layout.addWidget(v_offset)
-        shadow_layout.addWidget(QLabel("Blur Radius"))
-        shadow_layout.addWidget(blur_radius)
-        shadow_layout.addWidget(QLabel("Spread Radius"))
-        shadow_layout.addWidget(spread_radius)
-        shadow_layout.addWidget(color_picker)
-        shadow_layout.addWidget(apply_button)
-
-        shadow_dialog.setLayout(shadow_layout)
-        shadow_dialog.exec_()
 
     def pick_color(self, css_item, preview_label):
         """Open a color picker dialog for a specific CSS item."""
@@ -4458,18 +4334,6 @@ class CSSCustomizationDialog(QDialog):
             except Exception as e:
                 logging.error(f"Error uploading CSS file: {e}")
                 QMessageBox.critical(self, "Error", f"Failed to upload CSS file: {e}")
-
-    def reset_css_item(self, css_item: str, preview_label: QLabel):
-        """Resets a specific CSS element to its default state."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM custom_css WHERE element = ?", (css_item,))
-                conn.commit()
-            preview_label.setStyleSheet("")
-            logging.info(f"Reset CSS for {css_item}")
-        except sqlite3.Error as e:
-            logging.error(f"Error resetting CSS for {css_item}: {e}")
 
     def clear_all_customizations(self):
         """Clear all saved CSS customizations."""

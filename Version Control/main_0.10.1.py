@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.10.0
+# Filename: main_0.10.1
 
 # Copyright 2024 RBC Community Map Team
 #
@@ -217,12 +217,13 @@ To install all required modules, run the following command:
  pip install requests bs4 PySide6 PySide6-WebEngine
 """
 
-import importlib.util
-import math
-import os
 # -----------------------
 # Imports Handling
 # -----------------------
+
+import importlib.util
+import math
+import os
 import sys
 
 # List of required modules
@@ -275,7 +276,8 @@ from PySide6.QtWidgets import (
     QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
     QTextEdit
 )
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, \
+    QKeySequence, QShortcut
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
 from PySide6.QtCore import Slot as pyqtSlot
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -329,7 +331,7 @@ def setup_logging():
 # Call the logging setup function to initialize logging configuration
 setup_logging()
 
-version_number = "0.10.0"  # Update with your app version
+version_number = "0.10.1"  # Update with your app version
 logging.info(f"Launching app version {version_number}")
 
 # -----------------------
@@ -479,6 +481,8 @@ CREATE TABLE IF NOT EXISTS `userbuildings` (
 `Row` TEXT NOT NULL,
 PRIMARY KEY (`ID`)
 );
+INSERT OR IGNORE INTO settings (setting_name, setting_value)
+        VALUES ('keybind_config', 1);
 INSERT OR IGNORE INTO `banks` ("ID","Column","Row","Name") VALUES (1,'Aardvark','82nd','OmniBank'),
  (2,'Alder','40th','OmniBank'),
  (3,'Alder','80th','OmniBank'),
@@ -1769,12 +1773,137 @@ class RBCCommunityMap(QMainWindow):
         if not self.characters:
             self.firstrun_character_creation()
 
+        # Keybinding setup
+        self.keybind_config = 1  # Default to WASD (1); Arrows will be 2
+        self.setFocusPolicy(Qt.StrongFocus)  # Ensure window catches key events
+
+        # Load remaining data and UI
         self.load_destination()
         self.setup_ui_components()
         self.setup_console_logging()
+        self.setup_keybind_toggle()  # Add keybind toggle to menu
         self.show()
         self.update_minimap()
         self.load_last_active_character()
+
+    # -----------------------
+    # Keybindings
+    # -----------------------
+
+    def setup_keybindings(self, webview, extract_coordinates_from_html):
+        """
+        Sets up keybindings for movement (WASD and Arrow Keys toggleable).
+        """
+
+        # Define movement mappings for both WASD and Arrow Keys
+        movement_configs = {
+            1: {  # WASD Mode
+                "W": (-1, 0),
+                "A": (0, -1),
+                "S": (1, 0),
+                "D": (0, 1),
+            },
+            2: {  # Arrow Keys Mode
+                "ArrowUp": (-1, 0),
+                "ArrowLeft": (0, -1),
+                "ArrowDown": (1, 0),
+                "ArrowRight": (0, 1),
+            }
+        }
+
+        # Get current keybinding configuration
+        movement_keys = movement_configs.get(self.keybind_config, movement_configs[1])
+
+        def move_character(direction):
+            """
+            Moves the character based on keypress direction.
+
+            Args:
+                direction (str): Key pressed (W, A, S, D, or Arrow Keys).
+            """
+            print(f"Key Pressed: {direction}")
+            dx, dy = movement_keys.get(direction, (0, 0))
+
+            # Get current page content and extract coordinates
+            self.website_frame.page().toHtml(lambda html: process_movement(html, dx, dy))
+
+        def process_movement(html, dx, dy):
+            """
+            Processes movement after extracting current coordinates.
+
+            Args:
+                html (str): HTML content of the page.
+                dx (int): X direction modifier.
+                dy (int): Y direction modifier.
+            """
+            x, y = self.extract_coordinates_from_html(html)  # Use the scraper function
+            print(f"Extracted Coordinates: x={x}, y={y}")
+
+            if x is not None and y is not None:
+                new_x = x + dx
+                new_y = y + dy
+                logging.info(f"Moving to: x={new_x}, y={new_y}")
+                print(f"New Coordinates: x={new_x}, y={new_y}")
+
+                # Execute JavaScript to modify form and submit it
+                self.website_frame.page().runJavaScript(f"""
+                    (function() {{
+                        let form = document.querySelector("form[action='/blood.pl'][method='POST']");
+                        if (form) {{
+                            let xInput = form.querySelector("input[name='x']");
+                            let yInput = form.querySelector("input[name='y']");
+                            if (xInput && yInput) {{
+                                xInput.value = {new_x};
+                                yInput.value = {new_y};
+                                form.submit();  // Simulate pressing 'Move Here'
+                            }}
+                        }}
+                    }})();
+                """)
+
+        # Remove previous keybindings before reapplying
+        self.clear_existing_keybindings()
+
+        # Set up new keyboard shortcuts based on current config
+        for key, _ in movement_keys.items():
+            shortcut = QShortcut(QKeySequence(key), self.website_frame)
+            shortcut.activated.connect(lambda key=key: move_character(key))
+
+        logging.info(f"Keybindings updated: {'WASD' if self.keybind_config == 1 else 'Arrow Keys'} mode")
+
+    def setup_keybind_toggle(self):
+        """
+        Adds a toggle action for switching keybinding configurations in the Tools menu.
+        """
+        if not hasattr(self, 'menuBar'):
+            self.menuBar().setNativeMenuBar(False)  # Ensure menu bar is accessible
+
+        self.tools_menu = self.menuBar().addMenu("Tools")
+        toggle_action = QAction("Toggle Keybind Config", self)
+        toggle_action.triggered.connect(self.toggle_keybind_config)
+        self.tools_menu.addAction(toggle_action)
+        logging.info("Keybind toggle action added to Tools menu")
+
+    def toggle_keybind_config(self):
+        """
+        Switches between WASD (1) and Arrow Keys (2) keybinding configurations.
+        """
+        self.keybind_config = 2 if self.keybind_config == 1 else 1
+        logging.info(f"Switched to keybind config {self.keybind_config} "
+                     f"({'WASD' if self.keybind_config == 1 else 'Arrow Keys'})")
+
+        # Reinitialize keybindings after toggling
+        self.setup_keybindings(self.website_frame, self.extract_coordinates_from_html)
+
+        QMessageBox.information(self, "Keybind Config",
+                                f"Switched to {'WASD' if self.keybind_config == 1 else 'Arrow Keys'}")
+
+    def clear_existing_keybindings(self):
+        """
+        Clears previously set keyboard shortcuts to prevent duplicate bindings.
+        """
+        for shortcut in self.findChildren(QShortcut):
+            shortcut.setParent(None)  # Remove the shortcut
 
     # -----------------------
     # Load and apply customized UI Theme
@@ -1991,7 +2120,6 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # UI Setup
     # -----------------------
-
     def setup_ui_components(self):
         """
         Set up the main user interface for the RBC Community Map application.
@@ -2009,9 +2137,16 @@ class RBCCommunityMap(QMainWindow):
 
         # Initialize the QWebEngineView before setting up the browser controls
         self.website_frame = QWebEngineView(self.web_profile)
+
+        # Disable GPU-related features
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebGLEnabled, False)
+        self.website_frame.settings().setAttribute(QWebEngineSettings.Accelerated2dCanvasEnabled, False)
+        self.website_frame.settings().setAttribute(QWebEngineSettings.JavascriptEnabled, True)  # Keep JS enabled
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+
+        # Add Keybindings
+        self.setup_keybindings(self.website_frame, self.extract_coordinates_from_html)
 
         # Create the browser controls layout at the top of the webview
         self.browser_controls_layout = QHBoxLayout()
@@ -2261,7 +2396,6 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # Browser Controls Setup
     # -----------------------
-
     def go_back(self):
         """Navigate the web browser back to the previous page."""
         self.website_frame.back()
@@ -2296,6 +2430,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Settings menu
         settings_menu = menu_bar.addMenu('Settings')
+
         theme_action = QAction('Change Theme', self)
         theme_action.triggered.connect(self.change_theme)
         settings_menu.addAction(theme_action)
@@ -2337,6 +2472,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Help menu
         help_menu = menu_bar.addMenu('Help')
+
         faq_action = QAction('FAQ', self)
         faq_action.triggered.connect(lambda: webbrowser.open('https://quiz.ravenblack.net/faq.pl'))
         help_menu.addAction(faq_action)
@@ -2771,7 +2907,6 @@ class RBCCommunityMap(QMainWindow):
         """Refresh the webview content."""
         self.website_frame.reload()
 
-    # Add this new method here
     def apply_custom_css(self):
         """Inject the custom CSS into the webview."""
         try:
@@ -3218,7 +3353,10 @@ class RBCCommunityMap(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
+        logging.debug(f"Bank Coordinates: {self.banks_coordinates}")
         valid_banks = [(self.columns.get(col, 0), self.rows.get(row, 0)) for col, row, _, _ in self.banks_coordinates]
+        logging.debug(f"Valid_Banks: {valid_banks}")
+
         if not valid_banks:
             logging.warning("No valid bank locations found.")
             return None
@@ -3383,6 +3521,100 @@ class RBCCommunityMap(QMainWindow):
                 self.update_minimap()
             else:
                 logging.debug(f"Click ({click_x}, {click_y}) is outside the minimap bounds.")
+
+    def keyPressEvent(self, event):
+        if not self.selected_character:  # Only work if a character is logged in
+            logging.debug("Key press ignored: No character selected")
+            return
+
+        key = event.key()
+        js = self.website_frame.page().runJavaScript
+
+        # Spacebar: More Commands
+        if key == Qt.Key_Space:
+            js("document.querySelector('input[value=\"More Commands\"]')?.click();")
+            logging.debug("Triggered More Commands")
+
+        # Grid Movement - Config 1: WASD
+        elif self.keybind_config == 1:
+            if key == Qt.Key_W:
+                js("document.querySelector('input[name=\"n\"]')?.click();")  # North
+                logging.debug("Moved North")
+            elif key == Qt.Key_S:
+                js("document.querySelector('input[name=\"s\"]')?.click();")  # South
+                logging.debug("Moved South")
+            elif key == Qt.Key_A:
+                js("document.querySelector('input[name=\"w\"]')?.click();")  # West
+                logging.debug("Moved West")
+            elif key == Qt.Key_D:
+                js("document.querySelector('input[name=\"e\"]')?.click();")  # East
+                logging.debug("Moved East")
+
+        # Grid Movement - Config 2: Arrow Keys
+        elif self.keybind_config == 2:
+            if key == Qt.Key_Up:
+                js("document.querySelector('input[name=\"n\"]')?.click();")
+                logging.debug("Moved North")
+            elif key == Qt.Key_Down:
+                js("document.querySelector('input[name=\"s\"]')?.click();")
+                logging.debug("Moved South")
+            elif key == Qt.Key_Left:
+                js("document.querySelector('input[name=\"w\"]')?.click();")
+                logging.debug("Moved West")
+            elif key == Qt.Key_Right:
+                js("document.querySelector('input[name=\"e\"]')?.click();")
+                logging.debug("Moved East")
+
+        # Cycle Logins (Ctrl + Up/Down)
+        elif key == Qt.Key_Up and event.modifiers() & Qt.ControlModifier:
+            self.cycle_character(-1)
+            logging.debug("Cycled to previous character")
+        elif key == Qt.Key_Down and event.modifiers() & Qt.ControlModifier:
+            self.cycle_character(1)
+            logging.debug("Cycled to next character")
+
+        # Item Use (I key for first usable item)
+        elif key == Qt.Key_I:
+            js("""
+                let item = document.querySelector('input[name^="use_"]');
+                if (item) item.click();
+            """)
+            logging.debug("Used first available item")
+
+        # One-Touch Biting (B key)
+        elif key == Qt.Key_B:
+            js("""
+                let targets = Array.from(document.querySelectorAll('input[name^="bite_"]'));
+                let priority = targets.find(t => t.value.toLowerCase().includes('hunter')) || 
+                               targets.find(t => t.value.toLowerCase().includes('human')) || 
+                               targets.find(t => !t.value.toLowerCase().includes('vampire')) || 
+                               targets[0];
+                if (priority) priority.click();
+            """)
+            logging.debug("Attempted bite with priority: Hunter > Human > Vampire")
+
+        # One-Touch Robbing (R key)
+        elif key == Qt.Key_R:
+            js("""
+                let rob = document.querySelector('input[name^="rob_"]');
+                if (rob) rob.click();
+            """)
+            logging.debug("Attempted rob")
+
+        # Refresh minimap after movement or action
+        if key in (Qt.Key_W, Qt.Key_S, Qt.Key_A, Qt.Key_D,
+                   Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right,
+                   Qt.Key_B, Qt.Key_R, Qt.Key_I):
+            QTimer.singleShot(500, self.update_minimap)  # Delay for game to process
+
+    def cycle_character(self, direction):
+        """Cycle through characters in the QListWidget."""
+        current_row = self.character_list.currentRow()
+        new_row = (current_row + direction) % self.character_list.count()
+        if new_row < 0:
+            new_row = self.character_list.count() - 1
+        self.character_list.setCurrentRow(new_row)
+        self.on_character_selected(self.character_list.item(new_row))
 
     def open_set_destination_dialog(self):
         """

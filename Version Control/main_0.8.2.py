@@ -1,165 +1,93 @@
 #!/usr/bin/env python3
-# Filename: main_0.10.2
+# Filename: main_0.8.2
 
 """
-======================
-License Agreement
-======================
+=========================
+RBC Community Map Application
+=========================
+The RBC Community Map Application provides a graphical interface for navigating
+the city map of RavenBlack City. It includes features such as zooming, setting and saving destinations,
+viewing points of interest (such as banks, taverns, and guilds), managing user characters, and calculating
+damage required to defeat targets with specific blood point (BP) levels.
 
-Copyright 2024-2025 RBC Community Map Team
+Map data is dynamically fetched from an SQLite database, with some components refreshed via web scraping.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at:
+Main Features:
+- Zooming in and out of the map with dynamic label adjustments.
+- Setting, saving, and loading destinations with AP cost calculation.
+- Viewing closest points of interest, including banks, taverns, and transits.
+- Managing multiple user characters, with automatic login for the last active character.
+- Persistent sessions and cookies managed via an SQLite database.
+- Coin and bank balance tracking with automatic updates based on in-game actions.
+- Customizable themes, including colors for UI and minimap components.
+- Damage Calculator: A tool for determining the quantity and cost of weapons needed to reduce a target's BP to zero.
+  - Uses Vial of Holy Water, Garlic Spray, and Wooden Stake, based on BP thresholds.
+  - Prices vary by charisma level, with dynamic cost calculation based on target BP.
 
-    http://www.apache.org/licenses/LICENSE-2.0
+Modules:
+- sys: Provides access to system-specific parameters and functions.
+- os: Used for interacting with the operating system (e.g., directory and file management).
+- pickle: Facilitates the serialization and deserialization of Python objects.
+- sqlite3: Interface for SQLite database management, used for session data, cookies, coins, and theme settings.
+- requests: Allows sending HTTP requests to interact with external websites.
+- re: Provides regular expression matching operations, useful for HTML parsing.
+- datetime: Supplies classes for manipulating dates and times.
+- bs4 (BeautifulSoup): Used for parsing HTML and XML documents.
+- PySide6: Provides Python bindings for the Qt application framework, including UI components.
+- PySide6.QtWebEngineWidgets: Provides web view functionality to render in-game pages.
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Classes:
+- RBCCommunityMap: The main application class, responsible for initializing and managing the user interface,
+  web scraping, character management, and map functionalities.
+- DatabaseViewer: Displays the contents of SQLite database tables in a tabbed view for inspection.
+- CharacterDialog: A dialog class for adding, modifying, or deleting user characters.
+- ThemeCustomizationDialog: A dialog class that allows users to customize the application's theme.
+- SetDestinationDialog: A dialog class for setting destinations on the map.
+- AVITDScraper: A web scraper class for fetching and updating data for guilds and shops from 'A View in the Dark'.
+- DamageCalculator: A dialog-based tool for calculating the hits and costs needed to bring a target’s BP to zero,
+  considering charisma level discounts and optimized weapon usage (Holy Water, Garlic Spray, Wooden Stake).
+
+Key Functions:
+- connect_to_database: Establishes a connection to the SQLite database and handles connection errors.
+- load_data: Loads map data from the SQLite database, including coordinates for banks, taverns, transits, shops, and guilds.
+- initialize_cookie_db: Sets up an SQLite database for managing cookies.
+- save_cookie_to_db: Saves individual cookies from web sessions to the SQLite database.
+- load_cookies_from_db: Loads cookies from the SQLite database into the web engine for persistent sessions.
+- clear_cookie_db: Clears all cookies from the SQLite database.
+- fetch_table_data: Retrieves column names and data from a specified SQLite database table.
+- extract_coordinates_from_html: Extracts in-game map coordinates from loaded HTML content.
+- find_nearest_location: Finds the nearest point of interest based on a set of coordinates.
+- calculate_ap_cost: Calculates the Action Point (AP) cost between two locations on the map.
+- update_guilds: Scrapes and updates guilds data in the SQLite database.
+- update_shops: Scrapes and updates shops data in the SQLite database.
+- get_next_update_times: Retrieves the next update times for guilds and shops from the database.
+- inject_console_logging: Injects JavaScript into web pages to capture and log console messages.
+- apply_theme: Applies the selected theme to the application UI components.
+- save_theme_settings: Saves customized theme settings to the SQLite database.
+- load_theme_settings: Loads saved theme settings from the SQLite database.
+- show_about_dialog: Displays an 'About' dialog with details about the application and its version.
+- show_credits_dialog: Displays a scrolling 'Credits' dialog with contributors to the project.
+- calculate_damage (DamageCalculator): Calculates the quantity and cost of weapons required to reduce a target's BP
+  based on current BP and charisma level, applying the most cost-effective weapon strategy.
+
+To install all required modules, run the following command:
+ pip install pymysql requests bs4 PySide6 PySide6-WebEngine
 """
-
-"""
-=================================
-RBC City Map Application (v0.10.2)
-=================================
-This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
-(set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
-set destinations, and interact with dynamically updated data scraped from "A View in the Dark."
-
-Key Features:
-- **WASD Keyboard Navigation**: Move seamlessly through the minimap.
-- **Character Management**: Store and switch between multiple game accounts with encrypted credentials.
-- **Minimap System**: View **nearest banks, taverns, and transit stations** dynamically.
-- **SQLite Database Support**: Fast and lightweight storage with improved query performance.
-- **Theme Customization**: Fully customizable interface with **CSS styling** options.
-- **Web Scraper Integration**: Auto-fetch **guild/shop locations** from 'A View in the Dark'.
-- **Shopping List Tool**: Plan in-game purchases with cost breakdowns.
-- **Damage Calculator**: Calculate combat interactions and weapon damage efficiently.
-
-Modules Used:
-- **sys**: Provides system-specific parameters and functions.
-- **os**: Used for interacting with the operating system (e.g., file and directory management).
-- **requests**: Handles HTTP requests for web scraping operations.
-- **re**: Regular expression operations for parsing HTML and text.
-- **datetime**: Used in timestamps, logs, and database operations.
-- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in AVITDScraper).
-- **PySide6**: Provides a **Qt-based GUI framework**, handling UI elements, WebEngine, and event management.
-- **sqlite3**: Database engine for persistent storage of map data, character info, and settings.
-- **webbrowser**: Enables external browser interactions (e.g., opening the RBC website or Discord).
-- **math**: Used in **damage calculations** and navigation logic.
-- **logging**: Captures logs, errors, and system events.
-
-================================
-Classes and Methods (v0.10.2)
-================================
-
-#### RBCCommunityMap (Core Application)
-Handles the main UI, character management, minimap rendering, and keyboard navigation.
-
-- **__init__**: Initializes the main window, UI, and database connections.
-- **load_keybind_config**: Loads user-defined keybindings from the database.
-- **setup_keybindings**: Assigns keyboard controls for movement (WASD).
-- **move_character**: Moves the character in the desired direction.
-- **setup_ui_components**: Builds the main UI layout.
-- **refresh_page**: Reloads the webview content.
-- **apply_theme**: Applies custom themes to the UI.
-- **load_cookies**: Loads saved cookies into the embedded web browser.
-- **extract_coordinates_from_html**: Parses player coordinates from the web page.
-- **draw_minimap**: Renders the minimap based on extracted coordinates.
-- **zoom_in/zoom_out**: Controls the minimap zoom level.
-- **set_destination**: Marks a location on the minimap.
-- **calculate_ap_cost**: Computes movement costs between locations.
-- **mousePressEvent**: Captures mouse clicks to interact with the minimap.
-
-#### DatabaseViewer (Database Management)
-A utility to view and inspect data stored in the SQLite database.
-
-- **__init__**: Initializes the database viewer UI.
-- **get_table_data**: Fetches data from a selected table.
-- **add_table_tab**: Displays a new tab for a table's content.
-- **closeEvent**: Handles viewer closure and cleanup.
-
-#### CharacterDialog (Character Management UI)
-A dialog for adding and editing game characters.
-
-- **__init__**: Initializes the character creation/modification dialog.
-
-#### ThemeCustomizationDialog (Theme Settings)
-A UI tool to adjust the app’s theme colors.
-
-- **__init__**: Loads theme customization options.
-- **setup_ui_tab**: Configures the main UI color settings.
-- **setup_minimap_tab**: Configures minimap color customization.
-- **change_color**: Opens a color picker to adjust UI elements.
-- **apply_theme**: Saves and applies theme changes.
-
-#### CSSCustomizationDialog (Webview Customization)
-Allows users to modify webview styles using custom CSS.
-
-- **__init__**: Initializes CSS customization.
-- **add_tab**: Adds a category tab for CSS elements.
-- **save_and_apply_changes**: Saves and injects custom CSS into the webview.
-
-#### AVITDScraper (Web Scraping Engine)
-Fetches guild and shop location data from "A View in the Dark."
-
-- **__init__**: Sets up scraper parameters.
-- **scrape_guilds_and_shops**: Collects shop and guild locations.
-- **update_database**: Updates SQLite with fresh location data.
-
-#### set_destination_dialog (Destination Selection UI)
-Allows users to select a travel destination within the city.
-
-- **__init__**: Loads the UI components.
-- **populate_recent_destinations**: Displays recently visited locations.
-- **set_destination**: Saves a new destination in the database.
-
-#### ShoppingListTool (In-Game Purchase Planning)
-A tool for calculating costs of items from different shops.
-
-- **__init__**: Initializes the shopping list interface.
-- **add_item**: Adds an item to the list.
-- **update_total**: Calculates total cost including charisma-based discounts.
-
-#### DamageCalculator (Combat Assistance Tool)
-Helps players estimate weapon damage needed to defeat opponents.
-
-- **__init__**: Loads calculator settings.
-- **calculate_damage**: Computes weapon-based damage outputs.
-
-#### PowersDialog (Powers Reference UI)
-Displays information about in-game powers and related locations.
-
-- **__init__**: Initializes the powers UI.
-- **load_powers**: Loads power descriptions.
-- **set_destination**: Sets a guild as the destination for training.
-
-================================
-Installation Instructions
-================================
-
-To install dependencies, run:
-```sh
-pip install requests bs4 PySide6 PySide6-WebEngine
-"""
-
-# -----------------------
-# Imports Handling
-# -----------------------
 
 import importlib.util
 import math
 import os
+# -----------------------
+# Imports Handling
+# -----------------------
 import sys
 
 # List of required modules
 required_modules = [
-    'requests', 're', 'time', 'sqlite3', 'webbrowser', 'datetime', 'bs4',
-    'PySide6.QtWidgets', 'PySide6.QtGui', 'PySide6.QtCore', 'PySide6.QtWebEngineWidgets',
-    'PySide6.QtWebChannel', 'PySide6.QtNetwork'
+    'pickle', 'pymysql', 'requests', 're', 'time', 'sqlite3',
+    'webbrowser', 'datetime', 'bs4', 'PySide6.QtWidgets',
+    'PySide6.QtGui', 'PySide6.QtCore', 'PySide6.QtWebEngineWidgets',
+    'PySide6.QtWebChannel', 'PySide6.QtNetwork','cryptography', 'hashlib'
 ]
 
 def check_required_modules(modules):
@@ -183,7 +111,6 @@ def check_required_modules(modules):
             print(f"- {mod}")
         print("\nYou can install them with:")
         print(f"pip install {' '.join(missing_modules)}")
-        print("Consider using a virtual environment: python -m venv venv && source venv/bin/activate (Linux/Mac) or venv\\Scripts\\activate (Windows)")
         return False
     return True
 
@@ -193,29 +120,31 @@ if not check_required_modules(required_modules):
 
 # Proceed with the rest of the imports and program setup
 import logging
-import logging.handlers
+import pymysql
 import requests
 import re
 import webbrowser
 from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QPushButton, QComboBox, QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem,
-    QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
+    QMessageBox, QFileDialog, QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog,
     QTextEdit
 )
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, QShortcut, QKeySequence
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
 from PySide6.QtCore import Slot as pyqtSlot
-from PySide6.QtWidgets import QMainWindow, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
 from PySide6.QtNetwork import QNetworkCookie
-#import PySide6.QtCore
-
 import sqlite3
+from cryptography.fernet import Fernet
+
+# Initialize Fernet encryption using the loaded key
+key = b'Kslt2S6mlIeMRsRhfnZ2k2PjFjI98rOUpNE9H8bLywE='  # Replace with your actual key
+cipher_suite = Fernet(key)
 
 # -----------------------
 # Directory Setup
@@ -231,14 +160,19 @@ def ensure_directories_exist():
     managed by this function include:
     - logs: Stores application log files.
     - sessions: Stores session-related data, such as user sessions or cookies.
+    - settings: Stores application settings and configuration files.
     - images: Stores image files used by the application, such as icons.
 
     If any of these directories do not exist, they are created in the current working directory.
     """
     required_dirs = ['logs', 'sessions', 'images']
     for directory in required_dirs:
-        os.makedirs(directory, exist_ok=True)
-        logging.debug(f"Ensured directory exists: {directory}")
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            print(f"Created directory: {directory}")
+
+# Call the function to ensure directories are present
+ensure_directories_exist()
 
 # -----------------------
 # Logging Setup
@@ -247,23 +181,34 @@ def ensure_directories_exist():
 def setup_logging():
     """
     Set up logging configuration to save logs in the 'logs' directory.
+
+    This function configures the logging system to record application events,
+    errors, and debug information in a log file. The log file is named
+    'rbc_{date}.log', where {date} is replaced with the current date in the
+    format 'YYYY-MM-DD'. The log files are saved in the 'logs' directory,
+    and log messages are formatted to include the timestamp, log level,
+    and the message content.
+
+    Logging levels used:
+    - DEBUG: Detailed information, typically of interest only when diagnosing problems.
+    - INFO: Confirmation that things are working as expected.
+    - WARNING: An indication that something unexpected happened, or indicative of some problem.
+    - ERROR: A more serious problem, the software has not been able to perform some function.
+
+    If the 'logs' directory does not exist, it should be created by calling
+    the 'ensure_directories_exist()' function before this function.
     """
     log_filename = datetime.now().strftime('./logs/rbc_%Y-%m-%d.log')
-
     logging.basicConfig(
-        level=logging.DEBUG,  # Capture all log events
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        filename=log_filename,
-        filemode='a'
+        level=logging.DEBUG,  # Set the logging level to DEBUG to capture all events
+        format='%(asctime)s - %(levelname)s - %(message)s',  # Define the log message format
+        filename=log_filename,  # Log file path and name
+        filemode='a'  # Append to the log file if it already exists
     )
-
-    logging.info(f"Logging initialized. Logs will be written to {log_filename}")
+    print(f"Logging to: {log_filename}")  # Print the log file location to the console
 
 # Call the logging setup function to initialize logging configuration
 setup_logging()
-
-version_number = "0.10.2"  # Update with your app version
-logging.info(f"Launching app version {version_number}")
 
 # -----------------------
 # SQLite Setup
@@ -277,7 +222,7 @@ def initialize_database(DB_PATH):
     connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
 
-    # Schema creation
+    # Begin transaction
     cursor.executescript("""BEGIN TRANSACTION;
 CREATE TABLE IF NOT EXISTS `banks` (
 `ID` int NOT NULL ,
@@ -309,16 +254,14 @@ CREATE TABLE IF NOT EXISTS `columns` (
 `Coordinate` int NOT NULL,
 PRIMARY KEY (`ID`)
 );
-CREATE TABLE IF NOT EXISTS `cookies` (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    value TEXT,
-    domain TEXT,
-    path TEXT,
-    expiration TEXT,
-    secure INTEGER,
-    httponly INTEGER
-);
+CREATE TABLE IF NOT EXISTS cookies (
+                    name TEXT,
+                    domain TEXT,
+                    path TEXT,
+                    value TEXT,
+                    expiration INTEGER,
+                    UNIQUE(name, domain, path)
+                );
 CREATE TABLE IF NOT EXISTS destinations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     character_id INTEGER,
@@ -412,387 +355,354 @@ CREATE TABLE IF NOT EXISTS `userbuildings` (
 `Row` TEXT NOT NULL,
 PRIMARY KEY (`ID`)
 );
-INSERT OR IGNORE INTO settings (setting_name, setting_value)
-        VALUES ('keybind_config', 1);
-INSERT OR IGNORE INTO `banks` ("ID","Column","Row","Name") VALUES (1,'Aardvark','82nd','OmniBank'),
- (2,'Alder','40th','OmniBank'),
- (3,'Alder','80th','OmniBank'),
- (4,'Amethyst','16th','OmniBank'),
- (5,'Amethyst','37th','OmniBank'),
- (6,'Amethyst','99th','OmniBank'),
- (7,'Anguish','30th','OmniBank'),
- (8,'Anguish','73rd','OmniBank'),
- (9,'Anguish','91st','OmniBank'),
- (10,'Beech','26th','OmniBank'),
- (11,'Beech','39th','OmniBank'),
- (12,'Beryl','28th','OmniBank'),
- (13,'Beryl','40th','OmniBank'),
- (14,'Beryl','65th','OmniBank'),
- (15,'Beryl','72nd','OmniBank'),
- (16,'Bleak','14th','OmniBank'),
- (17,'Buzzard','13th','OmniBank'),
- (18,'Cedar','1st','OmniBank'),
- (19,'Cedar','52nd','OmniBank'),
- (20,'Cedar','80th','OmniBank'),
- (21,'Chagrin','23rd','OmniBank'),
- (22,'Chagrin','39th','OmniBank'),
- (23,'Cobalt','46th','OmniBank'),
- (24,'Cobalt','81st','OmniBank'),
- (25,'Cobalt','88th','OmniBank'),
- (26,'Cormorant','93rd','OmniBank'),
- (27,'Despair','1st','OmniBank'),
- (28,'Despair','75th','OmniBank'),
- (29,'Dogwood','4th','OmniBank'),
- (30,'Duck','37th','OmniBank'),
- (31,'Duck','77th','OmniBank'),
- (32,'Eagle','64th','OmniBank'),
- (33,'Eagle','89th','OmniBank'),
- (34,'Elm','98th','OmniBank'),
- (35,'Emerald','19th','OmniBank'),
- (36,'Emerald','90th','OmniBank'),
- (37,'Emerald','99th','OmniBank'),
- (38,'Ennui','20th','OmniBank'),
- (39,'Ennui','78th','OmniBank'),
- (40,'Fear','15th','OmniBank'),
- (41,'Ferret','32nd','OmniBank'),
- (42,'Ferret','90th','OmniBank'),
- (43,'Fir','2nd','OmniBank'),
- (44,'Flint','37th','OmniBank'),
- (45,'Flint','45th','OmniBank'),
- (46,'Flint','47th','OmniBank'),
- (47,'Flint','5th','OmniBank'),
- (48,'Gloom','34th','OmniBank'),
- (49,'Gloom','71st','OmniBank'),
- (50,'Gloom','89th','OmniBank'),
- (51,'Gloom','90th','OmniBank'),
- (52,'Haddock','46th','OmniBank'),
- (53,'Haddock','52nd','OmniBank'),
- (54,'Haddock','67th','OmniBank'),
- (55,'Haddock','74th','OmniBank'),
- (56,'Haddock','88th','OmniBank'),
- (57,'Hessite','39th','OmniBank'),
- (58,'Hessite','76th','OmniBank'),
- (59,'Holly','96th','OmniBank'),
- (60,'Horror','49th','OmniBank'),
- (61,'Horror','59th','OmniBank'),
- (62,'Ire','31st','OmniBank'),
- (63,'Ire','42nd','OmniBank'),
- (64,'Ire','53rd','OmniBank'),
- (65,'Ire','97th','OmniBank'),
- (66,'Ivory','5th','OmniBank'),
- (67,'Ivory','71st','OmniBank'),
- (68,'Ivy','70th','OmniBank'),
- (69,'Ivy','79th','OmniBank'),
- (70,'Ivy','NCL','OmniBank'),
- (71,'Jackal','43rd','OmniBank'),
- (72,'Jaded','25th','OmniBank'),
- (73,'Jaded','48th','OmniBank'),
- (74,'Jaded','71st','OmniBank'),
- (75,'Juniper','16th','OmniBank'),
- (76,'Juniper','20th','OmniBank'),
- (77,'Juniper','98th','OmniBank'),
- (78,'Knotweed','15th','OmniBank'),
- (79,'Knotweed','29th','OmniBank'),
- (80,'Kraken','13th','OmniBank'),
- (81,'Kraken','18th','OmniBank'),
- (82,'Kraken','34th','OmniBank'),
- (83,'Kraken','3rd','OmniBank'),
- (84,'Kraken','45th','OmniBank'),
- (85,'Kraken','48th','OmniBank'),
- (86,'Kraken','7th','OmniBank'),
- (87,'Kyanite','40th','OmniBank'),
- (88,'Kyanite','6th','OmniBank'),
- (89,'Larch','33rd','OmniBank'),
- (90,'Larch','7th','OmniBank'),
- (91,'Larch','91st','OmniBank'),
- (92,'Lead','11th','OmniBank'),
- (93,'Lead','21st','OmniBank'),
- (94,'Lead','88th','OmniBank'),
- (95,'Lion','80th','OmniBank'),
- (96,'Lonely','93rd','OmniBank'),
- (97,'Malachite','11th','OmniBank'),
- (98,'Malachite','32nd','OmniBank'),
- (99,'Malachite','87th','OmniBank'),
- (100,'Malaise','36th','OmniBank'),
- (101,'Malaise','4th','OmniBank'),
- (102,'Malaise','50th','OmniBank'),
- (103,'Maple','34th','OmniBank'),
- (104,'Maple','84th','OmniBank'),
- (105,'Maple','85th','OmniBank'),
- (106,'Mongoose','78th','OmniBank'),
- (107,'Mongoose','79th','OmniBank'),
- (108,'Mongoose','91st','OmniBank'),
- (109,'Nervous','10th','OmniBank'),
- (110,'Nettle','37th','OmniBank'),
- (111,'Nettle','67th','OmniBank'),
- (112,'Nickel','93rd','OmniBank'),
- (113,'Obsidian','36th','OmniBank'),
- (114,'Obsidian','79th','OmniBank'),
- (115,'Octopus','27th','OmniBank'),
- (116,'Octopus','71st','OmniBank'),
- (117,'Octopus','77th','OmniBank'),
- (118,'Olive','99th','OmniBank'),
- (119,'Olive','9th','OmniBank'),
- (120,'Oppression','2nd','OmniBank'),
- (121,'Oppression','89th','OmniBank'),
- (122,'Pessimism','19th','OmniBank'),
- (123,'Pessimism','44th','OmniBank'),
- (124,'Pessimism','87th','OmniBank'),
- (125,'Pilchard','44th','OmniBank'),
- (126,'Pilchard','60th','OmniBank'),
- (127,'Pine','42nd','OmniBank'),
- (128,'Pine','44th','OmniBank'),
- (129,'Pyrites','11th','OmniBank'),
- (130,'Pyrites','24th','OmniBank'),
- (131,'Pyrites','90th','OmniBank'),
- (132,'Quail','10th','OmniBank'),
- (133,'Quail','12th','OmniBank'),
- (134,'Quail','18th','OmniBank'),
- (135,'Quail','26th','OmniBank'),
- (136,'Quail','36th','OmniBank'),
- (137,'Quail','41st','OmniBank'),
- (138,'Quail','58th','OmniBank'),
- (139,'Quail','74th','OmniBank'),
- (140,'Qualms','28th','OmniBank'),
- (141,'Qualms','57th','OmniBank'),
- (142,'Qualms','75th','OmniBank'),
- (143,'Quartz','75th','OmniBank'),
- (144,'Quince','48th','OmniBank'),
- (145,'Quince','61st','OmniBank'),
- (146,'Ragweed','31st','OmniBank'),
- (147,'Ragweed','56th','OmniBank'),
- (148,'Raven','11th','OmniBank'),
- (149,'Raven','15th','OmniBank'),
- (150,'Raven','79th','OmniBank'),
- (151,'Raven','98th','OmniBank'),
- (152,'Regret','70th','OmniBank'),
- (153,'Ruby','18th','OmniBank'),
- (154,'Ruby','45th','OmniBank'),
- (155,'Sorrow','48th','OmniBank'),
- (156,'Sorrow','9th','OmniBank'),
- (157,'Squid','10th','OmniBank'),
- (158,'Squid','24th','OmniBank'),
- (159,'Steel','31st','OmniBank'),
- (160,'Steel','64th','OmniBank'),
- (161,'Steel','7th','OmniBank'),
- (162,'Sycamore','16th','OmniBank'),
- (163,'Tapir','11th','OmniBank'),
- (164,'Tapir','41st','OmniBank'),
- (165,'Tapir','NCL','OmniBank'),
- (166,'Teasel','60th','OmniBank'),
- (167,'Teasel','66th','OmniBank'),
- (168,'Teasel','92nd','OmniBank'),
- (169,'Torment','23rd','OmniBank'),
- (170,'Torment','28th','OmniBank'),
- (171,'Torment','31st','OmniBank'),
- (172,'Umbrella','20th','OmniBank'),
- (173,'Umbrella','80th','OmniBank'),
- (174,'Unctuous','23rd','OmniBank'),
- (175,'Unctuous','43rd','OmniBank'),
- (176,'Unicorn','11th','OmniBank'),
- (177,'Unicorn','78th','OmniBank'),
- (178,'Uranium','1st','OmniBank'),
- (179,'Uranium','48th','OmniBank'),
- (180,'Uranium','93rd','OmniBank'),
- (181,'Uranium','97th','OmniBank'),
- (182,'Vauxite','68th','OmniBank'),
- (183,'Vauxite','91st','OmniBank'),
- (184,'Vexation','24th','OmniBank'),
- (185,'Vulture','43rd','OmniBank'),
- (186,'Vulture','82nd','OmniBank'),
- (187,'WCL','77th','OmniBank'),
- (188,'Willow','84th','OmniBank'),
- (189,'Woe','44th','OmniBank'),
- (190,'Woe','85th','OmniBank'),
- (191,'Yak','45th','OmniBank'),
- (192,'Yak','82nd','OmniBank'),
- (193,'Yak','94th','OmniBank'),
- (194,'Yearning','75th','OmniBank'),
- (195,'Yearning','93rd','OmniBank'),
- (196,'Yew','4th','OmniBank'),
- (197,'Zebra','61st','OmniBank'),
- (198,'Zelkova','23rd','OmniBank'),
- (199,'Zelkova','73rd','OmniBank'),
- (200,'Zinc','74th','OmniBank');
-INSERT OR IGNORE INTO `color_mappings` (`id`, `type`, `color`) VALUES
-(1, 'bank', '#0000ff'),
-(2, 'tavern', '#887700'),
-(3, 'transit', '#880000'),
-(4, 'user_building', '#660022'),
-(5, 'alley', '#888888'),
-(6, 'default', '#000000'),
-(7, 'border', 'white'),
-(8, 'edge', '#0000ff'),
-(9, 'shop', '#004488'),
-(10, 'guild', '#ff0000'),
-(11, 'placesofinterest', '#660022'),
-(12, 'background', '#000000'),
-(13, 'text_color', '#dddddd'),
-(14, 'button_color', '#b1b1b1'),
-(15, 'cityblock', '#0000dd'),
-(16, 'intersect', '#008800'),
-(17, 'street', '#444444'),
-(18, 'human_bg', 'black'),
-(19, 'vhuman_bg', 'black'),
-(20, 'phuman_bg', 'black'),
-(21, 'whuman_bg', 'black'),
-(22, 'object_color', 'yellow'),
-(23, 'mo_bg', 'yellow'),
-(24, 'textad_bg', '#002211'),
-(25, 'hiscore_border', '#668877'),
-(26, 'hiscore_first_row', '#004400'),
-(27, 'table_at_bg', '#333333'),
-(28, 'sb_bg', '#555533'),
-(29, 'set_destination', '#1a7f7a'),
-(30, 'set_destination_transit', '#046380'),
-(31, 'headline_text', '#ff0000'),
-(32, 'link_text', '#999999'),
-(33, 'table_border', 'white'),
-(34, 'battle_border', 'none'),
-(35, 'pansy', '#ff8888'),
-(36, 'cloak', '#00ffff'),
-(37, 'rich', '#ffff44'),
-(38, 'mh_bg', 'transparent'),
-(39, 'mh_text', 'white');
-INSERT OR IGNORE INTO  "columns" ("ID","Name","Coordinate") VALUES 
-('1', 'WCL', '0'),
-('2', 'Western City Limits', '0'),
-('3', 'Aardvark', '2'),
-('4', 'Alder', '4'),
-('5', 'Buzzard', '6'),
-('6', 'Beech', '8'),
-('7', 'Cormorant', '10'),
-('8', 'Cedar', '12'),
-('9', 'Duck', '14'),
-('10', 'Dogwood', '16'),
-('11', 'Eagle', '18'),
-('12', 'Elm', '20'),
-('13', 'Ferret', '22'),
-('14', 'Fir', '24'),
-('15', 'Gibbon', '26'),
-('16', 'Gum', '28'),
-('17', 'Haddock', '30'),
-('18', 'Holly', '32'),
-('19', 'Iguana', '34'),
-('20', 'Ivy', '36'),
-('21', 'Jackal', '38'),
-('22', 'Juniper', '40'),
-('23', 'Kraken', '42'),
-('24', 'Knotweed', '44'),
-('25', 'Lion', '46'),
-('26', 'Larch', '48'),
-('27', 'Mongoose', '50'),
-('28', 'Maple', '52'),
-('29', 'Nightingale', '54'),
-('30', 'Nettle', '56'),
-('31', 'Octopus', '58'),
-('32', 'Olive', '60'),
-('33', 'Pilchard', '62'),
-('34', 'Pine', '64'),
-('35', 'Quail', '66'),
-('36', 'Quince', '68'),
-('37', 'Raven', '70'),
-('38', 'Ragweed', '72'),
-('39', 'Squid', '74'),
-('40', 'Sycamore', '76'),
-('41', 'Tapir', '78'),
-('42', 'Teasel', '80'),
-('43', 'Unicorn', '82'),
-('44', 'Umbrella', '84'),
-('45', 'Vulture', '86'),
-('46', 'Vervain', '88'),
-('47', 'Walrus', '90'),
-('48', 'Willow', '92'),
-('49', 'Yak', '94'),
-('50', 'Yew', '96'),
-('51', 'Zebra', '98'),
-('52', 'Zelkova', '100'),
-('53', 'Amethyst', '102'),
-('54', 'Anguish', '104'),
-('55', 'Beryl', '106'),
-('56', 'Bleak', '108'),
-('57', 'Cobalt', '110'),
-('58', 'Chagrin', '112'),
-('59', 'Diamond', '114'),
-('60', 'Despair', '116'),
-('61', 'Emerald', '118'),
-('62', 'Ennui', '120'),
-('63', 'Flint', '122'),
-('64', 'Fear', '124'),
-('65', 'Gypsum', '126'),
-('66', 'Gloom', '128'),
-('67', 'Hessite', '130'),
-('68', 'Horror', '132'),
-('69', 'Ivory', '134'),
-('70', 'Ire', '136'),
-('71', 'Jet', '138'),
-('72', 'Jaded', '140'),
-('73', 'Kyanite', '142'),
-('74', 'Killjoy', '144'),
-('75', 'Lead', '146'),
-('76', 'Lonely', '148'),
-('77', 'Malachite', '150'),
-('78', 'Malaise', '152'),
-('79', 'Nickel', '154'),
-('80', 'Nervous', '156'),
-('81', 'Obsidian', '158'),
-('82', 'Oppression', '160'),
-('83', 'Pyrites', '162'),
-('84', 'Pessimism', '164'),
-('85', 'Quartz', '166'),
-('86', 'Qualms', '168'),
-('87', 'Ruby', '170'),
-('88', 'Regret', '172'),
-('89', 'Steel', '174'),
-('90', 'Sorrow', '176'),
-('91', 'Turquoise', '178'),
-('92', 'Torment', '180'),
-('93', 'Uranium', '182'),
-('94', 'Unctuous', '184'),
-('95', 'Vauxite', '186'),
-('96', 'Vexation', '188'),
-('97', 'Wulfenite', '190'),
-('98', 'Woe', '192'),
-('99', 'Yuksporite', '194'),
-('100', 'Yearning', '196'),
-('101', 'Zinc', '198'),
-('102', 'Zestless', '200');
-INSERT OR IGNORE INTO  "guilds" ("ID","Name","Column","Row","next_update") VALUES (1,'Allurists Guild 1','NA','NA',''),
- (2,'Allurists Guild 2','NA','NA',''),
- (3,'Allurists Guild 3','NA','NA',''),
- (4,'Empaths Guild 1','NA','NA',''),
- (5,'Empaths Guild 2','NA','NA',''),
- (6,'Empaths Guild 3','NA','NA',''),
- (7,'Immolators Guild 1','NA','NA',''),
- (8,'Immolators Guild 2','NA','NA',''),
- (9,'Immolators Guild 3','NA','NA',''),
- (10,'Thieves Guild 1','NA','NA',''),
- (11,'Thieves Guild 2','NA','NA',''),
- (12,'Thieves Guild 3','NA','NA',''),
- (13,'Travellers Guild 1','NA','NA',''),
- (14,'Travellers Guild 2','NA','NA',''),
- (15,'Travellers Guild 3','NA','NA',''),
+INSERT OR IGNORE INTO \"banks\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (1,'Cedar','1st','OmniBank'),
+ (2,'Despair','1st','OmniBank'),
+ (3,'Uranium','1st','OmniBank'),
+ (4,'Fir','2nd','OmniBank'),
+ (5,'Oppression','2nd','OmniBank'),
+ (6,'Kracken','3rd','OmniBank'),
+ (7,'Dogwood','4th','OmniBank'),
+ (8,'Yew','4th','OmniBank'),
+ (9,'Malaise','4th','OmniBank'),
+ (10,'Flint','5th','OmniBank'),
+ (11,'Ivory','5th','OmniBank'),
+ (12,'Kyanite','6th','OmniBank'),
+ (13,'Kracken','7th','OmniBank'),
+ (14,'Larch','7th','OmniBank'),
+ (15,'Steel','7th','OmniBank'),
+ (16,'Olive','9th','OmniBank'),
+ (17,'Sorrow','9th','OmniBank'),
+ (18,'Quail','10th','OmniBank'),
+ (19,'Squid','10th','OmniBank'),
+ (20,'Nervous','10th','OmniBank'),
+ (21,'Pyrites','10th','OmniBank'),
+ (22,'Raven','11th','OmniBank'),
+ (23,'Tapir','11th','OmniBank'),
+ (24,'Unicorn','11th','OmniBank'),
+ (25,'Lead','11th','OmniBank'),
+ (26,'Malachite','11th','OmniBank'),
+ (27,'Quail','12th','OmniBank'),
+ (28,'Buzzard','13th','OmniBank'),
+ (29,'Kracken','13th','OmniBank'),
+ (30,'Bleak','14th','OmniBank'),
+ (31,'Knotweed','15th','OmniBank'),
+ (32,'Raven','15th','OmniBank'),
+ (33,'Fear','15th','OmniBank'),
+ (34,'Gypsum','15th','OmniBank'),
+ (35,'Juniper','16th','OmniBank'),
+ (36,'Sycamore','16th','OmniBank'),
+ (37,'Amethyst','16th','OmniBank'),
+ (38,'Kracken','18th','OmniBank'),
+ (39,'Quail','18th','OmniBank'),
+ (40,'Ruby','18th','OmniBank'),
+ (41,'Emerald','19th','OmniBank'),
+ (42,'Pessimism','19th','OmniBank'),
+ (43,'Juniper','20th','OmniBank'),
+ (44,'Umbrella','20th','OmniBank'),
+ (45,'Ennui','20th','OmniBank'),
+ (46,'Lead','21st','OmniBank'),
+ (47,'Zelkova','23rd','OmniBank'),
+ (48,'Chagrin','23rd','OmniBank'),
+ (49,'Torment','23rd','OmniBank'),
+ (50,'Unctuous','23rd','OmniBank'),
+ (51,'Squid','24th','OmniBank'),
+ (52,'Pyrites','24th','OmniBank'),
+ (53,'Vexation','24th','OmniBank'),
+ (54,'Jaded','25th','OmniBank'),
+ (55,'Beech','26th','OmniBank'),
+ (56,'Quail','26th','OmniBank'),
+ (57,'Octopus','27th','OmniBank'),
+ (58,'Beryl','28th','OmniBank'),
+ (59,'Qualms','28th','OmniBank'),
+ (60,'Torment','28th','OmniBank'),
+ (61,'Knotweed','29th','OmniBank'),
+ (62,'Anguish','30th','OmniBank'),
+ (63,'Ragweed','31st','OmniBank'),
+ (64,'Ire','31st','OmniBank'),
+ (65,'Steel','31st','OmniBank'),
+ (66,'Torment','31st','OmniBank'),
+ (67,'Ferret','32nd','OmniBank'),
+ (68,'Malachite','32nd','OmniBank'),
+ (69,'Larch','33rd','OmniBank'),
+ (70,'Kracken','34th','OmniBank'),
+ (71,'Maple','34th','OmniBank'),
+ (72,'Gloom','34th','OmniBank'),
+ (73,'Quail','36th','OmniBank'),
+ (74,'Malaise','36th','OmniBank'),
+ (75,'Obsidian','36th','OmniBank'),
+ (76,'Duck','37th','OmniBank'),
+ (77,'Nettle','37th','OmniBank'),
+ (78,'Amethyst','37th','OmniBank'),
+ (79,'Flint','37th','OmniBank'),
+ (80,'Beech','39th','OmniBank'),
+ (81,'Chagrin','39th','OmniBank'),
+ (82,'Hessite','39th','OmniBank'),
+ (83,'Alder','40th','OmniBank'),
+ (84,'Quail','41st','OmniBank'),
+ (85,'Tapir','41st','OmniBank'),
+ (86,'Pine','42nd','OmniBank'),
+ (87,'Ire','42nd','OmniBank'),
+ (88,'Jackal','43rd','OmniBank'),
+ (89,'Vulture','43rd','OmniBank'),
+ (90,'Unctuous','43rd','OmniBank'),
+ (91,'Pilchard','44th','OmniBank'),
+ (92,'Pine','44th','OmniBank'),
+ (93,'Pessimism','44th','OmniBank'),
+ (94,'Woe','44th','OmniBank'),
+ (95,'Kracken','45th','OmniBank'),
+ (96,'Yak','45th','OmniBank'),
+ (97,'Flint','45th','OmniBank'),
+ (98,'Ruby','45th','OmniBank'),
+ (99,'Haddock','46th','OmniBank'),
+ (100,'Cobalt','46th','OmniBank'),
+ (101,'Flint','47th','OmniBank'),
+ (102,'Kracken','48th','OmniBank'),
+ (103,'Quince','48th','OmniBank'),
+ (104,'Jaded','48th','OmniBank'),
+ (105,'Sorrow','48th','OmniBank'),
+ (106,'Uranium','48th','OmniBank'),
+ (107,'Horror','49th','OmniBank'),
+ (108,'Malaise','50th','OmniBank'),
+ (109,'Cedar','52nd','OmniBank'),
+ (110,'Haddock','52nd','OmniBank'),
+ (111,'Ire','53rd','OmniBank'),
+ (112,'Ragweed','56th','OmniBank'),
+ (113,'Qualms','57th','OmniBank'),
+ (114,'Quail','58th','OmniBank'),
+ (115,'Horror','59th','OmniBank'),
+ (116,'Pilchard','60th','OmniBank'),
+ (117,'Teasel','60th','OmniBank'),
+ (118,'Quince','61st','OmniBank'),
+ (119,'Eagle','64th','OmniBank'),
+ (120,'Steel','64th','OmniBank'),
+ (121,'Beryl','65th','OmniBank'),
+ (122,'Teasel','66th','OmniBank'),
+ (123,'Haddock','67th','OmniBank'),
+ (124,'Nettle','67th','OmniBank'),
+ (125,'Vauxite','68th','OmniBank'),
+ (126,'Ivy','70th','OmniBank'),
+ (127,'Regret','70th','OmniBank'),
+ (128,'Octopus','71st','OmniBank'),
+ (129,'Gloom','71st','OmniBank'),
+ (130,'Ivory','71st','OmniBank'),
+ (131,'Jaded','71st','OmniBank'),
+ (132,'Haddock','74th','OmniBank'),
+ (133,'Quail','74th','OmniBank'),
+ (134,'Zinc','74th','OmniBank'),
+ (135,'Despair','75th','OmniBank'),
+ (136,'Quartz','75th','OmniBank'),
+ (137,'Qualms','75th','OmniBank'),
+ (138,'Yearning','75th','OmniBank'),
+ (139,'Hessite','76th','OmniBank'),
+ (140,'WCL','77th','OmniBank'),
+ (141,'Duck','77th','OmniBank'),
+ (142,'Octopus','77th','OmniBank'),
+ (143,'Mongoose','78th','OmniBank'),
+ (144,'Unicorn','78th','OmniBank'),
+ (145,'Ennui','78th','OmniBank'),
+ (146,'Ivy','79th','OmniBank'),
+ (147,'Mongoose','79th','OmniBank'),
+ (148,'Raven','79th','OmniBank'),
+ (149,'Obsidian','79th','OmniBank'),
+ (150,'Alder','80th','OmniBank'),
+ (151,'Cedar','80th','OmniBank'),
+ (152,'Lion','80th','OmniBank'),
+ (153,'Umbrella','80th','OmniBank'),
+ (154,'Cobalt','81st','OmniBank'),
+ (155,'Aardvark','82nd','OmniBank'),
+ (156,'Vulture','82nd','OmniBank'),
+ (157,'Yak','82nd','OmniBank'),
+ (158,'Maple','84th','OmniBank'),
+ (159,'Willow','84th','OmniBank'),
+ (160,'Maple','85th','OmniBank'),
+ (161,'Woe','85th','OmniBank'),
+ (162,'Malachite','87th','OmniBank'),
+ (163,'Pessimism','87th','OmniBank'),
+ (164,'Haddock','88th','OmniBank'),
+ (165,'Cobalt','88th','OmniBank'),
+ (166,'Lead','88th','OmniBank'),
+ (167,'Eagle','89th','OmniBank'),
+ (168,'Gloom','89th','OmniBank'),
+ (169,'Oppression','89th','OmniBank'),
+ (170,'Ferret','90th','OmniBank'),
+ (171,'Emerald','90th','OmniBank'),
+ (172,'Gloom','90th','OmniBank'),
+ (173,'Pyrites','90th','OmniBank'),
+ (174,'Larch','91st','OmniBank'),
+ (175,'Mongoose','91st','OmniBank'),
+ (176,'Anguish','91st','OmniBank'),
+ (177,'Vauxite','91st','OmniBank'),
+ (178,'Teasel','92nd','OmniBank'),
+ (179,'Yearning','92nd','OmniBank'),
+ (180,'Cormorant','93rd','OmniBank'),
+ (181,'Lonely','93rd','OmniBank'),
+ (182,'Nickel','93rd','OmniBank'),
+ (183,'Uranium','93rd','OmniBank'),
+ (184,'Yak','94th','OmniBank'),
+ (185,'Holly','96th','OmniBank'),
+ (186,'Ire','97th','OmniBank'),
+ (187,'Uranium','97th','OmniBank'),
+ (188,'Elm','98th','OmniBank'),
+ (189,'Juniper','98th','OmniBank'),
+ (190,'Raven','98th','OmniBank'),
+ (191,'Olive','99th','OmniBank'),
+ (192,'Amethyst','99th','OmniBank'),
+ (193,'Emerald','99th','OmniBank');
+INSERT OR IGNORE INTO \"color_mappings\" (\"id\",\"type\",\"color\") VALUES (1,'bank','blue'),
+ (2,'tavern','orange'),
+ (3,'transit','red'),
+ (4,'user_building','purple'),
+ (5,'alley','grey'),
+ (6,'default','black'),
+ (7,'border','white'),
+ (9,'edge','blue'),
+ (10,'shop','green'),
+ (11,'guild','yellow'),
+ (12,'placesofinterest','purple'),
+ (13,'background','#d4d4d4'),
+ (14,'text_color','#000000'),
+ (15,'button_color','#b1b1b1'),
+ (30,'set_destination','#1a7f7a'),
+ (31,'set_destination_transit','#046380');
+INSERT OR IGNORE INTO \"columns\" (\"ID\",\"Name\",\"Coordinate\") VALUES (1,'WCL',0),
+ (2,'Aardvark',1),
+ (3,'Alder',3),
+ (4,'Buzzard',5),
+ (5,'Beech',7),
+ (6,'Cormorant',9),
+ (7,'Cedar',11),
+ (8,'Duck',13),
+ (9,'Dogwood',15),
+ (10,'Eagle',17),
+ (11,'Elm',19),
+ (12,'Ferret',21),
+ (13,'Fir',23),
+ (14,'Gibbon',25),
+ (15,'Gum',27),
+ (16,'Haddock',29),
+ (17,'Holly',31),
+ (18,'Iguana',33),
+ (19,'Ivy',35),
+ (20,'Jackal',37),
+ (21,'Juniper',39),
+ (22,'Kracken',41),
+ (23,'Knotweed',43),
+ (24,'Lion',45),
+ (25,'Larch',47),
+ (26,'Mongoose',49),
+ (27,'Maple',51),
+ (28,'Nightingale',53),
+ (29,'Nettle',55),
+ (30,'Octopus',57),
+ (31,'Olive',59),
+ (32,'Pilchard',61),
+ (33,'Pine',63),
+ (34,'Quail',65),
+ (35,'Quince',67),
+ (36,'Raven',69),
+ (37,'Ragweed',71),
+ (38,'Squid',73),
+ (39,'Sycamore',75),
+ (40,'Tapir',77),
+ (41,'Teasel',79),
+ (42,'Unicorn',81),
+ (43,'Umbrella',83),
+ (44,'Vulture',85),
+ (45,'Vervain',87),
+ (46,'Walrus',89),
+ (47,'Willow',91),
+ (48,'Yak',93),
+ (49,'Yew',95),
+ (50,'Zebra',97),
+ (51,'Zelkova',99),
+ (52,'Amethyst',101),
+ (53,'Anguish',103),
+ (54,'Beryl',105),
+ (55,'Bleak',107),
+ (56,'Cobalt',109),
+ (57,'Chagrin',111),
+ (58,'Diamond',113),
+ (59,'Despair',115),
+ (60,'Emerald',117),
+ (61,'Ennui',119),
+ (62,'Flint',121),
+ (63,'Fear',123),
+ (64,'Gypsum',125),
+ (65,'Gloom',127),
+ (66,'Hessite',129),
+ (67,'Horror',131),
+ (68,'Ivory',133),
+ (69,'Ire',135),
+ (70,'Jet',137),
+ (71,'Jaded',139),
+ (72,'Kyanite',141),
+ (73,'Killjoy',143),
+ (74,'Lead',145),
+ (75,'Lonely',147),
+ (76,'Malachite',149),
+ (77,'Malaise',151),
+ (78,'Nickel',153),
+ (79,'Nervous',155),
+ (80,'Obsidian',157),
+ (81,'Oppression',159),
+ (82,'Pyrites',161),
+ (83,'Pessimism',163),
+ (84,'Quartz',165),
+ (85,'Qualms',167),
+ (86,'Ruby',169),
+ (87,'Regret',171),
+ (88,'Steel',173),
+ (89,'Sorrow',175),
+ (90,'Turquoise',177),
+ (91,'Torment',179),
+ (92,'Uranium',181),
+ (93,'Unctuous',183),
+ (94,'Vauxite',185),
+ (95,'Vexation',187),
+ (96,'Wulfenite',189),
+ (97,'Woe',191),
+ (98,'Yuksporite',193),
+ (99,'Yearning',195),
+ (100,'Zinc',197),
+ (101,'Zestless',199),
+ (102,'ECL',200),
+ (103,'Western City Limits',0),
+ (104,'Eastern City Limits',200);
+INSERT OR IGNORE INTO \"guilds\" (\"ID\",\"Name\",\"Column\",\"Row\",\"next_update\") VALUES (1,'Allurists Guild 1','','',''),
+ (2,'Allurists Guild 2','','',''),
+ (3,'Allurists Guild 3','','',''),
+ (4,'Empaths Guild 1','','',''),
+ (5,'Empaths Guild 2','','',''),
+ (6,'Empaths Guild 3','','',''),
+ (7,'Immolators Guild 1','','',''),
+ (8,'Immolators Guild 2','','',''),
+ (9,'Immolators Guild 3','','',''),
+ (10,'Thieves Guild 1','','',''),
+ (11,'Thieves Guild 2','','',''),
+ (12,'Thieves Guild 3','','',''),
+ (13,'Travellers Guild 1','','',''),
+ (14,'Travellers Guild 2','','',''),
+ (15,'Travellers Guild 3','','',''),
  (16,'Peacekkeepers Mission 1','Emerald','67th',''),
  (17,'Peacekkeepers Mission 2','Unicorn','33rd',''),
  (18,'Peacekkeepers Mission 3','Emerald','33rd','');
-INSERT OR IGNORE INTO  "placesofinterest" ("ID","Name","Column","Row") VALUES (1,'Battle Arena','Zelkova','52nd'),
+INSERT OR IGNORE INTO \"placesofinterest\" (\"ID\",\"Name\",\"Column\",\"Row\") VALUES (1,'Battle Arena','Zelkova','52nd'),
  (2,'Hall of Binding','Vervain','40th'),
  (3,'Hall of Severance','Walrus','40th'),
  (4,'The Graveyard','Larch','50th'),
  (5,'Cloister of Secrets','Gloom','1st'),
- (6,'Eternal Aubade of Mystical Treasures','Zelkova','47th'),
- (7,'Kindred Hospital','Woe','13th');
-INSERT OR IGNORE INTO  "powers" ("power_id","name","guild","cost","quest_info","skill_info") VALUES (1,'Battle Cloak','Any Peacekeeper''s Mission',2000,'None','Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
+ (6,'Eternal Aubade of Mystical Treasures','Zelkova','47th');
+INSERT OR IGNORE INTO \"powers\" (\"power_id\",\"name\",\"guild\",\"cost\",\"quest_info\",\"skill_info\") VALUES (1,'Battle Cloak','Any Peacekeeper''s Mission',2000,'None','Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
  (2,'Celerity 1','Travellers Guild 1',4000,'Bring items to 3 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
  (3,'Celerity 2','Travellers Guild 2',8000,'Bring items to 6 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
  (4,'Celerity 3','Travellers Guild 3',17500,'Bring items to 12 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (15 minutes/AP).'),
- (5,'Charisma 1','Allurists Guild 1',1000,'Convince 3 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 3%.'),
- (6,'Charisma 2','Allurists Guild 2',3000,'Convince 6 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 7%.'),
- (7,'Charisma 3','Allurists Guild 3',5000,'Convince 9 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 10%, with an additional coin discount on each item.'),
- (8,'Locate 1','Empaths Guild 1',1500,'Visit specific locations, say "Check-Point", and drain 10 BP per location.','You can now determine the distance to a specific vampire.'),
- (9,'Locate 2','Empaths Guild 2',4000,'Visit specific locations, say "Check-Point", and drain 15 BP per location.','Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
- (10,'Locate 3','Empaths Guild 3',15000,'Visit specific locations, say "Check-Point", and drain 25 BP per location.','Locate 3 reveals the exact street intersection of the vampire.'),
- (11,'Neutrality 1','Peacekeeper''s Mission 1',10000,'None','Neutrality designates a vampire as "non-violent", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
+ (5,'Charisma 1','Allurists Guild 1',1000,'Convince 3 vampires to visit a specific pub and say \"VampName sent me\".','Shop prices reduced by 3%.'),
+ (6,'Charisma 2','Allurists Guild 2',3000,'Convince 6 vampires to visit a specific pub and say \"VampName sent me\".','Shop prices reduced by 7%.'),
+ (7,'Charisma 3','Allurists Guild 3',5000,'Convince 9 vampires to visit a specific pub and say \"VampName sent me\".','Shop prices reduced by 10%, with an additional coin discount on each item.'),
+ (8,'Locate 1','Empaths Guild 1',1500,'Visit specific locations, say \"Check-Point\", and drain 10 BP per location.','You can now determine the distance to a specific vampire.'),
+ (9,'Locate 2','Empaths Guild 2',4000,'Visit specific locations, say \"Check-Point\", and drain 15 BP per location.','Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
+ (10,'Locate 3','Empaths Guild 3',15000,'Visit specific locations, say \"Check-Point\", and drain 25 BP per location.','Locate 3 reveals the exact street intersection of the vampire.'),
+ (11,'Neutrality 1','Peacekeeper''s Mission 1',10000,'None','Neutrality designates a vampire as \"non-violent\", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
  (12,'Neutrality 2','Peacekeeper''s Mission 2',10000,'Additional 500 BP cost at this level.','Continues non-violent status with Peacekeeper protection.'),
  (13,'Neutrality 3','Peacekeeper''s Mission 3',10000,'Additional 1000 BP cost at this level.','Non-violent status continues, and Vial of Holy Water causes only 1 BP of damage.'),
  (14,'Perception 1','Allurists Guild',7500,'Hunt and kill 1 Vampire Hunter within 10 days.','Allows detection of hunters and potentially coin sounds in vampire pockets.'),
@@ -816,110 +726,111 @@ INSERT OR IGNORE INTO  "powers" ("power_id","name","guild","cost","quest_info","
  (32,'Thrift 1','Allurists Guild 1',1000,'Buy 1 Perfect Red Rose from a specified shop.','5% chance to keep a used item/scroll instead of it burning up.'),
  (33,'Thrift 2','Allurists Guild 2',3000,'Buy 1 Perfect Red Rose from 3 specified shops.','10% chance to keep a used item/scroll instead of it burning up.'),
  (34,'Thrift 3','Allurists Guild 3',10000,'Buy 1 Perfect Red Rose from 6 specified shops.','15% chance to keep a used item/scroll instead of it burning up.');
-INSERT OR IGNORE INTO  "rows" ("ID","Name","Coordinate") VALUES
- ('1', 'NCL', '0'),
-('2', 'Northern City Limits', '0'),
-('3', '1st', '2'),
-('4', '2nd', '4'),
-('5', '3rd', '6'),
-('6', '4th', '8'),
-('7', '5th', '10'),
-('8', '6th', '12'),
-('9', '7th', '14'),
-('10', '8th', '16'),
-('11', '9th', '18'),
-('12', '10th', '20'),
-('13', '11th', '22'),
-('14', '12th', '24'),
-('15', '13th', '26'),
-('16', '14th', '28'),
-('17', '15th', '30'),
-('18', '16th', '32'),
-('19', '17th', '34'),
-('20', '18th', '36'),
-('21', '19th', '38'),
-('22', '20th', '40'),
-('23', '21st', '42'),
-('24', '22nd', '44'),
-('25', '23rd', '46'),
-('26', '24th', '48'),
-('27', '25th', '50'),
-('28', '26th', '52'),
-('29', '27th', '54'),
-('30', '28th', '56'),
-('31', '29th', '58'),
-('32', '30th', '60'),
-('33', '31st', '62'),
-('34', '32nd', '64'),
-('35', '33rd', '66'),
-('36', '34th', '68'),
-('37', '35th', '70'),
-('38', '36th', '72'),
-('39', '37th', '74'),
-('40', '38th', '76'),
-('41', '39th', '78'),
-('42', '40th', '80'),
-('43', '41st', '82'),
-('44', '42nd', '84'),
-('45', '43rd', '86'),
-('46', '44th', '88'),
-('47', '45th', '90'),
-('48', '46th', '92'),
-('49', '47th', '94'),
-('50', '48th', '96'),
-('51', '49th', '98'),
-('52', '50th', '100'),
-('53', '51st', '102'),
-('54', '52nd', '104'),
-('55', '53rd', '106'),
-('56', '54th', '108'),
-('57', '55th', '110'),
-('58', '56th', '112'),
-('59', '57th', '114'),
-('60', '58th', '116'),
-('61', '59th', '118'),
-('62', '60th', '120'),
-('63', '61st', '122'),
-('64', '62nd', '124'),
-('65', '63rd', '126'),
-('66', '64th', '128'),
-('67', '65th', '130'),
-('68', '66th', '132'),
-('69', '67th', '134'),
-('70', '68th', '136'),
-('71', '69th', '138'),
-('72', '70th', '140'),
-('73', '71st', '142'),
-('74', '72nd', '144'),
-('75', '73rd', '146'),
-('76', '74th', '148'),
-('77', '75th', '150'),
-('78', '76th', '152'),
-('79', '77th', '154'),
-('80', '78th', '156'),
-('81', '79th', '158'),
-('82', '80th', '160'),
-('83', '81st', '162'),
-('84', '82nd', '164'),
-('85', '83rd', '166'),
-('86', '84th', '168'),
-('87', '85th', '170'),
-('88', '86th', '172'),
-('89', '87th', '174'),
-('90', '88th', '176'),
-('91', '89th', '178'),
-('92', '90th', '180'),
-('93', '91st', '182'),
-('94', '92nd', '184'),
-('95', '93rd', '186'),
-('96', '94th', '188'),
-('97', '95th', '190'),
-('98', '96th', '192'),
-('99', '97th', '194'),
-('100', '98th', '196'),
-('101', '99th', '198'),
-('102', '100th', '200');
-INSERT OR IGNORE INTO  "shop_items" ("id","shop_name","item_name","base_price","charisma_level_1","charisma_level_2","charisma_level_3") VALUES (1,'Discount Magic','Perfect Dandelion',35,33,32,31),
+INSERT OR IGNORE INTO \"rows\" (\"ID\",\"Name\",\"Coordinate\") VALUES (1,'NCL',0),
+ (2,'1st',1),
+ (3,'2nd',3),
+ (4,'3rd',5),
+ (5,'4th',7),
+ (6,'5th',9),
+ (7,'6th',11),
+ (8,'7th',13),
+ (9,'8th',15),
+ (10,'9th',17),
+ (11,'10th',19),
+ (12,'11th',21),
+ (13,'12th',23),
+ (14,'13th',25),
+ (15,'14th',27),
+ (16,'15th',29),
+ (17,'16th',31),
+ (18,'17th',33),
+ (19,'18th',35),
+ (20,'19th',37),
+ (21,'20th',39),
+ (22,'21st',41),
+ (23,'22nd',43),
+ (24,'23rd',45),
+ (25,'24th',47),
+ (26,'25th',49),
+ (27,'26th',51),
+ (28,'27th',53),
+ (29,'28th',55),
+ (30,'29th',57),
+ (31,'30th',59),
+ (32,'31st',61),
+ (33,'32nd',63),
+ (34,'33rd',65),
+ (35,'34th',67),
+ (36,'35th',69),
+ (37,'36th',71),
+ (38,'37th',73),
+ (39,'38th',75),
+ (40,'39th',77),
+ (41,'40th',79),
+ (42,'41st',81),
+ (43,'42nd',83),
+ (44,'43rd',85),
+ (45,'44th',87),
+ (46,'45th',89),
+ (47,'46th',91),
+ (48,'47th',93),
+ (49,'48th',95),
+ (50,'49th',97),
+ (51,'50th',99),
+ (52,'51st',101),
+ (53,'52nd',103),
+ (54,'53rd',105),
+ (55,'54th',107),
+ (56,'55th',109),
+ (57,'56th',111),
+ (58,'57th',113),
+ (59,'58th',115),
+ (60,'59th',117),
+ (61,'60th',119),
+ (62,'61st',121),
+ (63,'62nd',123),
+ (64,'63rd',125),
+ (65,'64th',127),
+ (66,'65th',129),
+ (67,'66th',131),
+ (68,'67th',133),
+ (69,'68th',135),
+ (70,'69th',137),
+ (71,'70th',139),
+ (72,'71st',141),
+ (73,'72nd',143),
+ (74,'73rd',145),
+ (75,'74th',147),
+ (76,'75th',149),
+ (77,'76th',151),
+ (78,'77th',153),
+ (79,'78th',155),
+ (80,'79th',157),
+ (81,'80th',159),
+ (82,'81st',161),
+ (83,'82nd',163),
+ (84,'83rd',165),
+ (85,'84th',167),
+ (86,'85th',169),
+ (87,'86th',171),
+ (88,'87th',173),
+ (89,'88th',175),
+ (90,'89th',177),
+ (91,'90th',179),
+ (92,'91st',181),
+ (93,'92nd',183),
+ (94,'93rd',185),
+ (95,'94th',187),
+ (96,'95th',189),
+ (97,'96th',191),
+ (98,'97th',193),
+ (99,'98th',195),
+ (100,'99th',197),
+ (101,'100th',199),
+ (102,'SCL',200),
+ (103,'Northern City Limits',0),
+ (104,'Southern City Limits',200);
+INSERT OR IGNORE INTO \"shop_items\" (\"id\",\"shop_name\",\"item_name\",\"base_price\",\"charisma_level_1\",\"charisma_level_2\",\"charisma_level_3\") VALUES (1,'Discount Magic','Perfect Dandelion',35,33,32,31),
  (2,'Discount Magic','Sprint Potion',105,101,97,94),
  (3,'Discount Magic','Perfect Red Rose',350,339,325,315),
  (4,'Discount Magic','Scroll of Turning',350,339,325,315),
@@ -1160,127 +1071,120 @@ INSERT OR IGNORE INTO  "shop_items" ("id","shop_name","item_name","base_price","
  (239,'The White House','Pewter Celtic Cross',10000,10000,10000,10000),
  (240,'The White House','Compass',11999,11999,11999,11999),
  (241,'The White House','Pewter Tankard',15000,15000,15000,15000);
-INSERT OR IGNORE INTO  "shops" ("ID","Name","Column","Row","next_update") VALUES (1,'Ace Porn','NA','NA',''),
- (2,'Checkers Porn Shop','NA','NA',''),
- (3,'Dark Desires','NA','NA',''),
- (4,'Discount Magic','NA','NA',''),
- (5,'Discount Potions','NA','NA',''),
- (6,'Discount Scrolls','NA','NA',''),
- (7,'Herman''s Scrolls','NA','NA',''),
- (8,'Interesting Times','NA','NA',''),
- (9,'McPotions','NA','NA',''),
- (10,'Paper and Scrolls','NA','NA',''),
- (11,'Potable Potions','NA','NA',''),
- (12,'Potion Distillery','NA','NA',''),
- (13,'Potionworks','NA','NA',''),
- (14,'Reversi Porn','NA','NA',''),
- (15,'Scrollmania','NA','NA',''),
- (16,'Scrolls ''n'' Stuff','NA','NA',''),
- (17,'Scrolls R Us','NA','NA',''),
- (18,'Scrollworks','NA','NA',''),
- (19,'Silver Apothecary','NA','NA',''),
- (20,'Sparks','NA','NA',''),
- (21,'Spinners Porn','NA','NA',''),
- (22,'The Magic Box','NA','NA',''),
- (23,'The Potion Shoppe','NA','NA',''),
- (24,'White Light','NA','NA',''),
- (25,'Ye Olde Scrolles','NA','NA','');
-INSERT OR IGNORE INTO  "taverns" ("ID","Column","Row","Name") VALUES (1,'Gum','33rd','Abbot''s Tavern'),
- (2,'Knotweed','11th','Archer''s Tavern'),
- (3,'Torment','16th','Baker''s Tavern'),
- (4,'Fir','13th','Balmer''s Tavern'),
- (5,'Nettle','3rd','Barker''s Tavern'),
- (6,'Duck','7th','Bloodwood Canopy Cafe'),
- (7,'Haddock','64th','Bowyer''s Tavern'),
- (8,'Qualms','61st','Butler''s Tavern'),
- (9,'Yew','78th','Carter''s Tavern'),
- (10,'Raven','71st','Chandler''s Tavern'),
- (11,'Bleak','64th','Club Xendom'),
- (12,'Pilchard','48th','Draper''s Tavern'),
- (13,'Yak','90th','Falconer''s Tavern'),
- (14,'Ruby','20th','Fiddler''s Tavern'),
- (15,'Ferret','84th','Fisherman''s Tavern'),
- (16,'Pine','68th','Five French Hens'),
- (17,'Steel','26th','Freeman''s Tavern'),
- (18,'Gibbon','98th','Harper''s Tavern'),
- (19,'Ire','63rd','Hawker''s Tavern'),
- (20,'Hessite','55th','Hell''s Angels Clubhouse'),
- (21,'Fir','72nd','Hunter''s Tavern'),
+INSERT OR IGNORE INTO \"shops\" (\"ID\",\"Name\",\"Column\",\"Row\",\"next_update\") VALUES (1,'Ace Porn','','',''),
+ (2,'Checkers Porn Shop','','',''),
+ (3,'Dark Desires','','',''),
+ (4,'Discount Magic','','',''),
+ (5,'Discount Potions','','',''),
+ (6,'Discount Scrolls','','',''),
+ (7,'Herman''s Scrolls','','',''),
+ (8,'Interesting Times','','',''),
+ (9,'McPotions','','',''),
+ (10,'Paper and Scrolls','','',''),
+ (11,'Potable Potions','','',''),
+ (12,'Potion Distillery','','',''),
+ (13,'Potionworks','','',''),
+ (14,'Reversi Porn','','',''),
+ (15,'Scrollmania','','',''),
+ (16,'Scrolls ''n'' Stuff','','',''),
+ (17,'Scrolls R Us','','',''),
+ (18,'Scrollworks','','',''),
+ (19,'Silver Apothecary','','',''),
+ (20,'Sparks','','',''),
+ (21,'Spinners Porn','','',''),
+ (22,'The Magic Box','','',''),
+ (23,'The Potion Shoppe','','',''),
+ (24,'White Light','','',''),
+ (25,'Ye Olde Scrolles','','','');
+INSERT OR IGNORE INTO \"taverns\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (1,'Ferret','44th','Miller''s Tavern'),
+ (2,'Gibbon','44th','The Ox and Bow'),
+ (3,'Kyanite','19th','The Lounge'),
+ (4,'Nervous','42nd','The Lightbringer'),
+ (5,'Oppression','45th','The Angel''s Wing'),
+ (6,'Pessimism','37th','The Book and Beggar'),
+ (7,'Pyrites','41st','The Brain and Hatchling'),
+ (8,'Qualms','43rd','The Broken Lover'),
+ (9,'Steel','3rd','Oyler''s Tavern'),
+ (10,'Vexation','2nd','The Hearth and Sabre'),
+ (11,'Dogwood','78th','The Moon'),
+ (12,'Eagle','67th','Shooter''s Tavern'),
+ (13,'Ferret','84th','Fisherman''s Tavern'),
+ (14,'Haddock','64th','Bowyer''s Tavern'),
+ (15,'Jackal','53rd','The Palm and Parson'),
+ (16,'Quail','85th','The Poltroon'),
+ (17,'Yew','78th','Carter''s Tavern'),
+ (19,'Oppression','70th','The Stick in the Mud'),
+ (20,'Pyrites','70th','Mercer''s Tavern'),
  (22,'Lion','1st','Leacher''s Tavern'),
- (23,'Malachite','76th','Lovers at Dawn Inn'),
- (24,'Ragweed','78th','Marbler''s Tavern'),
- (25,'Ferret','44th','Miller''s Tavern'),
- (26,'Steel','3rd','Oyler''s Tavern'),
- (27,'Diamond','92nd','Painter''s Tavern'),
- (28,'Walrus','83rd','Peace De Résistance'),
- (29,'Fear','34th','Pub Forty-Two'),
- (30,'Qualms','61st','Ratskeller'),
- (31,'Beryl','98th','Rider''s Tavern'),
- (32,'Qualms','5th','Rogue''s Tavern'),
- (33,'Eagle','67th','Shooter''s Tavern'),
- (34,'Bleak','NCL','Smuggler''s Cove'),
- (35,'Anguish','98th','Ten Turtle Doves'),
- (36,'Oppression','45th','The Angel''s Wing'),
- (37,'Oppression','70th','The Axeman and Guillotine'),
- (38,'Ivory','99th','The Blinking Pixie'),
- (39,'Pessimism','37th','The Book and Beggar'),
- (40,'Malachite','70th','The Booze Hall'),
- (41,'Pyrites','41st','The Brain and Hatchling'),
- (42,'Lonely','87th','The Brimming Brew'),
- (43,'Qualms','43rd','The Broken Lover'),
- (44,'Ruby','90th','The Burning Brand'),
- (45,'Walrus','68th','The Cart and Castle'),
- (46,'Lion','1st','The Celtic Moonligh'),
- (47,'Beech','19th','The Clam and Champion'),
- (48,'Nightingale','32nd','The Cosy Walrus'),
- (49,'Sorrow','70th','The Crossed Swords Tavern'),
- (50,'Gum','10th','The Crouching Tiger'),
- (51,'Killjoy','46th','The Crow''s Nest Tavern'),
- (52,'Pine','51st','The Dead of Night'),
- (53,'Lonely','78th','The Demon''s Heart'),
- (54,'Ragweed','6th','The Dog House'),
- (55,'Zinc','94th','The Drunk Cup'),
- (56,'Yak','30th','The Ferryman''s Arms'),
- (57,'Nervous','2nd','The Flirty Angel'),
- (58,'Sorrow','91st','The Freudian Slip'),
- (59,'Walrus','62nd','The Ghastly Flabber'),
- (60,'Lion','95th','The Golden Partridge'),
- (61,'Zebra','50th','The Guardian Outpost'),
- (62,'Obsidian','54th','The Gunny''s Shack'),
- (63,'Vexation','2nd','The Hearth and Sabre'),
- (64,'Dogwood','54th','The Kestrel'),
- (65,'Mongoose','15th','The Last Days'),
- (66,'Unicorn','92nd','The Lazy Sunflower'),
- (67,'Nervous','42nd','The Lightbringer'),
- (68,'Kyanite','19th','The Lounge'),
- (69,'Yearning','48th','The Marsupial'),
- (70,'Hessite','97th','The McAllister Tavern'),
- (71,'Dogwood','78th','The Moon over Orion'),
- (72,'Gibbon','44th','The Ox and Bow'),
- (73,'Jackal','53rd','The Palm and Parson'),
- (74,'Quail','85th','The Poltroon'),
- (75,'Ruby','21st','The Round Room'),
- (76,'Diamond','1st','The Scupper and Forage'),
- (77,'Pine','91st','The Shattered Platter'),
- (78,'Nickel','57th','The Shining Devil'),
- (79,'Alder','57th','The Sign of the Times'),
- (80,'Ennui','80th','The Stick and Stag'),
- (81,'Oppression','70th','The Stick in the Mud'),
- (82,'Malaise','87th','The Sun'),
- (83,'Eagle','34th','The Sunken Sofa'),
- (84,'Turquoise','71st','The Swords at Dawn'),
- (85,'Elm','93rd','The Teapot and Toxin'),
- (86,'Mongoose','92nd','The Thief of Hearts'),
- (87,'Despair','38th','The Thorn''s Pride'),
- (88,'Zebra','36th','The Two Sisters'),
- (89,'Nettle','86th','The Wart and Whisk'),
- (90,'Sycamore','89th','The Whirling Dervish'),
- (91,'Vulture','11th','The Wild Hunt'),
- (92,'Steel','23rd','Treehouse'),
- (93,'Yew','5th','Vagabond''s Tavern'),
- (94,'Anguish','68th','Xendom Tavern'),
- (95,'Pyrites','70th','Ye Olde Gallows Ale House');
-INSERT OR IGNORE INTO  "transits" ("ID","Column","Row","Name") VALUES (1,'Mongoose','25th','Calliope'),
+ (23,'Diamond','1st','The Scupper and Forage'),
+ (24,'Nervous','2nd','The Flirting Angel'),
+ (25,'Nettle','3rd','Barker''s Tavern'),
+ (26,'Yew','5th','Vagabond''s Tavern'),
+ (27,'Qualms','5th','Rogue''s Tavern'),
+ (28,'Ragweed','6th','The Dog House'),
+ (29,'Duck','7th','The Stripey Dragon'),
+ (30,'Gum','10th','The Crouching Tiger'),
+ (31,'Knotweed','11th','Archer''s Tavern'),
+ (32,'Vulture','11th','The Wild Hunt'),
+ (33,'Fir','13th','Balmer''s Tavern'),
+ (34,'Mongoose','15th','The Last Days'),
+ (35,'Torment','16th','Baker''s Tavern'),
+ (36,'Beech','19th','The Clam and Champion'),
+ (37,'Ruby','20th','Fiddler''s Tavern'),
+ (38,'Ruby','21st','The Round Room'),
+ (39,'Steel','23rd','Porter''s Tavern'),
+ (40,'Steel','26th','Freeman''s Tavern'),
+ (42,'Nightingale','32nd','The Cosy Walrus'),
+ (43,'Gum','33rd','Abbot''s Tavern'),
+ (44,'Eagle','34th','The Sunken Sofa'),
+ (45,'Fear','34th','Pub Forty-Two'),
+ (46,'Despair','38th','The Thorn''s Pride'),
+ (47,'Killjoy','46th','The Crow''s Nest Tavern'),
+ (48,'Pilchard','48th','Draper''s Tavern'),
+ (49,'Yearning','48th','The Marsupial'),
+ (50,'Pine','51st','The Dead of Night'),
+ (51,'Dogwood','54th','The Kestrel'),
+ (52,'Obsidian','54th','The Gunny''s Shack'),
+ (53,'Hessite','55th','The Weevil and Stallion'),
+ (54,'Alder','57th','The Sign of the Times'),
+ (55,'Nickel','57th','The Shining Devil'),
+ (56,'Qualms','61st','Butler''s Tavern'),
+ (57,'Walrus','62nd','The Ghastly Flabber'),
+ (58,'Ire','63rd','Hawker''s Tavern'),
+ (60,'Pine','68th','Five French Hens'),
+ (61,'Walrus','68th','The Cart and Castle'),
+ (62,'Anguish','68th','Xendom Tavern'),
+ (63,'Malachite','70th','Pub'),
+ (64,'Sorrow','70th','Pub'),
+ (65,'Raven','71st','Pub'),
+ (66,'Turquoise','71st','Pub'),
+ (67,'Fir','72nd','Hunter''s Tavern'),
+ (68,'Malachite','76th','Pub'),
+ (69,'Ragweed','78th','Pub'),
+ (70,'Lonely','78th','Pub'),
+ (71,'Ennui','80th','The Stick and Stag'),
+ (72,'Walrus','83rd','Pub'),
+ (73,'Nettle','86th','Pub'),
+ (74,'Lonely','87th','Pub'),
+ (75,'Malaise','87th','Pub'),
+ (76,'Sycamore','89th','Pub'),
+ (77,'Pine','90th','Pub'),
+ (78,'Yak','90th','Pub'),
+ (79,'Ruby','90th','Pub'),
+ (80,'Sorrow','91st','Pub'),
+ (81,'Mongoose','92nd','Pub'),
+ (82,'Unicorn','92nd','Pub'),
+ (83,'Diamond','92nd','Painter''s Tavern'),
+ (84,'Elm','93rd','The Teapot and Toxin'),
+ (85,'Zinc','93rd','Pub'),
+ (86,'Lion','95th','The Golden Partridge'),
+ (87,'Hessite','97th','The McAllister Tavern'),
+ (88,'Gibbon','98th','Harper''s Tavern'),
+ (89,'Anguish','98th','Ten Turtle Doves'),
+ (90,'Beryl','98th','Rider''s Tavern'),
+ (91,'Ivory','99th','The Blinking Pixie'),
+ (94,'Zebra','50th','The Guardian Outpost');
+INSERT OR IGNORE INTO \"transits\" (\"ID\",\"Column\",\"Row\",\"Name\") VALUES (1,'Mongoose','25th','Calliope'),
  (2,'Zelkova','25th','Clio'),
  (3,'Malachite','25th','Erato'),
  (4,'Mongoose','50th','Euterpe'),
@@ -1289,7 +1193,7 @@ INSERT OR IGNORE INTO  "transits" ("ID","Column","Row","Name") VALUES (1,'Mongoo
  (7,'Mongoose','75th','Terpsichore'),
  (8,'Zelkova','75th','Thalia'),
  (9,'Malachite','75th','Urania');
-INSERT OR IGNORE INTO  "userbuildings" ("ID","Name","Column","Row") VALUES (1,'Ace''s House of Dumont','Cedar','99th'),
+INSERT OR IGNORE INTO \"userbuildings\" (\"ID\",\"Name\",\"Column\",\"Row\") VALUES (1,'Ace''s House of Dumont','Cedar','99th'),
  (2,'Alatáriël Maenor','Diamond','50th'),
  (3,'Alpha Dragon''s and Lyric''s House of Dragon and Flame','Amethyst','90th'),
  (4,'AmadisdeGaula''s Stellaburgi','Wulfenite','38th'),
@@ -1440,7 +1344,6 @@ COMMIT;
     connection.close()
 
 # Call database initialization
-ensure_directories_exist()  # Call before logging setup to ensure logs directory exists
 initialize_database(DB_PATH)
 
 # -----------------------
@@ -1471,105 +1374,104 @@ def load_data(DB_PATH):
             - guilds_coordinates (dict): Mapping of guild names to their coordinates.
             - places_of_interest_coordinates (dict): Mapping of place of interest names to their coordinates.
     """
-    try:
-        connection = sqlite3.connect(DB_PATH)
-        cursor = connection.cursor()
+    connection = sqlite3.connect(DB_PATH)
+    cursor = connection.cursor()
 
-        def map_coordinates(query, key_col, coord_cols):
-            """Helper to map names to raw string coordinates from a query."""
-            cursor.execute(query)
-            data = cursor.fetchall()
-            return {row[key_col]: tuple(row[i] for i in coord_cols) for row in data}
+    # Fetch column names and their coordinates
+    cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
+    columns_data = cursor.fetchall()
+    columns = {name: int(coordinate) for name, coordinate in columns_data}
 
-        # Fetch column names and their coordinates (single integer values)
-        cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
-        columns = {row[0]: row[1] for row in cursor.fetchall()}  # Directly map to integer coordinate
+    # Fetch row names and their coordinates
+    cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
+    rows_data = cursor.fetchall()
+    rows = {name: int(coordinate) for name, coordinate in rows_data}
 
-        # Fetch row names and their coordinates (single integer values)
-        cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
-        rows = {row[0]: row[1] for row in cursor.fetchall()}  # Directly map to integer coordinate
+    # Fetch coordinates from the banks table
+    cursor.execute("SELECT `Column`, `Row` FROM banks")
+    banks_data = cursor.fetchall()
+    banks_coordinates = [
+        (col, row, None, None)
+        for col, row in banks_data
+    ]
 
-        # Fetch coordinates from the banks table
-        cursor.execute("SELECT `Column`, `Row` FROM banks")
-        banks_coordinates = [(col, row, None, None) for col, row in cursor.fetchall()]
+    # Fetch taverns and their coordinates
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM taverns")
+    taverns_data = cursor.fetchall()
+    taverns_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in taverns_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-        # Fetch taverns and their coordinates (as street names initially)
-        tavern_data = map_coordinates("SELECT `Name`, `Column`, `Row` FROM taverns", 0, [1, 2])
-        taverns_coordinates = {}
-        for name, (col_name, row_name) in tavern_data.items():
-            col_coord = columns.get(col_name, 0) + 1  # Convert street name to coordinate
-            row_coord = rows.get(row_name, 0) + 1     # Convert street name to coordinate
-            taverns_coordinates[name] = (col_coord, row_coord)
+    # Fetch transits and their coordinates
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM transits")
+    transits_data = cursor.fetchall()
+    transits_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in transits_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-        # Fetch transits and their coordinates
-        transit_data = map_coordinates("SELECT `Name`, `Column`, `Row` FROM transits", 0, [1, 2])
-        transits_coordinates = {}
-        for name, (col_name, row_name) in transit_data.items():
-            col_coord = columns.get(col_name, 0) + 1
-            row_coord = rows.get(row_name, 0) + 1
-            transits_coordinates[name] = (col_coord, row_coord)
+    # Fetch user buildings and their coordinates
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM userbuildings")
+    user_buildings_data = cursor.fetchall()
+    user_buildings_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in user_buildings_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-        # Fetch user buildings and their coordinates
-        user_building_data = map_coordinates("SELECT `Name`, `Column`, `Row` FROM userbuildings", 0, [1, 2])
-        user_buildings_coordinates = {}
-        for name, (col_name, row_name) in user_building_data.items():
-            col_coord = columns.get(col_name, 0) + 1
-            row_coord = rows.get(row_name, 0) + 1
-            user_buildings_coordinates[name] = (col_coord, row_coord)
+    # Fetch color mappings
+    cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
+    color_mappings_data = cursor.fetchall()
+    color_mappings = {type_: QColor(color) for type_, color in color_mappings_data}
 
-        # Fetch color mappings
-        cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
-        color_mappings = {type_: QColor(color) for type_, color in cursor.fetchall()}
+    # Fetch shops and their coordinates
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM shops")
+    shops_data = cursor.fetchall()
+    shops_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in shops_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-        # Fetch shops and their coordinates
-        shop_data = map_coordinates("SELECT `Name`, `Column`, `Row` FROM shops", 0, [1, 2])
-        shops_coordinates = {}
-        for name, (col_name, row_name) in shop_data.items():
-            if col_name == "NA" or row_name == "NA":
-                logging.warning(f"Skipping shop {name} due to 'NA' coordinates.")
-                continue  # Skip entries with NA coordinates
+    # Fetch guilds and their coordinates
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM guilds")
+    guilds_data = cursor.fetchall()
+    guilds_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in guilds_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-            col_coord = columns.get(col_name, 0) + 1
-            row_coord = rows.get(row_name, 0) + 1
-            shops_coordinates[name] = (col_coord, row_coord)
+    # Fetch places of interest and their coordinates
+    cursor.execute("SELECT `Name`, `Column`, `Row` FROM placesofinterest")
+    places_of_interest_data = cursor.fetchall()
+    places_of_interest_coordinates = {
+        name: (columns.get(col) + 1, rows.get(row) + 1)
+        for name, col, row in places_of_interest_data
+        if columns.get(col) is not None and rows.get(row) is not None
+    }
 
-        # Fetch guilds and their coordinates
-        guild_data = map_coordinates("SELECT `Name`, `Column`, `Row` FROM guilds", 0, [1, 2])
-        guilds_coordinates = {}
-        for name, (col_name, row_name) in guild_data.items():
-            if col_name == "NA" or row_name == "NA":
-                logging.warning(f"Skipping guild {name} due to 'NA' coordinates.")
-                continue  # Skip entries with NA coordinates
+    # Close the database connection after fetching all data
+    connection.close()
 
-            col_coord = columns.get(col_name, 0) + 1
-            row_coord = rows.get(row_name, 0) + 1
-            guilds_coordinates[name] = (col_coord, row_coord)
-
-        # Fetch places of interest and their coordinates
-        poi_data = map_coordinates("SELECT `Name`, `Column`, `Row` FROM placesofinterest", 0, [1, 2])
-        places_of_interest_coordinates = {}
-        for name, (col_name, row_name) in poi_data.items():
-            col_coord = columns.get(col_name, 0) + 1
-            row_coord = rows.get(row_name, 0) + 1
-            places_of_interest_coordinates[name] = (col_coord, row_coord)
-
-        cursor.execute("SELECT `Type`, `Color` FROM color_mappings")
-        color_mappings = {type_: QColor(color) for type_, color in cursor.fetchall()}
-
-        cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
-        row = cursor.fetchone()
-        keybind_config = int(row[0]) if row else 1  # Default to WASD (1)
-
-        connection.close()
-        return (
-            columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config
-        )
-    except sqlite3.Error as e:
-        logging.error("Failed to load data from database: %s", e)
-        raise
+    return (
+        columns,
+        rows,
+        banks_coordinates,
+        taverns_coordinates,
+        transits_coordinates,
+        user_buildings_coordinates,
+        color_mappings,
+        shops_coordinates,
+        guilds_coordinates,
+        places_of_interest_coordinates
+    )
 
 # Load the data and ensure that color_mappings is initialized before the CityMapApp class is used
-columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config = load_data(DB_PATH)
+columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates = load_data(DB_PATH)
 
 # -----------------------
 # Webview Cookie Database
@@ -1577,53 +1479,29 @@ columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, use
 
 def save_cookie_to_db(cookie):
     """
-    Save a single cookie to the SQLite database, updating existing cookies instead of duplicating them.
+    Save a single cookie to the SQLite database.
 
     Args:
         cookie (QNetworkCookie): The QNetworkCookie object representing the cookie to save.
+
+    This function inserts the cookie's details into the 'cookies' table in the SQLite database.
     """
     connection = sqlite3.connect(DB_PATH)
     cursor = connection.cursor()
-
-    try:
-        # First, check if the cookie already exists
-        cursor.execute('''
-            SELECT id FROM cookies WHERE name = ? AND domain = ? AND path = ?
-        ''', (cookie.name().data().decode('utf-8'),
-              cookie.domain(),
-              cookie.path()))
-
-        existing_cookie = cursor.fetchone()
-
-        if existing_cookie:
-            # Update the existing cookie
-            cursor.execute('''
-                UPDATE cookies 
-                SET value = ?, expiration = ?, secure = ?, httponly = ? 
-                WHERE id = ?
-            ''', (cookie.value().data().decode('utf-8'),
-                  cookie.expirationDate().toString() if not cookie.isSessionCookie() else None,
-                  int(cookie.isSecure()),
-                  int(cookie.isHttpOnly()),
-                  existing_cookie[0]))  # Update by ID
-        else:
-            # Insert new cookie if it does not exist
-            cursor.execute('''
-                INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (cookie.name().data().decode('utf-8'),
-                  cookie.value().data().decode('utf-8'),
-                  cookie.domain(),
-                  cookie.path(),
-                  cookie.expirationDate().toString() if not cookie.isSessionCookie() else None,
-                  int(cookie.isSecure()),
-                  int(cookie.isHttpOnly())))
-
-        connection.commit()
-    except sqlite3.Error as e:
-        logging.error(f"Failed to save/update cookie: {e}")
-    finally:
-        connection.close()
+    cursor.execute('''
+        INSERT INTO cookies (name, value, domain, path, expiry, secure, httponly)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (
+        cookie.name().data().decode('utf-8'),
+        cookie.value().data().decode('utf-8'),
+        cookie.domain(),
+        cookie.path(),
+        cookie.expirationDate().toString() if not cookie.isSessionCookie() else None,
+        int(cookie.isSecure()),
+        int(cookie.isHttpOnly())
+    ))
+    connection.commit()
+    connection.close()
 
 def load_cookies_from_db():
     """
@@ -1671,7 +1549,6 @@ def clear_cookie_db():
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
-
 class RBCCommunityMap(QMainWindow):
     """
     Main application class for the RBC Community Map.
@@ -1712,12 +1589,11 @@ class RBCCommunityMap(QMainWindow):
         # Set up cookie handling and logging
         self.setup_cookie_handling()
 
-        # Load initial data
-        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates, self.keybind_config = load_data(DB_PATH)
+        # Load the data
+        self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates, self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings, self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates = load_data(DB_PATH)
 
         # Set up the UI components
         self.zoom_level = 3
-        self.load_zoom_level_from_database()
         self.minimap_size = 280
         self.column_start = 0
         self.row_start = 0
@@ -1734,134 +1610,18 @@ class RBCCommunityMap(QMainWindow):
         self.load_characters()
 
         if not self.characters:
-            self.firstrun_character_creation()
+                self.firstrun_character_creation()
 
-        # Load remaining data and UI
         self.load_destination()
-        self.setup_ui_components()
+        self.setup_ui()
         self.setup_console_logging()
         self.show()
         self.update_minimap()
         self.load_last_active_character()
 
-        # Keybinding setup
-        self.keybind_config = self.load_keybind_config()
-        self.setup_keybindings()
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.website_frame.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-# -----------------------
-# Keybindings
-# -----------------------
-
-    def load_keybind_config(self):
-        """Load keybind config from the database."""
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
-        result = cursor.fetchone()
-        conn.close()
-        return result[0] if result else 1  # Default to WASD
-
-    def setup_keybindings(self):
-        """Sets up keybindings for movement."""
-        movement_configs = {
-            1: {  # WASD Mode
-                Qt.Key.Key_W: 1,  # Top-center
-                Qt.Key.Key_A: 3,  # Middle-left
-                Qt.Key.Key_S: 7,  # Bottom-center
-                Qt.Key.Key_D: 5   # Middle-right
-            },
-            2: {  # Arrow Keys Mode
-                Qt.Key.Key_Up: 1,
-                Qt.Key.Key_Left: 3,
-                Qt.Key.Key_Down: 7,
-                Qt.Key.Key_Right: 5
-            }
-        }
-
-        self.movement_keys = movement_configs.get(self.keybind_config, movement_configs[1])
-        logging.info(f"Movement Keys Set: {self.movement_keys}")
-
-        self.clear_existing_keybindings()
-
-        for key, move_index in self.movement_keys.items():
-            shortcut = QShortcut(QKeySequence(key), self.website_frame, context=Qt.ApplicationShortcut)
-            shortcut.activated.connect(lambda idx=move_index: self.move_character(idx))
-
-    def move_character(self, move_index):
-        """Move character to the specified grid position."""
-        logging.debug(f"Move triggered for grid index: {move_index}")
-        js_code = """
-            (function() {
-                // Find all table cells in the movement grid
-                const table = document.querySelector('table table'); // Nested table with grid
-                if (!table) {
-                    console.log('Movement grid table not found');
-                    return 'No table';
-                }
-                const spaces = Array.from(table.querySelectorAll('td'));
-                if (spaces.length !== 9) {
-                    console.log('Expected 9 grid cells, found: ' + spaces.length);
-                    return 'Invalid grid size: ' + spaces.length;
-                }
-                const targetSpace = spaces[%d];
-                if (!targetSpace) {
-                    console.log('Target space not found for index: %d');
-                    return 'No target space';
-                }
-                const form = targetSpace.querySelector('form[action="/blood.pl"][method="POST"]');
-                if (!form) {
-                    console.log('No form found in target space at index: %d');
-                    return 'No form';
-                }
-                const x = form.querySelector('input[name="x"]').value;
-                const y = form.querySelector('input[name="y"]').value;
-                form.submit();
-                console.log('Submitted move to x=' + x + ', y=' + y);
-                return 'Submitted to x=' + x + ', y=' + y;
-            })();
-        """ % (move_index, move_index, move_index)
-        self.website_frame.page().runJavaScript(js_code, lambda result: logging.debug(f"Move result: {result}"))
-        self.website_frame.setFocus()
-
-    def toggle_keybind_config(self, mode: int):
-        """
-        Switches between WASD (1), Arrow Keys (2), and Off (0) keybinding configurations.
-        """
-        self.keybind_config = mode
-        mode_text = "WASD" if mode == 1 else "Arrow Keys" if mode == 2 else "Off"
-        logging.info(f"Switched to keybind config {mode} ({mode_text})")
-
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE settings SET setting_value = ? WHERE setting_name = 'keybind_config'", (mode,))
-            conn.commit()
-
-        # Reinitialize keybindings
-        self.setup_keybindings()
-
-        # Update the menu checkmarks
-        self.update_keybind_menu()
-
-        QMessageBox.information(self, "Keybind Config", f"Switched to {mode_text}")
-
-    def update_keybind_menu(self):
-        """
-        Updates the checkmarks in the Keybindings menu based on the current keybind setting.
-        """
-        self.keybind_wasd_action.setChecked(self.keybind_config == 1)
-        self.keybind_arrow_action.setChecked(self.keybind_config == 2)
-        self.keybind_off_action.setChecked(self.keybind_config == 0)
-
-    def clear_existing_keybindings(self):
-        """Remove existing shortcuts from website_frame to prevent duplicates."""
-        for shortcut in self.website_frame.findChildren(QShortcut):
-            shortcut.setParent(None)
-
-# -----------------------
-# Load and apply customized UI Theme
-# -----------------------
+    # -----------------------
+    # Load and apply customized UI Theme
+    # -----------------------
 
     def load_theme_settings(self):
         """
@@ -1888,12 +1648,6 @@ class RBCCommunityMap(QMainWindow):
                 "theme_shop": "green",
                 "theme_guild": "yellow",
                 "theme_placesofinterest": "purple",
-                "theme_set_destination": "#1a7f7a",
-                "theme_set_destination_transit": "#046380",
-                "theme_alley": "grey",
-                "theme_default": "black",
-                "theme_border": "white",
-                "theme_edge": "blue",
             }
 
             self.color_mappings = {key.replace("theme_", ""): QColor(value) for key, value in settings}
@@ -1992,15 +1746,9 @@ class RBCCommunityMap(QMainWindow):
             self.save_theme_settings()
             logging.info("Theme updated and saved.")
 
-    def open_css_customization_dialog(self):
-        """Open the CSS customization dialog."""
-        dialog = CSSCustomizationDialog(self)
-        dialog.exec()
-
-# -----------------------
-# Cookie Handling
-# -----------------------
-
+    # -----------------------
+    # Cookie Handling
+    # -----------------------
     def setup_cookie_handling(self):
         """
         Set up cookie handling, including loading and saving cookies from the 'cookies' table in rbc_map_data.db.
@@ -2031,13 +1779,7 @@ class RBCCommunityMap(QMainWindow):
             cookie.setDomain(domain)
             cookie.setPath(path)
             cookie.setValue(value.encode())
-            try:
-                if expiration and expiration.isdigit():
-                    cookie.setExpirationDate(QDateTime.fromSecsSinceEpoch(int(expiration)))
-                else:
-                    logging.warning("Invalid expiration value for cookie: %s", expiration)
-            except ValueError as e:
-                logging.error("Error parsing expiration date: %s", e)
+            cookie.setExpirationDate(QDateTime.fromSecsSinceEpoch(expiration))
             self.cookie_store.setCookie(cookie, QUrl(f"https://{domain}"))
 
         connection.close()
@@ -2066,17 +1808,17 @@ class RBCCommunityMap(QMainWindow):
             ))
 
             connection.commit()
-            #logging.debug(f"Cookie added to rbc_map_data.db: {cookie.name().data().decode('utf-8')}")
-        except sqlite3.Error as e:
+            logging.debug(f"Cookie added to rbc_map_data.db: {cookie.name().data().decode('utf-8')}")
+        except Exception as e:
             logging.error(f"Failed to add cookie to database: {e}")
         finally:
             connection.close()
 
-# -----------------------
-# UI Setup
-# -----------------------
+    # -----------------------
+    # UI Setup
+    # -----------------------
 
-    def setup_ui_components(self):
+    def setup_ui(self):
         """
         Set up the main user interface for the RBC Community Map application.
 
@@ -2093,16 +1835,9 @@ class RBCCommunityMap(QMainWindow):
 
         # Initialize the QWebEngineView before setting up the browser controls
         self.website_frame = QWebEngineView(self.web_profile)
-
-        # Disable GPU-related features
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, False)
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)  # Keep JS enabled
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
-
-        # Add Keybindings
-        self.setup_keybindings()
 
         # Create the browser controls layout at the top of the webview
         self.browser_controls_layout = QHBoxLayout()
@@ -2349,23 +2084,29 @@ class RBCCommunityMap(QMainWindow):
                 self.show()
                 self.update_minimap()
 
-# -----------------------
-# Browser Controls Setup
-# -----------------------
+    # -----------------------
+    # Browser Controls Setup
+    # -----------------------
 
     def go_back(self):
-        """Navigate the web browser back to the previous page."""
+        """
+        Navigate the web browser back to the previous page.
+        """
         self.website_frame.back()
 
     def go_forward(self):
-        """Navigate the web browser forward to the next page."""
+        """
+        Navigate the web browser forward to the next page.
+        """
         self.website_frame.forward()
 
     def refresh_page(self):
-        """Refresh the current page displayed in the web browser."""
+        """
+        Refresh the current page displayed in the web browser.
+        """
         self.website_frame.reload()
 
-    def create_menu_bar(self) -> None:
+    def create_menu_bar(self):
         """
         Create the menu bar with File, Settings, Tools, and Help menus.
         """
@@ -2387,14 +2128,9 @@ class RBCCommunityMap(QMainWindow):
 
         # Settings menu
         settings_menu = menu_bar.addMenu('Settings')
-
         theme_action = QAction('Change Theme', self)
         theme_action.triggered.connect(self.change_theme)
         settings_menu.addAction(theme_action)
-
-        css_customization_action = QAction('CSS Customization', self)
-        css_customization_action.triggered.connect(self.open_css_customization_dialog)
-        settings_menu.addAction(css_customization_action)
 
         zoom_in_action = QAction('Zoom In', self)
         zoom_in_action.triggered.connect(self.zoom_in_browser)
@@ -2404,47 +2140,31 @@ class RBCCommunityMap(QMainWindow):
         zoom_out_action.triggered.connect(self.zoom_out_browser)
         settings_menu.addAction(zoom_out_action)
 
-        # Keybindings Submenu
-        keybindings_menu = settings_menu.addMenu("Keybindings")
-
-        self.keybind_wasd_action = QAction("WASD", self, checkable=True)
-        self.keybind_wasd_action.triggered.connect(lambda: self.toggle_keybind_config(1))
-
-        self.keybind_arrow_action = QAction("Arrow Keys", self, checkable=True)
-        self.keybind_arrow_action.triggered.connect(lambda: self.toggle_keybind_config(2))
-
-        self.keybind_off_action = QAction("Off", self, checkable=True)
-        self.keybind_off_action.triggered.connect(lambda: self.toggle_keybind_config(0))
-
-        keybindings_menu.addAction(self.keybind_wasd_action)
-        keybindings_menu.addAction(self.keybind_arrow_action)
-        keybindings_menu.addAction(self.keybind_off_action)
-
-        # Update checkmark based on current keybind setting
-        self.update_keybind_menu()
-
         # Tools menu
         tools_menu = menu_bar.addMenu('Tools')
 
+        # Database Viewer Tool
         database_viewer_action = QAction('Database Viewer', self)
         database_viewer_action.triggered.connect(self.open_database_viewer)
         tools_menu.addAction(database_viewer_action)
 
+        # Shopping List Tool
         shopping_list_action = QAction('Shopping List Generator', self)
         shopping_list_action.triggered.connect(self.open_shopping_list_tool)
         tools_menu.addAction(shopping_list_action)
 
+        # Damage Calculator Tool
         damage_calculator_action = QAction('Damage Calculator', self)
         damage_calculator_action.triggered.connect(self.open_damage_calculator_tool)
         tools_menu.addAction(damage_calculator_action)
 
+        # Power Reference Tool
         power_reference_action = QAction('Power Reference Tool', self)
         power_reference_action.triggered.connect(self.open_powers_dialog)
         tools_menu.addAction(power_reference_action)
 
         # Help menu
         help_menu = menu_bar.addMenu('Help')
-
         faq_action = QAction('FAQ', self)
         faq_action.triggered.connect(lambda: webbrowser.open('https://quiz.ravenblack.net/faq.pl'))
         help_menu.addAction(faq_action)
@@ -2462,16 +2182,20 @@ class RBCCommunityMap(QMainWindow):
         help_menu.addAction(credits_action)
 
     def zoom_in_browser(self):
-        """Zoom in on the web page displayed in the QWebEngineView."""
+        """
+        Zoom in on the web page displayed in the QWebEngineView.
+        """
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() + 0.1)
 
     def zoom_out_browser(self):
-        """Zoom out on the web page displayed in the QWebEngineView."""
+        """
+        Zoom out on the web page displayed in the QWebEngineView.
+        """
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
-# -----------------------
-# Error Logging
-# -----------------------
+    # -----------------------
+    # Error Logging
+    # -----------------------
 
     def setup_console_logging(self):
         """
@@ -2488,16 +2212,16 @@ class RBCCommunityMap(QMainWindow):
         enabling logging of JavaScript console messages within the Python application.
         """
         script = """
-            (function() {
-                var console_log = console.log;
-                console.log = function(message) {
-                    console_log(message);
-                    if (typeof qtHandler !== 'undefined' && qtHandler.handleConsoleMessage) {
-                        qtHandler.handleConsoleMessage(message);
-                    }
-                };
-            })();
-        """
+                    (function() {
+                        var console_log = console.log;
+                        console.log = function(message) {
+                            console_log(message);
+                            if (typeof qtHandler !== 'undefined' && qtHandler.handleConsoleMessage) {
+                                qtHandler.handleConsoleMessage(message);
+                            }
+                        };
+                    })();
+                """
         self.website_frame.page().runJavaScript(script)
 
     @pyqtSlot(str)
@@ -2511,23 +2235,28 @@ class RBCCommunityMap(QMainWindow):
         print(f"Console message: {message}")
         logging.debug(f"Console message: {message}")
 
-# -----------------------
-# Menu Control Items
-# -----------------------
+    # -----------------------
+    # Menu Control Items
+    # -----------------------
 
     def save_webpage_screenshot(self):
         """
         Save the current webpage as a screenshot.
-        Opens a file dialog to specify the location and filename for saving the screenshot in PNG format.
+
+        Opens a file dialog to specify the location and filename for saving
+        the screenshot in PNG format.
         """
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "", "PNG Files (*.png);;All Files (*)")
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "",
+                                                   "PNG Files (*.png);;All Files (*)")
         if file_name:
             self.website_frame.grab().save(file_name)
 
     def save_app_screenshot(self):
         """
         Save the current application window as a screenshot.
-        Opens a file dialog to specify the location and filename for saving the screenshot in PNG format.
+
+        Opens a file dialog to specify the location and filename for saving
+        the screenshot in PNG format.
         """
         file_name, _ = QFileDialog.getSaveFileName(self, "Save App Screenshot", "", "PNG Files (*.png);;All Files (*)")
         if file_name:
@@ -2542,7 +2271,7 @@ class RBCCommunityMap(QMainWindow):
         current_item = self.character_list.currentItem()
 
         if current_item:
-            character_name = current_item.text()
+            character_name = current_item.text()  # Extract the selected character's name
         else:
             # Show an error message if no character is selected
             QMessageBox.warning(self, "No Character Selected", "Please select a character from the list.")
@@ -2584,14 +2313,17 @@ class RBCCommunityMap(QMainWindow):
 
     def open_powers_dialog(self):
         """
-        Opens the Powers Dialog and ensures character coordinates are passed correctly.
+        Opens the Powers Information dialog.
         """
-        powers_dialog = PowersDialog(self, self.character_x, self.character_y, DB_PATH)  # Ensure correct parameters
+        # Initialize the PowersDialog with the SQLite database connection
+        powers_dialog = PowersDialog(DB_PATH)  # Pass the SQLite connection
+
+        # Show the PowersDialog as a modal
         powers_dialog.exec()
 
-# -----------------------
-# Character Management
-# -----------------------
+    # -----------------------
+    # Character Management
+    # -----------------------
 
     def load_characters(self):
         """
@@ -2629,6 +2361,8 @@ class RBCCommunityMap(QMainWindow):
                 self.character_list.setCurrentRow(0)
                 self.selected_character = self.characters[0]
                 logging.debug(f"Selected character set: {self.selected_character}")
+                if 'id' not in self.selected_character:
+                    logging.error("Loaded character data lacks 'id'. Check database integrity.")
             else:
                 logging.warning("No characters found in the database.")
                 self.selected_character = None
@@ -2726,11 +2460,12 @@ class RBCCommunityMap(QMainWindow):
         QTimer.singleShot(1000, self.login_selected_character)
 
     def login_selected_character(self):
-        """Log in the selected character using JavaScript."""
         if not self.selected_character:
             logging.warning("No character selected for login.")
             return
-        logging.debug(f"Logging in character: {self.selected_character['name']} with ID: {self.selected_character.get('id')}")
+
+        logging.debug(
+            f"Logging in character: {self.selected_character['name']} with ID: {self.selected_character.get('id')}")
         name = self.selected_character['name']
         password = self.selected_character['password']
         login_script = f"""
@@ -2756,20 +2491,40 @@ class RBCCommunityMap(QMainWindow):
         if dialog.exec():
             name = dialog.name_edit.text()
             password = dialog.password_edit.text()
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                try:
-                    cursor.execute('INSERT INTO characters (name, password) VALUES (?, ?)', (name, password))
-                    character_id = cursor.lastrowid
-                    cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
-                    conn.commit()
-                    self.save_last_active_character(character_id)
-                    self.characters.append({'name': name, 'password': password, 'id': character_id})
-                    self.character_list.addItem(QListWidgetItem(name))
-                    logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
-                except sqlite3.Error as e:
-                    logging.error(f"Failed to create character '{name}': {e}")
-                    QMessageBox.critical(self, "Error", f"Failed to create character: {e}")
+
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            try:
+                # Insert the new character into the characters table
+                cursor.execute('''
+                    INSERT INTO characters (name, password) VALUES (?, ?)
+                ''', (name, password))
+                connection.commit()
+
+                # Retrieve the id of the newly inserted character
+                character_id = cursor.lastrowid
+
+                # Insert default coin values for the new character in the coins table
+                cursor.execute('''
+                    INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)
+                ''', (character_id,))
+                connection.commit()
+
+                # Set the new character as the last active character
+                self.save_last_active_character(character_id)
+
+                # Update the character list in the UI
+                self.characters.append({'name': name, 'password': password})
+                self.character_list.addItem(QListWidgetItem(name))
+
+                logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to create character '{name}': {e}")
+            finally:
+                connection.close()
+
         else:
             sys.exit("No characters added. Exiting the application.")
 
@@ -2784,20 +2539,39 @@ class RBCCommunityMap(QMainWindow):
         if dialog.exec():
             name = dialog.name_edit.text()
             password = dialog.password_edit.text()
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                try:
-                    cursor.execute('INSERT INTO characters (name, password) VALUES (?, ?)', (name, password))
-                    character_id = cursor.lastrowid
-                    cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
-                    conn.commit()
-                    self.save_last_active_character(character_id)
-                    self.characters.append({'name': name, 'password': password, 'id': character_id})
-                    self.character_list.addItem(QListWidgetItem(name))
-                    logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
-                except sqlite3.Error as e:
-                    logging.error(f"Failed to add character '{name}': {e}")
-                    QMessageBox.critical(self, "Error", f"Failed to add character: {e}")
+
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            try:
+                # Insert the new character into the characters table
+                cursor.execute('''
+                    INSERT INTO characters (name, password) VALUES (?, ?)
+                ''', (name, password))
+                connection.commit()
+
+                # Retrieve the id of the newly inserted character
+                character_id = cursor.lastrowid
+
+                # Insert default coin values for the new character in the coins table
+                cursor.execute('''
+                    INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)
+                ''', (character_id,))
+                connection.commit()
+
+                # Set the new character as the last active character
+                self.save_last_active_character(character_id)
+
+                # Update the character list in the UI
+                self.characters.append({'name': name, 'password': password})
+                self.character_list.addItem(QListWidgetItem(name))
+
+                logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to add character '{name}': {e}")
+            finally:
+                connection.close()
 
     def modify_character(self):
         """
@@ -2821,7 +2595,9 @@ class RBCCommunityMap(QMainWindow):
                 logging.debug(f"Character {name} modified.")
 
     def delete_character(self):
-        """Delete the selected character from the list."""
+        """
+        Delete the selected character from the list.
+        """
         current_item = self.character_list.currentItem()
         if current_item is None:
             logging.warning("No character selected for deletion.")
@@ -2838,81 +2614,78 @@ class RBCCommunityMap(QMainWindow):
         Save the last active character's ID to the last_active_character table.
         Ensures that only one entry exists, replacing any previous entry.
         """
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.execute("DELETE FROM last_active_character")
-                cursor.execute('INSERT INTO last_active_character (character_id) VALUES (?)', (character_id,))
-                conn.commit()
-                logging.debug(f"Last active character set to character_id: {character_id}")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to save last active character: {e}")
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        try:
+            # Use REPLACE INTO to ensure there's only one entry for the last active character
+            cursor.execute('''
+                REPLACE INTO last_active_character (character_id) VALUES (?)
+            ''', (character_id,))
+
+            connection.commit()
+            logging.debug(f"Last active character set to character_id: {character_id}")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save last active character: {e}")
+        finally:
+            connection.close()
 
     def load_last_active_character(self):
         """
         Load the last active character from the database by character_id and set the selected character for auto-login.
         """
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT character_id FROM last_active_character")
-                result = cursor.fetchone()
-                if result:
-                    character_id = result[0]
-                    self.selected_character = next((char for char in self.characters if char.get('id') == character_id), None)
-                    if self.selected_character:
-                        logging.debug(f"Last active character loaded: {self.selected_character['name']}")
-                        self.login_needed = True
-                        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-                    else:
-                        logging.warning(f"Last active character ID '{character_id}' not found in character list.")
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Retrieve the last active character's ID from the last_active_character table
+            cursor.execute("SELECT character_id FROM last_active_character")
+            result = cursor.fetchone()
+
+            if result:
+                character_id = result[0]
+
+                # Find the character in self.characters by matching 'id'
+                self.selected_character = next((char for char in self.characters if char.get('id') == character_id),
+                                               None)
+
+                if self.selected_character:
+                    logging.debug(f"Last active character loaded: {self.selected_character['name']}")
+                    self.login_needed = True  # Set the flag to indicate login is needed
+                    self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))  # Load the login page
                 else:
-                    logging.warning("No last active character found in the database.")
+                    logging.warning(f"Last active character ID '{character_id}' not found in character list.")
+
+            else:
+                logging.warning("No last active character found in the database.")
+
         except sqlite3.Error as e:
             logging.error(f"Failed to load last active character from database: {e}")
+        finally:
+            connection.close()
 
-# -----------------------
-# Web View Handling
-# -----------------------
-
-    def refresh_webview(self):
-        """Refresh the webview content."""
-        self.website_frame.reload()
-
-    def apply_custom_css(self):
-        """Inject the custom CSS into the webview."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT element, value FROM custom_css")
-                customizations = cursor.fetchall()
-                css_string = "\n".join([f"{element} {{ {value} }}" for element, value in customizations])
-
-            if css_string and hasattr(self, 'website_frame'):
-                logging.info(f"Injecting CSS into webpage:\n{css_string}")
-                self.website_frame.page().runJavaScript(f"""
-                    let styleTag = document.getElementById('custom-css');
-                    if (!styleTag) {{
-                        styleTag = document.createElement('style');
-                        styleTag.id = 'custom-css';
-                        document.head.appendChild(styleTag);
-                    }}
-                    styleTag.innerHTML = `{css_string}`;
-                """)
-                logging.info("Custom CSS injected into webpage.")
-            else:
-                logging.warning("No CSS to apply or website_frame not available.")
-        except sqlite3.Error as e:
-            logging.error(f"Error applying custom CSS: {e}")
+    # -----------------------
+    # Web View Handling
+    # -----------------------
 
     def on_webview_load_finished(self, success):
+        """
+        Handle the event when the webview finishes loading.
+
+        Logs an error and shows a message box if the load fails. If successful, the HTML
+        content is processed to extract coordinates and update the minimap.
+        """
         if not success:
             logging.error("Failed to load the webpage.")
-            QMessageBox.critical(self, "Error", "Failed to load the webpage. Check your network or try again.")
+            QMessageBox.critical(self, "Error",
+                                 "Failed to load the webpage. Please check your network connection or try again later.")
         else:
             logging.info("Webpage loaded successfully.")
+            # Process the HTML if needed
             self.website_frame.page().toHtml(self.process_html)
-            self.apply_custom_css()  # This will now work
+
+            # If login is needed, trigger the login process
             if self.login_needed:
                 logging.debug("Logging in last active character.")
                 self.login_selected_character()
@@ -2941,91 +2714,47 @@ class RBCCommunityMap(QMainWindow):
             # Call the method to extract bank coins and pocket changes from the HTML
             self.extract_coins_from_html(html)
             logging.debug("HTML processed successfully for coordinates and coin count.")
+
+        except Exception as e:
+            logging.error(f"Unexpected error in process_html: {e}")
+
         except Exception as e:
             logging.error(f"Unexpected error in process_html: {e}")
 
     def extract_coordinates_from_html(self, html):
         """
-        Extract coordinates from the HTML content, prioritizing the player's current location.
+        Extract coordinates from the HTML content.
 
         Args:
             html (str): HTML content as a string.
 
         Returns:
-            tuple: x and y coordinates, or (None, None) if not found.
+            tuple: x and y coordinates.
+
+        Parses the HTML using BeautifulSoup to find the input elements that hold the
+        x and y coordinates. Returns these coordinates if found, otherwise returns None.
         """
         soup = BeautifulSoup(html, 'html.parser')
+        x_input = soup.find('input', {'name': 'x'})
+        y_input = soup.find('input', {'name': 'y'})
+        if x_input and y_input:
+            x_value = int(x_input['value'])
+            y_value = int(y_input['value'])
+            logging.debug(f"Extracted coordinates from input fields: x={x_value}, y={y_value}")
+            return x_value, y_value
 
-        logging.debug("Extracting coordinates from HTML...")
+        current_location_td = soup.find('td', {'class': 'street', 'style': 'border: solid 1px white;'})
 
-        # Check for city limits
-        city_limit_cells = soup.find_all('td', class_='cityblock')
-        if city_limit_cells:
-            logging.debug(f"Found {len(city_limit_cells)} city limit blocks.")
+        if current_location_td:
+            form = current_location_td.find('form')
+            if form:
+                x_value = int(form.find('input', {'name': 'x'})['value'])
+                y_value = int(form.find('input', {'name': 'y'})['value'])
+                logging.debug(f"Extracted coordinates from form: x={x_value}, y={y_value}")
+                return x_value, y_value
 
-        # Check for first available coordinates
-        first_x_input = soup.find('input', {'name': 'x'})
-        first_y_input = soup.find('input', {'name': 'y'})
-
-        first_x = int(first_x_input['value']) if first_x_input else None
-        first_y = int(first_y_input['value']) if first_y_input else None
-
-        logging.debug(f"First detected coordinate: x={first_x}, y={first_y}")
-
-        if len(city_limit_cells) >= 4:
-            logging.warning("City limits detected in all four edges. Adjusting coordinates.")
-
-            if first_x is not None and first_y is not None:
-                return -1, -1  # Assign -1,-1 if surrounded by city limits
-            else:
-                return None, None
-
-        # Adjust for Northern Edge (Y=0)
-        if len(city_limit_cells) > 0 and first_y == 0:
-            logging.debug(f"Detected Northern City Limit at y={first_y}")
-            return first_x, -1
-
-        # Adjust for Western Edge (X=0)
-        if len(city_limit_cells) > 0 and first_x == 0:
-            logging.debug(f"Detected Western City Limit at x={first_x}")
-            return -1, first_y
-
-        # If no adjustments, return detected values
-        return first_x, first_y
-
-    def adjust_for_city_limits_with_html(self, x, y, soup):
-        """
-        Adjust coordinates based on city limits in the HTML content.
-
-        Args:
-            x (int): X coordinate.
-            y (int): Y coordinate.
-            soup (BeautifulSoup): Parsed HTML content.
-
-        Returns:
-            tuple: Adjusted x and y coordinates.
-        """
-        logging.debug(f"Adjusting for city limits: Initial x={x}, y={y}")
-
-        # Check if city limits blocks are in the first row
-        city_limits_present = soup.find_all('td', class_='cityblock',
-                                            string=lambda text: text and 'City Limits' in text)
-
-        if city_limits_present:
-            logging.debug(f"Detected city limits in HTML. Adjusting...")
-
-            if x == 0 and y == 0:
-                logging.debug("Detected corner case (0,0). Adjusting to (-1, -1)")
-                return -1, -1
-            elif x == 0:
-                logging.debug(f"Detected west edge at x={x}. Adjusting to (-1, {y})")
-                return -1, y
-            elif y == 0:
-                logging.debug(f"Detected north edge at y={y}. Adjusting to ({x}, -1)")
-                return x, -1
-
-        logging.debug(f"Final adjusted coordinates: x={x}, y={y}")
-        return x, y
+        logging.debug("No coordinates found in the HTML content.")
+        return None, None
 
     def extract_coins_from_html(self, html):
         """
@@ -3039,74 +2768,132 @@ class RBCCommunityMap(QMainWindow):
         and transit coin actions in the HTML content, updating both bank and pocket coins in the
         SQLite database based on character_id.
         """
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            character_id = self.selected_character['id']
-            updates = []
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
 
-            bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
-            if bank_match:
-                bank_coins = int(bank_match.group(1))
-                logging.info(f"Bank coins found: {bank_coins}")
-                updates.append(("UPDATE coins SET bank = ? WHERE character_id = ?", (bank_coins, character_id)))
+        # Get the character ID for the selected character
+        character_id = self.selected_character['id']
 
-            pocket_match = re.search(r"You have (\d+) coins", html)
-            if pocket_match:
-                pocket_coins = int(pocket_match.group(1))
-                logging.info(f"Pocket coins found: {pocket_coins}")
-                updates.append(("UPDATE coins SET pocket = ? WHERE character_id = ?", (pocket_coins, character_id)))
+        # Search for the bank balance line (found by "Welcome to Omnibank")
+        bank_match = re.search(r"Welcome to Omnibank. Your account has (\d+) coins in it.", html)
 
-            deposit_match = re.search(r"You deposit (\d+) coins.", html)
-            if deposit_match:
-                deposit_coins = int(deposit_match.group(1))
-                logging.info(f"Deposit found: {deposit_coins} coins")
-                updates.append(("UPDATE coins SET pocket = pocket - ? WHERE character_id = ?", (deposit_coins, character_id)))
+        # Search for the pocket balance line (found by "You have \d+ coins")
+        pocket_match = re.search(r"You have (\d+) coins", html)
 
-            withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
-            if withdraw_match:
-                withdraw_coins = int(withdraw_match.group(1))
-                logging.info(f"Withdrawal found: {withdraw_coins} coins")
-                updates.append(("UPDATE coins SET pocket = pocket + ? WHERE character_id = ?", (withdraw_coins, character_id)))
+        # Handle bank balance update
+        if bank_match:
+            bank_coins = int(bank_match.group(1))
+            logging.info(f"Bank coins found: {bank_coins}")
 
-            transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
-            if transit_match:
-                coins_in_pocket = int(transit_match.group(1))
-                logging.info(f"Transit found: Pocket coins updated to {coins_in_pocket}")
-                updates.append(("UPDATE coins SET pocket = ? WHERE character_id = ?", (coins_in_pocket, character_id)))
+            # Update the bank coins in the SQLite database
+            cursor.execute('''
+                UPDATE coins 
+                SET bank = ? 
+                WHERE character_id = ?
+            ''', (bank_coins, character_id))
 
-            actions = {
-                'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
-                'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
-                'human': r'You drink the human\'s blood.*You also found (\d+) coins',
-                'bag_of_coins': r'The bag contained (\d+) coins',
-                'robbing': r'You stole (\d+) coins from (\w+)',
-                'silver_suitcase': r'The suitcase contained (\d+) coins',
-                'given_coins': r'(\w+) gave you (\d+) coins',
-                'getting_robbed': r'(\w+) stole (\d+) coins from you'
-            }
+        # Handle pocket coin balance update
+        if pocket_match:
+            pocket_coins = int(pocket_match.group(1))
+            logging.info(f"Pocket coins found: {pocket_coins}")
 
-            for action, pattern in actions.items():
-                match = re.search(pattern, html)
-                if match:
-                    coin_count = int(match.group(1 if action != 'given_coins' else 2))
-                    if action == 'getting_robbed':
-                        vamp_name = match.group(1)
-                        updates.append(("UPDATE coins SET pocket = pocket - ? WHERE character_id = ?", (coin_count, character_id)))
-                        logging.info(f"Lost {coin_count} coins to {vamp_name}.")
-                    else:
-                        updates.append(("UPDATE coins SET pocket = pocket + ? WHERE character_id = ?", (coin_count, character_id)))
-                        logging.info(f"Gained {coin_count} coins from {action}.")
-                    break
+            # Update the pocket coins in the SQLite database
+            cursor.execute('''
+                UPDATE coins 
+                SET pocket = ? 
+                WHERE character_id = ?
+            ''', (pocket_coins, character_id))
 
-            for query, params in updates:
-                cursor.execute(query, params)
-            conn.commit()
-            logging.info(f"Updated coins for character ID {character_id}.")
+        # Handle deposit action (optional, depending on your needs)
+        deposit_match = re.search(r"You deposit (\d+) coins.", html)
+        if deposit_match:
+            deposit_coins = int(deposit_match.group(1))
+            logging.info(f"Deposit found: {deposit_coins} coins")
 
-# -----------------------
-# Minimap Drawing and Update
-# -----------------------
+            # Reduce the pocket coins by the deposited amount
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = pocket - ?
+                WHERE character_id = ?
+            ''', (deposit_coins, character_id))
 
+        # Handle withdrawal action (optional, depending on your needs)
+        withdraw_match = re.search(r"You withdraw (\d+) coins.", html)
+        if withdraw_match:
+            withdraw_coins = int(withdraw_match.group(1))
+            logging.info(f"Withdrawal found: {withdraw_coins} coins")
+
+            # Increase the pocket coins by the withdrawn amount
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = pocket + ?
+                WHERE character_id = ?
+            ''', (withdraw_coins, character_id))
+
+        # Handle transit coin update (optional, depending on your needs)
+        transit_match = re.search(r"It costs 5 coins to ride. You have (\d+).", html)
+        if transit_match:
+            coins_in_pocket = int(transit_match.group(1))
+            logging.info(f"Transit found: Pocket coins updated to {coins_in_pocket}")
+
+            # Explicitly set the pocket coin count after transit
+            cursor.execute('''
+                UPDATE coins
+                SET pocket = ?
+                WHERE character_id = ?
+            ''', (coins_in_pocket, character_id))
+
+        # Handle other coin-related actions (e.g., hunting, robbing, etc.)
+        actions = {
+            'hunter': r'You drink the hunter\'s blood.*You also found (\d+) coins',
+            'paladin': r'You drink the paladin\'s blood.*You also found (\d+) coins',
+            'human': r'You drink the human\'s blood.*You also found (\d+) coins',
+            'bag_of_coins': r'The bag contained (\d+) coins',
+            'robbing': r'You stole (\d+) coins from (\w+)',
+            'silver_suitcase': r'The suitcase contained (\d+) coins',
+            'given_coins': r'(\w+) gave you (\d+) coins',
+            'getting_robbed': r'(\w+) stole (\d+) coins from you'
+        }
+
+        # Handle other coin-related actions (e.g., hunting, robbing, etc.)
+        for action, pattern in actions.items():
+            match = re.search(pattern, html)
+            if match:
+                coin_count = int(match.group(1))
+                if action == 'getting_robbed':
+                    # Losing coins when robbed
+                    vamp_name = match.group(2)
+                    cursor.execute('''
+                        UPDATE coins
+                        SET pocket = pocket - ?
+                        WHERE character_id = ?
+                    ''', (coin_count, character_id))
+                    logging.info(f"Lost {coin_count} coins to {vamp_name}.")
+                else:
+                    # Gaining coins from hunting, robbing, etc.
+                    cursor.execute('''
+                        UPDATE coins
+                        SET pocket = pocket + ?
+                        WHERE character_id = ?
+                    ''', (coin_count, character_id))
+                    logging.info(f"Gained {coin_count} coins from {action}.")
+                break  # Exit loop after first match
+
+        connection.commit()
+        connection.close()
+        logging.info(f"Updated coins for character ID {character_id}.")
+
+    def refresh_webview(self):
+        """
+        Refresh the webview content.
+
+        Reloads the current page displayed in the QWebEngineView.
+        """
+        self.website_frame.reload()
+
+    # -----------------------
+    # Minimap Drawing and Update
+    # -----------------------
     def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations,
@@ -3120,34 +2907,48 @@ class RBCCommunityMap(QMainWindow):
         font_size = max(8, block_size // 4)  # Dynamically adjust font size, with a minimum of 5
         border_size = 1  # Size of the border around each cell
 
+        # Dynamically adjust font size based on block size
         font = painter.font()
         font.setPointSize(font_size)
         painter.setFont(font)
 
+        # Calculate font metrics for centering text
         font_metrics = QFontMetrics(font)
 
-        logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "f"zoom_level={self.zoom_level}, block_size={block_size}")
+        logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "
+                      f"zoom_level={self.zoom_level}, block_size={block_size}")
 
-        def draw_label_box(x, y, width, height, bg_color, text):
+        def draw_location(column_index, row_index, color, label_text=None):
             """
-            Draws a text label box with a background color, white border, and properly formatted text.
+            Draws a location on the minimap with dynamic scaling and border.
+
+            Args:
+                column_index (int): Column index of the location.
+                row_index (int): Row index of the location.
+                color (QColor): Color to fill the location.
+                label_text (str, optional): Label text to draw at the location. Defaults to None.
             """
-            # Draw background
-            painter.fillRect(QRect(x, y, width, height), bg_color)
+            x0 = (column_index - self.column_start) * block_size
+            y0 = (row_index - self.row_start) * block_size
+            logging.debug(f"Drawing location at column_index={column_index}, row_index={row_index}, "
+                          f"x0={x0}, y0={y0}")
 
-            # Draw white border
-            painter.setPen(QColor('white'))
-            painter.drawRect(QRect(x, y, width, height))
+            # Draw a smaller rectangle within the cell
+            inner_margin = block_size // 4
+            painter.fillRect(x0 + inner_margin, y0 + inner_margin,
+                             block_size - 2 * inner_margin, block_size - 2 * inner_margin, color)
 
-            # Set font
-            font = painter.font()
-            font.setPointSize(max(4, min(8, block_size // 4)))  # Keep text readable
-            painter.setFont(font)
+            if label_text:
+                # Calculate bounding box for text centering
+                text_rect = font_metrics.boundingRect(label_text)
+                # Calculate centered position with boundaries
+                text_x = x0 + (block_size - text_rect.width()) // 2
+                text_y = y0 + (block_size + text_rect.height()) // 2 - font_metrics.descent()
 
-            # Draw text (aligned top-center, allowing wrapping)
-            text_rect = QRect(x, y, width, height)
-            painter.setPen(QColor('white'))
-            painter.drawText(text_rect, Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, text)
+                # Define QRect for wrapping within cell size, ensuring center alignment with bounds
+                wrap_rect = QRect(x0, y0, block_size, block_size)
+                painter.setPen(QColor('white'))
+                painter.drawText(wrap_rect, Qt.AlignCenter | Qt.TextWordWrap, label_text)
 
         # Draw the grid
         for i in range(self.zoom_level):
@@ -3156,7 +2957,8 @@ class RBCCommunityMap(QMainWindow):
                 row_index = self.row_start + i
 
                 x0, y0 = j * block_size, i * block_size
-                logging.debug(f"Drawing grid cell at column_index={column_index}, row_index={row_index}, "f"x0={x0}, y0={y0}")
+                logging.debug(f"Drawing grid cell at column_index={column_index}, row_index={row_index}, "
+                              f"x0={x0}, y0={y0}")
 
                 # Draw the cell background
                 painter.setPen(QColor('white'))
@@ -3167,7 +2969,7 @@ class RBCCommunityMap(QMainWindow):
                 row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
 
                 # Draw cell background color
-                if column_index < 1 or column_index > 200 or row_index < 1 or row_index > 200:
+                if column_index <= -1 or column_index >= 201 or row_index <= -1 or row_index >= 201:
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["edge"])
                 elif (column_index % 2 == 1) or (row_index % 2 == 1):
@@ -3177,129 +2979,123 @@ class RBCCommunityMap(QMainWindow):
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
                                      block_size - 2 * border_size, self.color_mappings["default"])
 
-                # Draw intersection labels with background box
+                # Draw labels only at intersections of named streets
                 if column_name and row_name:
                     label_text = f"{column_name} & {row_name}"
-                    label_height = block_size // 3  # Set label height
-                    draw_label_box(x0 + 2, y0 + 2, block_size - 4, label_height, self.color_mappings["intersect"], label_text)
+
+                    # Set the font size dynamically, ensuring it does not exceed the maximum
+                    max_font_size = 8  # Set to desired maximum font size
+                    calculated_font_size = max(4, min(block_size // 3, max_font_size))
+                    font = painter.font()
+                    font.setPointSize(calculated_font_size)
+                    painter.setFont(font)
+
+                    # Define text rectangle and enable word wrapping with center alignment
+                    text_rect = QRect(x0, y0, block_size, block_size)
+                    painter.setPen(QColor('white'))
+                    painter.drawText(text_rect, Qt.AlignCenter | Qt.TextWordWrap, label_text)
 
         # Draw special locations (banks with correct offsets)
         for (col_name, row_name, _, _) in self.banks_coordinates:
             column_index = self.columns.get(col_name)
             row_index = self.rows.get(row_name)
             if column_index is not None and row_index is not None:
+                # Adjust bank coordinates by +1 to match the tavern and transit coordinate system
                 adjusted_column_index = column_index + 1
                 adjusted_row_index = row_index + 1
-                draw_label_box(
-                    (adjusted_column_index - self.column_start) * block_size,
-                    (adjusted_row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["bank"], "BANK"
-                )
+                draw_location(adjusted_column_index, adjusted_row_index, self.color_mappings["bank"], "Bank")
             else:
                 logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
 
-        # Draw other locations without the offset
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_label_box(
-                    (column_index - self.column_start) * block_size,
-                    (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["tavern"], name
-                )
+                draw_location(column_index, row_index, self.color_mappings["tavern"], name)
+            else:
+                logging.warning(f"Skipping tavern '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.transits_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_label_box(
-                    (column_index - self.column_start) * block_size,
-                    (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["transit"], name
-                )
+                draw_location(column_index, row_index, self.color_mappings["transit"], name)
+            else:
+                logging.warning(f"Skipping transit '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_label_box(
-                    (column_index - self.column_start) * block_size,
-                    (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["user_building"], name
-                )
+                draw_location(column_index, row_index, self.color_mappings["user_building"], name)
+            else:
+                logging.warning(f"Skipping user building '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_label_box(
-                    (column_index - self.column_start) * block_size,
-                    (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["shop"], name
-                )
+                draw_location(column_index, row_index, self.color_mappings["shop"], name)
+            else:
+                logging.warning(f"Skipping shop '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_label_box(
-                    (column_index - self.column_start) * block_size,
-                    (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["guild"], name
-                )
+                draw_location(column_index, row_index, self.color_mappings["guild"], name)
+            else:
+                logging.warning(f"Skipping guild '{name}' due to missing coordinates")
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
-                draw_label_box(
-                    (column_index - self.column_start) * block_size,
-                    (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["placesofinterest"], name
-                )
+                draw_location(column_index, row_index, self.color_mappings["placesofinterest"], name)
+            else:
+                logging.warning(f"Skipping place of interest '{name}' due to missing coordinates")
 
-            # Get current location
-            current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
+        # Get current location
+        current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
 
-            # Find and draw lines to nearest locations
-            nearest_tavern = self.find_nearest_tavern(current_x, current_y)
-            nearest_bank = self.find_nearest_bank(current_x, current_y)
-            nearest_transit = self.find_nearest_transit(current_x, current_y)
+        # Find and draw lines to nearest locations
+        nearest_tavern = self.find_nearest_tavern(current_x, current_y)
+        nearest_bank = self.find_nearest_bank(current_x, current_y)
+        nearest_transit = self.find_nearest_transit(current_x, current_y)
 
-            # Draw nearest tavern line
-            if nearest_tavern:
-                nearest_tavern_coords = nearest_tavern[0][1]
-                painter.setPen(QPen(QColor('orange'), 3))
-                painter.drawLine(
-                    (current_x - self.column_start) * block_size + block_size // 2,
-                    (current_y - self.row_start) * block_size + block_size // 2,
-                    (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
-                    (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
-                )
+        # Draw nearest tavern line
+        if nearest_tavern:
+            nearest_tavern_coords = nearest_tavern[0][1]
+            painter.setPen(QPen(QColor('orange'), 3))  # Set pen color to orange and width to 3
+            painter.drawLine(
+                (current_x - self.column_start) * block_size + block_size // 2,
+                (current_y - self.row_start) * block_size + block_size // 2,
+                (nearest_tavern_coords[0] - self.column_start) * block_size + block_size // 2,
+                (nearest_tavern_coords[1] - self.row_start) * block_size + block_size // 2
+            )
 
-            # Draw nearest bank line
-            if nearest_bank:
-                nearest_bank_coords = nearest_bank[0][1]
-                painter.setPen(QPen(QColor('blue'), 3))
-                painter.drawLine(
-                    (current_x - self.column_start) * block_size + block_size // 2,
-                    (current_y - self.row_start) * block_size + block_size // 2,
-                    (nearest_bank_coords[0] - self.column_start) * block_size + block_size // 2,
-                    (nearest_bank_coords[1] - self.row_start) * block_size + block_size // 2
-                )
+        # Draw nearest bank line
+        if nearest_bank:
+            nearest_bank_coords = nearest_bank[0][1]
+            painter.setPen(QPen(QColor('blue'), 3))  # Set pen color to blue and width to 3
+            painter.drawLine(
+                (current_x - self.column_start) * block_size + block_size // 2,
+                (current_y - self.row_start) * block_size + block_size // 2,
+                (nearest_bank_coords[0] + 1 - self.column_start) * block_size + block_size // 2,
+                (nearest_bank_coords[1] + 1 - self.row_start) * block_size + block_size // 2
+            )
 
-            # Draw nearest transit line
-            if nearest_transit:
-                nearest_transit_coords = nearest_transit[0][1]
-                painter.setPen(QPen(QColor('red'), 3))
-                painter.drawLine(
-                    (current_x - self.column_start) * block_size + block_size // 2,
-                    (current_y - self.row_start) * block_size + block_size // 2,
-                    (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
-                    (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
-                )
+        # Draw nearest transit line
+        if nearest_transit:
+            nearest_transit_coords = nearest_transit[0][1]
+            painter.setPen(QPen(QColor('red'), 3))  # Set pen color to red and width to 3
+            painter.drawLine(
+                (current_x - self.column_start) * block_size + block_size // 2,
+                (current_y - self.row_start) * block_size + block_size // 2,
+                (nearest_transit_coords[0] - self.column_start) * block_size + block_size // 2,
+                (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
+            )
 
-            # Draw destination line
-            if self.destination:
-                painter.setPen(QPen(QColor('green'), 3))
-                painter.drawLine(
-                    (current_x - self.column_start) * block_size + block_size // 2,
-                    (current_y - self.row_start) * block_size + block_size // 2,
-                    (self.destination[0] - self.column_start) * block_size + block_size // 2,
-                    (self.destination[1] - self.row_start) * block_size + block_size // 2
-                )
+        # Draw destination line
+        if self.destination:
+            painter.setPen(QPen(QColor('green'), 3))  # Set pen color to green and width to 3
+            painter.drawLine(
+                (current_x - self.column_start) * block_size + block_size // 2,
+                (current_y - self.row_start) * block_size + block_size // 2,
+                (self.destination[0] - self.column_start) * block_size + block_size // 2,
+                (self.destination[1] - self.row_start) * block_size + block_size // 2
+            )
 
-            painter.end()
-            self.minimap_label.setPixmap(pixmap)
+        painter.end()
+        self.minimap_label.setPixmap(pixmap)
 
     def update_minimap(self):
         """
@@ -3307,11 +3103,8 @@ class RBCCommunityMap(QMainWindow):
 
         Calls draw_minimap and then updates the info frame with any relevant information.
         """
-        if not self.is_updating_minimap:
-            self.is_updating_minimap = True
-            self.draw_minimap()
-            self.update_info_frame()
-            self.is_updating_minimap = False
+        self.draw_minimap()
+        self.update_info_frame()
 
     def find_nearest_location(self, x, y, locations):
         """
@@ -3325,7 +3118,11 @@ class RBCCommunityMap(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        distances = [(max(abs(lx - x), abs(ly - y)), (lx, ly)) for lx, ly in locations]
+        distances = []
+        for loc in locations:
+            lx, ly = loc
+            dist = max(abs(lx - x), abs(ly - y))  # Using Chebyshev distance
+            distances.append((dist, (lx, ly)))
         distances.sort()
         return distances
 
@@ -3353,8 +3150,16 @@ class RBCCommunityMap(QMainWindow):
         Returns:
             list: List of distances and corresponding coordinates.
         """
-        valid_banks = [(self.columns.get(col, 0) + 1, self.rows.get(row, 0) + 1) for col, row, _, _ in
-                       self.banks_coordinates]
+        valid_banks = []
+        for col, row, _, _ in self.banks_coordinates:
+            try:
+                col_index = self.columns[col]
+                row_index = self.rows[row]
+            except KeyError:
+                logging.warning(
+                    f"Bank location with column '{col}' and row '{row}' could not be found in the available columns or rows.")
+                continue
+            valid_banks.append((col_index, row_index))
 
         if not valid_banks:
             logging.warning("No valid bank locations found.")
@@ -3376,18 +3181,23 @@ class RBCCommunityMap(QMainWindow):
         return self.find_nearest_location(x, y, list(self.transits_coordinates.values()))
 
     def set_destination(self):
-        """Open the set destination dialog to select a new destination."""
+        """
+        Open the set destination dialog to select a new destination.
+        """
         dialog = set_destination_dialog(self)
-        if dialog.exec() == QDialog.accepted:
+        if dialog.exec() == QDialog.Accepted:
             self.update_minimap()
 
     def get_current_destination(self):
-        """Retrieve the latest destination from the SQLite database."""
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT col, row FROM destinations ORDER BY timestamp DESC LIMIT 1")
-            result = cursor.fetchone()
-            return (result[0], result[1]) if result else None
+        """
+        Retrieve the latest destination from the SQLite database.
+        """
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+        cursor.execute("SELECT col, row FROM destinations ORDER BY timestamp DESC LIMIT 1")
+        result = cursor.fetchone()
+        connection.close()
+        return (result[0], result[1]) if result else None
 
     def load_destination(self):
         """
@@ -3403,86 +3213,67 @@ class RBCCommunityMap(QMainWindow):
             self.destination = None
             logging.info("No destination found in database. Starting with no destination.")
 
-# -----------------------
-# Minimap Controls
-# -----------------------
-
+    # -----------------------
+    # Minimap Controls
+    # -----------------------
     def zoom_in(self):
         """
         Zoom in the minimap, ensuring the character stays centered.
         """
         if self.zoom_level > 3:
-            self.zoom_level -= 2
-            self.zoom_level_changed = True
-            self.save_zoom_level_to_database()
+            self.zoom_level -= 2  # Reduce by 2 to keep zoom levels odd-numbered
             self.website_frame.page().toHtml(self.process_html)
 
     def zoom_out(self):
         """
         Zoom out the minimap, ensuring the character stays centered.
         """
-        if self.zoom_level < 7:
-            self.zoom_level += 2
-            self.zoom_level_changed = True
-            self.save_zoom_level_to_database()
+        if self.zoom_level < 7:  # Adjusted max level to improve readability
+            self.zoom_level += 2  # Increase by 2 to keep zoom levels odd-numbered
             self.website_frame.page().toHtml(self.process_html)
-
-    def save_zoom_level_to_database(self):
-        """Save the current zoom level to the settings table in the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO settings (setting_name, setting_value)
-                    VALUES ('minimap_zoom', ?)
-                    ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
-                """, (self.zoom_level, self.zoom_level))
-                conn.commit()
-                logging.debug(f"Zoom level saved to database: {self.zoom_level}")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to save zoom level to database: {e}")
-
-    def load_zoom_level_from_database(self):
-        """
-        Load the saved zoom level from the settings table in the database.
-        If no value is found, set it to the default (3).
-        """
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                result = cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'minimap_zoom'").fetchone()
-                self.zoom_level = int(result[0]) if result else 3
-                logging.debug(f"Zoom level loaded from database: {self.zoom_level}")
-        except sqlite3.Error as e:
-            self.zoom_level = 3  # Fallback default zoom level
-            logging.error(f"Failed to load zoom level from database: {e}")
 
     def recenter_minimap(self):
         """
-        Recenter the minimap so that the character's location is at the center cell,
-        including visible but non-traversable areas beyond the traversable range.
+        Recenter the minimap so that the character's location is at the center cell.
         """
+        # Ensure character_x and character_y are set
         if not hasattr(self, 'character_x') or not hasattr(self, 'character_y'):
             logging.error("Character position not set. Cannot recenter minimap.")
             return
 
-        logging.debug(f"Before recentering: character_x={self.character_x}, character_y={self.character_y}")
+        # Add an adjustment for character coordinates to ensure alignment
+        adjusted_character_x = self.character_x + 1
+        adjusted_character_y = self.character_y + 1
 
-        # Calculate zoom offset (-1 for 5x5, -2 for 7x7, etc.)
-        zoom_offset = (self.zoom_level - 4) // 2
-        logging.debug(f"Zoom Offset: {zoom_offset}")
+        # Calculate center offset for odd-sized grids (3x3, 5x5, etc.)
+        center_offset = (self.zoom_level - 1) // 2
 
-        self.column_start = max(0, min(self.character_x - zoom_offset, 200 - self.zoom_level))
-        self.row_start = max(0, min(self.character_y - zoom_offset, 200 - self.zoom_level))
+        # Calculate start positions to center the character
+        column_start = adjusted_character_x - center_offset
+        row_start = adjusted_character_y - center_offset
 
-        logging.debug(
-            f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
+        # Clamp start positions to valid grid bounds (-1 to 201)
+        column_start = max(-1, min(column_start, 201 - self.zoom_level))
+        row_start = max(-1, min(row_start, 201 - self.zoom_level))
+
+        # Log the updated values for debugging
+        logging.debug(f"Recentered minimap: character_x={self.character_x}, character_y={self.character_y}, "
+                      f"adjusted_character_x={adjusted_character_x}, adjusted_character_y={adjusted_character_y}, "
+                      f"column_start={column_start}, row_start={row_start}, zoom_level={self.zoom_level}")
+
+        # Update minimap start positions
+        self.column_start = column_start
+        self.row_start = row_start
+
+        # Refresh the minimap
         self.update_minimap()
 
     def go_to_location(self):
         """
         Go to the selected location.
-        Adjusts the minimap's starting column and row based on the selected location from the combo boxes.
+
+        Adjusts the minimap's starting column and row based on the selected location from the combo boxes,
+        then updates the minimap.
         """
         column_name = self.combo_columns.currentText()
         row_name = self.combo_rows.currentText()
@@ -3503,49 +3294,68 @@ class RBCCommunityMap(QMainWindow):
         self.update_minimap()
 
     def mousePressEvent(self, event: QMouseEvent):
-        """Handle mouse clicks on the minimap to recenter it."""
         if event.button() == Qt.MouseButton.LeftButton:
-            # Map global click position to minimap's local coordinates
-            local_position = self.minimap_label.mapFromGlobal(event.globalPosition().toPoint())
-            click_x, click_y = local_position.x(), local_position.y()
+            # Get the click position relative to the screen (as QPointF)
+            global_position = event.globalPosition()
+            click_x, click_y = int(global_position.x()), int(global_position.y())
 
-            # Validate click is within the minimap
-            if 0 <= click_x < self.minimap_label.width() and 0 <= click_y < self.minimap_label.height():
-                # Calculate relative coordinates and block size
+            # Get minimap_label's global geometry
+            minimap_rect = self.minimap_label.geometry()
+            minimap_top_left = self.minimap_label.mapToGlobal(minimap_rect.topLeft())
+            minimap_bottom_right = self.minimap_label.mapToGlobal(minimap_rect.bottomRight())
+
+            minimap_x1, minimap_y1 = minimap_top_left.x(), minimap_top_left.y()
+            minimap_x2, minimap_y2 = minimap_bottom_right.x(), minimap_bottom_right.y()
+
+            # Ensure the click is within the minimap bounds
+            if minimap_x1 <= click_x <= minimap_x2 and minimap_y1 <= click_y <= minimap_y2:
+                # Adjust click position to relative minimap coordinates
+                relative_x = click_x - minimap_x1
+                relative_y = click_y - minimap_y1
+
                 block_size = self.minimap_size // self.zoom_level
-                clicked_column = self.column_start + (click_x // block_size)
-                clicked_row = self.row_start + (click_y // block_size)
-                center_offset = self.zoom_level // 2
-                min_start, max_start = -(self.zoom_level // 2), 201 + (self.zoom_level // 2) - self.zoom_level
-                self.column_start = max(min_start, min(clicked_column - center_offset, max_start))
-                self.row_start = max(min_start, min(clicked_row - center_offset, max_start))
-                logging.debug(f"Click at ({click_x}, {click_y}) -> Cell: ({clicked_column}, {clicked_row})")
-                logging.debug(f"New minimap start: column={self.column_start}, row={self.row_start}")
 
-                # Update the minimap display
+                # Calculate clicked column and row
+                clicked_column = self.column_start + (relative_x + block_size // 2) // block_size
+                clicked_row = self.row_start + (relative_y + block_size // 2) // block_size
+
+                # Debugging logs for click details
+                logging.debug(f"Mouse click within minimap at ({relative_x}, {relative_y})")
+                logging.debug(f"Block size: {block_size}")
+                logging.debug(f"Calculated cell: Column={clicked_column}, Row={clicked_row}")
+
+                # Calculate new minimap center
+                center_offset = self.zoom_level // 2
+                new_column_start = clicked_column - center_offset
+                new_row_start = clicked_row - center_offset
+
+                # Clamp start positions to valid bounds
+                new_column_start = max(min(new_column_start, 201 - self.zoom_level), -1)
+                new_row_start = max(min(new_row_start, 201 - self.zoom_level), -1)
+
+                # Update start positions
+                self.column_start = new_column_start
+                self.row_start = new_row_start
+
+                # Debugging logs for new start positions
+                logging.debug(f"New column_start: {self.column_start}, New row_start: {self.row_start}")
+
+                # Update the minimap
                 self.update_minimap()
             else:
-                logging.debug(f"Click ({click_x}, {click_y}) is outside the minimap bounds.")
-
-
-    def cycle_character(self, direction):
-        """Cycle through characters in the QListWidget."""
-        current_row = self.character_list.currentRow()
-        new_row = (current_row + direction) % self.character_list.count()
-        if new_row < 0:
-            new_row = self.character_list.count() - 1
-        self.character_list.setCurrentRow(new_row)
-        self.on_character_selected(self.character_list.item(new_row))
+                logging.debug(f"Click ({click_x}, {click_y}) is outside minimap bounds.")
 
     def open_set_destination_dialog(self):
         """
         Open the set destination dialog.
-        Opens a dialog that allows the user to set a destination and updates the minimap if confirmed.
+
+        Opens a dialog that allows the user to set a destination. If the user confirms the destination,
+        it loads the destination and updates the minimap.
         """
         dialog = set_destination_dialog(self)
 
         # Execute dialog and check for acceptance
-        if dialog.exec() == QDialog.accepted:
+        if dialog.exec() == QDialog.Accepted:
             # Load the newly set destination from the database
             self.load_destination()
 
@@ -3563,25 +3373,34 @@ class RBCCommunityMap(QMainWindow):
         """
         if destination_coords is None or character_id is None:
             return
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.execute("INSERT INTO recent_destinations (character_id, col, row) VALUES (?, ?, ?)",
-                               (character_id, *destination_coords))
-                cursor.execute("""
-                    DELETE FROM recent_destinations 
-                    WHERE character_id = ? AND id NOT IN (
-                        SELECT id FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10
-                    )
-                """, (character_id, character_id))
-                conn.commit()
-                logging.info(f"Destination {destination_coords} saved for character ID {character_id}.")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to save recent destination: {e}")
 
-# -----------------------
-# Infobar Management
-# -----------------------
+        connection = sqlite3.connect(DB_PATH)
+        cursor = connection.cursor()
+
+        try:
+            # Insert the new destination with character_id
+            cursor.execute("INSERT INTO recent_destinations (character_id, col, row) VALUES (?, ?, ?)",
+                           (character_id, *destination_coords))
+
+            # Keep only the 10 most recent destinations per character
+            cursor.execute("""
+                DELETE FROM recent_destinations 
+                WHERE character_id = ? AND id NOT IN (
+                    SELECT id FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10
+                )
+            """, (character_id, character_id))
+
+            connection.commit()
+            logging.info(
+                f"Destination {destination_coords} saved to recent destinations for character ID {character_id}.")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save recent destination: {e}")
+        finally:
+            connection.close()
+
+    # -----------------------
+    # Infobar Management
+    # -----------------------
 
     def calculate_ap_cost(self, start, end):
         """
@@ -3634,22 +3453,14 @@ class RBCCommunityMap(QMainWindow):
             destination_coords = self.destination
             destination_ap_cost = self.calculate_ap_cost((current_x, current_y), destination_coords)
             destination_intersection = self.get_intersection_name(destination_coords)
-
             # Check for a named place at destination
             place_name = next(
-                (name for name, coords in {
-                    **self.guilds_coordinates,
-                    **self.shops_coordinates,
-                    **self.user_buildings_coordinates,
-                    **self.places_of_interest_coordinates
-                }.items() if coords == destination_coords),
+                (name for name, coords in self.places_of_interest_coordinates.items() if coords == destination_coords),
                 None
             )
-
-            destination_label_text = place_name if place_name else "Set Destination"
+            destination_label_text = f"Set Destination - {place_name}" if place_name else "Set Destination"
             self.destination_label.setText(
-                f"{destination_label_text}\n{destination_intersection} - AP: {destination_ap_cost}"
-            )
+                f"{destination_label_text}\n{destination_intersection} - AP: {destination_ap_cost}")
 
             # Transit-Based AP Cost for Set Destination
             nearest_transit_to_character = self.find_nearest_transit(current_x, current_y)
@@ -3668,13 +3479,11 @@ class RBCCommunityMap(QMainWindow):
                 dest_transit_name = next(
                     name for name, coords in self.transits_coordinates.items() if coords == dest_transit_coords)
 
-                # Update the transit destination label to include destination name
-                destination_name = place_name if place_name else "Set Destination"
+                # Update the transit destination label
                 self.transit_destination_label.setText(
-                    f"{destination_name} - {char_transit_name} to {dest_transit_name}\n"
+                    f"Set Destination - {char_transit_name} to {dest_transit_name}\n"
                     f"{self.get_intersection_name(dest_transit_coords)} - Total AP: {total_ap_via_transit}"
                 )
-
             else:
                 self.transit_destination_label.setText("Transit Route Info Unavailable")
 
@@ -3711,33 +3520,45 @@ class RBCCommunityMap(QMainWindow):
         else:
             return f"{column_name} & {row_name}"
 
-# -----------------------
-# Menu Actions
-# -----------------------
+    # -----------------------
+    # Menu Actions
+    # -----------------------
 
     def open_discord(self):
-        """Open the RBC Discord invite link in the system's default web browser."""
+        """
+        Open the RBC Discord invite link in the system's default web browser.
+        """
         webbrowser.open('https://discord.gg/nwEa8FaTDS')
 
     def open_website(self):
-        """Open the RBC Website in the system's default web browser."""
-        webbrowser.open('https://lollis-home.ddns.net/viewpage.php?page_id=2')
+        """
+        Open the RBC Website in the system's default web browser.
+        """
+        webbrowser.open('http://lollis-home.tailbf7f28.ts.net/viewpage.php?page_id=1')
 
     def show_about_dialog(self):
         """
         Display an "About" dialog with details about the RBC City Map application.
+
+        The dialog includes information about the application version, its purpose,
+        and a brief description of its features.
         """
         QMessageBox.about(self, "About RBC City Map",
                           "RBC City Map Application\n\n"
-                          f"Version {version_number}\n\n"
+                          "Version 0.8.2\n\n"
                           "This application allows you to view the city map of RavenBlack City, "
                           "set destinations, and navigate through various locations.\n\n"
                           "Development team shown in credits.\n\n\n"
-                          "This program is based on the LIAM² app by Leprichaun")
+                          "This program is based on the LIAM\u00B2 app by Leprichaun")
+
+    from PySide6.QtCore import QTimer
 
     def show_credits_dialog(self):
         """
         Display a "Credits" dialog with a list of contributors to the RBC City Map project.
+
+        The credits are presented in a scrolling animation, acknowledging contributions
+        from different individuals for various parts of the project.
         """
         credits_text = (
             "Credits to the team who made this happen:\n\n"
@@ -3746,7 +3567,7 @@ class RBCCommunityMap(QMainWindow):
             "Linux Compatibility: Josh \"Blaskewitts\" Corse, Fern Lovebond\n\n"
             "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n\n\n"
             "Special Thanks:\n\n"
-            "Cain \"Leprechaun\" McBride for the LIAM² program \nthat inspired this program\n\n"
+            "Cain \"Leprichaun\" McBride for the LIAM\u00B2 program \nthat inspired this program\n\n"
             "Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retrieved\n\n"
             "Everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
             "Anders for RBNav and the help along the way\n\n\n\n"
@@ -3758,6 +3579,7 @@ class RBCCommunityMap(QMainWindow):
         credits_dialog.setFixedSize(650, 400)
 
         layout = QVBoxLayout(credits_dialog)
+
         scroll_area = QScrollArea()
         scroll_area.setStyleSheet("background-color: black; border: none;")
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -3768,17 +3590,23 @@ class RBCCommunityMap(QMainWindow):
         credits_label.setStyleSheet("font-size: 18px; color: white; background-color: black;")
         credits_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         credits_label.setWordWrap(True)
+
         scroll_area.setWidget(credits_label)
 
         credits_label.setGeometry(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height())
+
+        # Create and start the scrolling animation
         animation = QPropertyAnimation(credits_label, b"geometry")
-        animation.setDuration(35000)
+        animation.setDuration(35000)  # 30 seconds
         animation.setStartValue(QRect(0, scroll_area.height(), scroll_area.width(), credits_label.sizeHint().height()))
-        animation.setEndValue(QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
+        animation.setEndValue(
+            QRect(0, -credits_label.sizeHint().height(), scroll_area.width(), credits_label.sizeHint().height()))
         animation.setEasingCurve(QEasingCurve.Type.Linear)
 
+        # Close dialog 5 seconds after the animation finishes
         def close_after_delay():
-            QTimer.singleShot(2500, credits_dialog.accept)
+            QTimer.singleShot(2500, credits_dialog.accept)  # Wait 2.5 seconds before closing
+
         animation.finished.connect(close_after_delay)
         animation.start()
 
@@ -3787,10 +3615,12 @@ class RBCCommunityMap(QMainWindow):
     # -----------------------
     # Database Viewer
     # -----------------------
-
     def open_database_viewer(self):
         """
         Open the database viewer to browse and inspect data from the RBC City Map database.
+
+        This method connects to the SQLite database, fetches the data from specified tables,
+        and displays it in a new DatabaseViewer window.
         """
         try:
             # Create a new SQLite database connection every time the viewer is opened
@@ -3799,6 +3629,7 @@ class RBCCommunityMap(QMainWindow):
             # Show the database viewer, passing the new connection
             self.database_viewer = DatabaseViewer(database_connection)
             self.database_viewer.show()
+
         except Exception as e:
             logging.error(f"Error opening Database Viewer: {e}")
             QMessageBox.critical(self, "Error", f"Error opening Database Viewer: {e}")
@@ -3816,43 +3647,15 @@ class RBCCommunityMap(QMainWindow):
         """
         cursor.execute(f"PRAGMA table_info(`{table_name}`)")
         column_names = [col[1] for col in cursor.fetchall()]
+
         cursor.execute(f"SELECT * FROM `{table_name}`")
         data = cursor.fetchall()
+
         return column_names, data
-
-    def generate_custom_css(self):
-        """
-        Generate a complete CSS string from the saved customizations.
-
-        Returns:
-            str: The complete CSS string.
-        """
-        try:
-            connection = sqlite3.connect(DB_PATH)
-            cursor = connection.cursor()
-
-            # Fetch saved customizations
-            cursor.execute("SELECT element, value FROM custom_css")
-            customizations = cursor.fetchall()
-            logging.info("Fetched customizations from database:")
-            for element, value in customizations:
-                logging.info(f"{element}: {value}")
-
-            css_string = "\n".join([f"{element} {{ {value} }}" for element, value in customizations])
-            logging.info("Generated CSS string:")
-            logging.info(css_string)
-
-            return css_string
-        except sqlite3.Error as e:
-            logging.error(f"Error generating custom CSS: {e}")
-            return ""
-        finally:
-            connection.close()
 
 # -----------------------
 # Tools
 # -----------------------
-
 class DatabaseViewer(QMainWindow):
     """
     Main application class for viewing database tables.
@@ -3940,7 +3743,6 @@ class DatabaseViewer(QMainWindow):
 # -----------------------
 # Character Dialog Class
 # -----------------------
-
 class CharacterDialog(QDialog):
     """
     A dialog for adding or modifying a character.
@@ -3995,7 +3797,6 @@ class CharacterDialog(QDialog):
 # -----------------------
 # Theme Customization Dialog
 # -----------------------
-
 class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing the application's theme colors.
@@ -4135,250 +3936,9 @@ class ThemeCustomizationDialog(QDialog):
             f"QLabel {{ color: {text_color}; }}"
         )
 
-class CSSCustomizationDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("CSS Customization")
-        self.setMinimumSize(600, 400)
-        self.parent = parent  # Reference to RBCCommunityMap
-
-        # Initialize database table
-        self.initialize_css_table()
-
-        # Tab widget for organizing sections
-        self.tab_widget = QTabWidget()
-        self.tabs = {}
-
-        # Add tabs with all CSS elements from the website
-        self.add_tab("General", [
-            "BODY", "H1", "DIV", "P", "A", "FORM", "UL", "DIV.spacey", ".head", "DIV.asubhead", "DIV.sb"
-        ])
-        self.add_tab("Tables", [
-            "TD", "TD.cityblock", "TD.intersect", "TD.street", "TD.city", "TABLE.textad", "TABLE.hiscore",
-            "TABLE.hiscore tr:first-child", "TABLE.hiscore tr:not(:first-child) td", "TD.headline", "TD.text",
-            "TD.link", "TABLE.at", "TABLE.at TD", "TABLE.at TD.ahead", "TABLE.battle", "TABLE.battle TD",
-            "TABLE.battle TD.n", "TABLE.battle TD.f", "TABLE.battle TD.e"
-        ])
-        self.add_tab("Text", [
-            "SPAN.intersect", "SPAN.transit", "SPAN.arena", "SPAN.pub", "SPAN.bank", "SPAN.shop",
-            "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy", "SPAN.sever", "SPAN.bind", "SPAN.human",
-            "SPAN.vhuman", "SPAN.phuman", "SPAN.whuman", "SPAN.object", "P.ans", "UL.possessions",
-            ".pansy", ".cloak", ".rich", ".mh"
-        ])
-        self.add_tab("Miscellaneous", [
-            "#mo"
-        ])
-
-        # Control buttons
-        button_layout = QHBoxLayout()
-        self.save_button = QPushButton("Save and Apply")
-        self.save_button.clicked.connect(self.save_and_apply_changes)
-        self.upload_button = QPushButton("Upload CSS File")
-        self.upload_button.clicked.connect(self.upload_css_file)
-        self.clear_button = QPushButton("Clear All Customizations")
-        self.clear_button.clicked.connect(self.clear_all_customizations)
-
-        button_layout.addWidget(self.save_button)
-        button_layout.addWidget(self.upload_button)
-        button_layout.addWidget(self.clear_button)
-
-        # Main layout
-        main_layout = QVBoxLayout(self)
-        main_layout.addWidget(self.tab_widget)
-        main_layout.addLayout(button_layout)
-        self.setLayout(main_layout)
-
-        # Load existing customizations
-        self.load_existing_customizations()
-
-    def initialize_css_table(self):
-        """Initialize the custom_css table in the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS custom_css (
-                        element TEXT PRIMARY KEY,
-                        value TEXT
-                    )
-                """)
-                conn.commit()
-                logging.info("Custom CSS table initialized or verified.")
-        except sqlite3.Error as e:
-            logging.error(f"Error initializing custom_css table: {e}")
-
-    def add_tab(self, title, css_items):
-        """Add a new tab for a specific category of CSS customizations."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-
-        for item in css_items:
-            item_layout = QHBoxLayout()
-
-            label = QLabel(item)
-            label.setFixedWidth(200)  # Increased width to accommodate longer selectors
-
-            # Preview square
-            preview_label = QLabel()
-            preview_label.setFixedSize(50, 20)
-            preview_label.setStyleSheet("border: 1px solid black;")
-
-            color_button = QPushButton("Pick Color")
-            color_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_color(i, p))
-
-            image_button = None
-            if "TD" in item or "TABLE" in item or "DIV" in item:  # Add image picker for elements that typically use backgrounds
-                image_button = QPushButton("Pick Image")
-                image_button.clicked.connect(lambda _, i=item, p=preview_label: self.pick_image(i, p))
-                item_layout.addWidget(image_button)
-
-            item_layout.addWidget(label)
-            item_layout.addWidget(preview_label)
-            item_layout.addWidget(color_button)
-
-            layout.addLayout(item_layout)
-
-        layout.addStretch()
-        tab.setLayout(layout)
-        self.tab_widget.addTab(tab, title)
-        self.tabs[title] = tab
-
-    def pick_color(self, css_item, preview_label):
-        """Open a color picker dialog for a specific CSS item."""
-        color = QColorDialog.getColor()
-        if color.isValid():
-            value = f"background-color: {color.name()};"
-            self.save_css_item(css_item, value)
-            preview_label.setStyleSheet(f"background-color: {color.name()}; border: 1px solid black;")
-            logging.info(f"Selected color {color.name()} for {css_item}")
-
-    def pick_image(self, css_item, preview_label):
-        """Open a file dialog to select an image for a specific CSS item."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image File", "", "Images (*.png *.jpg *.jpeg *.bmp)")
-        if file_path:
-            value = f"background-image: url('file:///{file_path}'); background-size: cover;"
-            self.save_css_item(css_item, value)
-            preview_label.setStyleSheet(value)
-            logging.info(f"Selected image {file_path} for {css_item}")
-
-    def save_css_item(self, css_item, value):
-        """Save the customization for a specific CSS item to the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT OR REPLACE INTO custom_css (element, value)
-                    VALUES (?, ?)
-                """, (css_item, value))
-                conn.commit()
-                logging.info(f"Saved CSS item '{css_item}' with value '{value}' to database.")
-        except sqlite3.Error as e:
-            logging.error(f"Error saving CSS item: {e}")
-
-    def load_existing_customizations(self):
-        """Load existing CSS customizations and update UI preview labels."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT element, value FROM custom_css")
-                customizations = cursor.fetchall()
-
-            for element, value in customizations:
-                for tab_title, tab_widget in self.tabs.items():
-                    layout = tab_widget.layout()
-                    for i in range(layout.count()):
-                        item_layout = layout.itemAt(i)
-                        if item_layout and item_layout.layout() is not None:  # Check if it's a layout
-                            sub_layout = item_layout.layout()
-                            label = sub_layout.itemAt(0).widget()
-                            preview = sub_layout.itemAt(1).widget()
-                            if label.text() == element:
-                                preview.setStyleSheet(value)
-                                break
-            logging.info(f"Loaded {len(customizations)} existing CSS customizations.")
-        except sqlite3.Error as e:
-            logging.error(f"Error loading customizations: {e}")
-
-    def save_and_apply_changes(self):
-        """Save changes and apply CSS to the webview."""
-        logging.info("Saving and applying CSS customizations...")
-        self.generate_custom_css()  # Ensure CSS is saved to the database
-        self.apply_custom_css()  # Call the updated method without passing custom_css
-        if self.parent:
-            self.parent.website_frame.reload()
-        self.accept()
-        logging.info("CSS customizations saved and applied.")
-
-    def apply_custom_css(self, css=None):
-        """Inject the custom CSS into the webview via the parent."""
-        if self.parent:
-            self.parent.apply_custom_css()  # Call parent's method
-        else:
-            logging.error("Parent not available. Cannot apply CSS.")
-
-    def generate_custom_css(self):
-        """Generate a complete CSS string from saved customizations."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT element, value FROM custom_css")
-                customizations = cursor.fetchall()
-                css_string = "\n".join([f"{element} {{ {value} }}" for element, value in customizations])
-                return css_string
-        except sqlite3.Error as e:
-            logging.error(f"Error generating custom CSS: {e}")
-            return ""
-
-    def upload_css_file(self):
-        """Upload an external CSS file and apply it."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select CSS File", "", "CSS Files (*.css)")
-        if file_path:
-            try:
-                with open(file_path, "r") as file:
-                    css_content = file.read()
-
-                # Parse CSS into individual rules
-                rules = re.findall(r'([^{]+){([^}]+)}', css_content, re.DOTALL)
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    for selector, properties in rules:
-                        selector = selector.strip()
-                        value = properties.strip()
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO custom_css (element, value)
-                            VALUES (?, ?)
-                        """, (selector, value))
-                    conn.commit()
-
-                self.load_existing_customizations()
-                self.apply_custom_css(css_content)
-                if self.parent:
-                    self.parent.website_frame.reload()
-                logging.info(f"Uploaded and applied CSS file: {file_path}")
-            except Exception as e:
-                logging.error(f"Error uploading CSS file: {e}")
-                QMessageBox.critical(self, "Error", f"Failed to upload CSS file: {e}")
-
-    def clear_all_customizations(self):
-        """Clear all saved CSS customizations."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM custom_css")
-                conn.commit()
-            self.load_existing_customizations()
-            self.apply_custom_css("")
-            if self.parent:
-                self.parent.website_frame.reload()
-            logging.info("All CSS customizations cleared.")
-        except sqlite3.Error as e:
-            logging.error(f"Error clearing customizations: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to clear customizations: {e}")
-
 # -----------------------
 # AVITD Scraper Class
 # -----------------------
-
 class AVITDScraper:
     """
     A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
@@ -4395,7 +3955,7 @@ class AVITDScraper:
         }
 
         # Set up logging
-        logging.basicConfig(level=logging.debug, format='%(asctime)s - %(levelname)s - %(message)s')
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
         logging.info("AVITDScraper initialized.")
 
     def scrape_guilds_and_shops(self):
@@ -4536,63 +4096,25 @@ class AVITDScraper:
 
         cursor = self.connection.cursor()
 
-        # Step 1: Set all entries' Row and Column to 'NA', except Peacekeeper's Missions for guilds
+        # Step 1: Set all entries' Row and Column to 'NA' initially
         try:
-            logging.debug(
-                f"Setting all {table} entries' Row and Column to 'NA', except Peacekeeper's Missions for guilds.")
-            if table == "guilds":
-                cursor.execute(f"""
-                    UPDATE {table}
-                    SET `Column`='NA', `Row`='NA', `next_update`=?
-                    WHERE Name NOT LIKE 'Peacekkeepers Mission%'
-                """, (next_update,))
-            else:  # If updating 'shops', clear all without exception
-                cursor.execute(f"""
-                    UPDATE {table}
-                    SET `Column`='NA', `Row`='NA', `next_update`=?
-                """, (next_update,))
+            logging.debug(f"Setting all {table} entries' Row and Column to 'NA'.")
+            cursor.execute(f"UPDATE {table} SET `Column`='NA', `Row`='NA', `next_update`=?", (next_update,))
         except sqlite3.Error as e:
             logging.error(f"Failed to reset {table} entries to 'NA': {e}")
             return
 
-        # Step 2: Insert or update entries, excluding Peacekeeper's Missions in shops
+        # Step 2: Update with the correct data from the scraped results
         for name, column, row in data:
-            if table == "shops" and "Peacekkeepers Mission" in name:
-                logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
-                continue  # Skip Peacekeeper's Missions when updating shops
-
             try:
                 logging.debug(
                     f"Updating {table} entry: Name={name}, Column={column}, Row={row}, Next Update={next_update}")
-                cursor.execute(f"""
-                    INSERT INTO {table} (Name, `Column`, `Row`, `next_update`)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(Name) DO UPDATE SET
-                        `Column`=excluded.`Column`,
-                        `Row`=excluded.`Row`,
-                        `next_update`=excluded.`next_update`
-                """, (name, column, row, next_update))
+                cursor.execute(
+                    f"UPDATE {table} SET `Column`=?, `Row`=?, `next_update`=? WHERE `Name`=?",
+                    (column, row, next_update, name)
+                )
             except sqlite3.Error as e:
                 logging.error(f"Failed to update {table} entry '{name}': {e}")
-
-        # Step 3: Ensure Peacekeeper’s Missions Always Remain in Guilds Table Only
-        if table == "guilds":
-            try:
-                logging.debug("Ensuring Peacekeeper's Mission locations remain constant in guilds table.")
-                cursor.executemany("""
-                    INSERT INTO guilds (Name, `Column`, `Row`, `next_update`)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(Name) DO UPDATE SET
-                        `Column`=excluded.`Column`,
-                        `Row`=excluded.`Row`,
-                        `next_update`=excluded.`next_update`
-                """, [
-                    ("Peacekkeepers Mission 1", "Emerald", "67th", next_update),
-                    ("Peacekkeepers Mission 2", "Unicorn", "33rd", next_update),
-                    ("Peacekkeepers Mission 3", "Emerald", "33rd", next_update),
-                ])
-            except sqlite3.Error as e:
-                logging.error(f"Failed to persist Peacekeeper's Missions in guilds: {e}")
 
         self.connection.commit()
         cursor.close()
@@ -4609,7 +4131,6 @@ class AVITDScraper:
 # -----------------------
 # Set Destination Dialog
 # -----------------------
-
 class set_destination_dialog(QDialog):
     """
     A dialog for setting a destination on the map.
@@ -4792,7 +4313,7 @@ class set_destination_dialog(QDialog):
 
         # Reload data from the SQLite database
         try:
-            updated_data = load_data(DB_PATH)
+            updated_data = load_data()
             self.parent.columns, self.parent.rows, self.parent.banks_coordinates, \
                 self.parent.taverns_coordinates, self.parent.transits_coordinates, \
                 self.parent.user_buildings_coordinates, self.parent.color_mappings, \
@@ -4977,23 +4498,6 @@ class set_destination_dialog(QDialog):
         logging.warning("No valid destination selected.")
         return None
 
-    def set_external_destination(self, col, row, guild_name):
-        """Set a destination externally and update the UI accordingly."""
-        logging.info("External destination set: %s at (%s, %s)", guild_name, col, row)
-
-        # Store the destination internally
-        self.external_destination = (col, row, guild_name)
-
-        # Ensure the destination is recognized properly
-        self.recent_destinations_dropdown.clear()
-        self.recent_destinations_dropdown.addItem(f"{guild_name} - {col}, {row}", (col, row))
-
-        # Ensure it gets selected
-        self.recent_destinations_dropdown.setCurrentIndex(1)
-
-        # Enable the Set Destination button
-        self.set_destination()
-
     def show_error_dialog(self, title, message):
         # Create a dialog box to display the error message
         error_dialog = QDialog(self)
@@ -5016,7 +4520,6 @@ class set_destination_dialog(QDialog):
 # -----------------------
 # Shopping list Tools
 # -----------------------
-
 class ShoppingListTool(QMainWindow):
     def __init__(self, character_name, DB_PATH):
         """
@@ -5149,15 +4652,16 @@ class ShoppingListTool(QMainWindow):
 
     def populate_shop_dropdown(self):
         """
-        Populate the shop dropdown with available shops from the SQLite database.
+        Populate the shop dropdown with available shops from the MySQL database.
         """
         try:
             self.sqlite_cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
             shops = self.sqlite_cursor.fetchall()
             for shop in shops:
                 self.shop_combobox.addItem(shop[0])
-        except sqlite3.Error as err:
+        except pymysql.MySQLError as err:
             print(f"Error fetching shop names: {err}")
+
     def load_items(self):
         """
         Load items from the selected shop and charisma level into the available items list.
@@ -5271,7 +4775,6 @@ class ShoppingListTool(QMainWindow):
 # -----------------------
 # Damage Calculator Tool
 # -----------------------
-
 class DamageCalculator(QDialog):
     def __init__(self, db_connection):
         super().__init__()
@@ -5396,199 +4899,115 @@ class DamageCalculator(QDialog):
 # -----------------------
 # Powers Reference Tool
 # -----------------------
-
 class PowersDialog(QDialog):
-    def __init__(self, parent, character_x, character_y, DB_PATH):
-        """Initialize the PowersDialog with character coordinates and SQLite connection."""
-        super().__init__(parent)
+    def __init__(self):
+        """
+        Initialize the PowersDialog with an SQLite connection using the global DB_PATH.
+        """
+        super().__init__()
         self.setWindowTitle("Powers Information")
         self.setMinimumSize(600, 400)
-        self.parent = parent  # Reference to RBCCommunityMap
-        self.character_x = character_x
-        self.character_y = character_y
-        self.DB_PATH = DB_PATH
 
-        logging.debug("Initializing PowersDialog with coordinates: (%d, %d)", character_x, character_y)
-
-        # SQLite connection
+        # Establish SQLite connection using the global DB_PATH
         self.db_connection = sqlite3.connect(DB_PATH)
 
-        # Main layout
+        # Layout setup
         main_layout = QHBoxLayout(self)
 
-        # Left panel: Powers list
+        # Left panel: List of powers
         self.powers_list = QListWidget()
         self.powers_list.itemClicked.connect(self.load_power_info)
         main_layout.addWidget(self.powers_list)
 
-        # Right panel: Details
+        # Right panel: Power details
         self.details_panel = QVBoxLayout()
-        self.power_name_label = self.create_labeled_field("Power")
-        self.guild_label = self.create_labeled_field("Guild")
-        self.cost_label = self.create_labeled_field("Cost")
-        self.quest_info_text = self.create_labeled_field("Quest Info", QTextEdit)
-        self.skill_info_text = self.create_labeled_field("Skill Info", QTextEdit)
 
-        self.set_destination_button = QPushButton("Set Destination")
-        self.set_destination_button.setEnabled(False)
-        self.set_destination_button.clicked.connect(self.set_destination)
-        self.details_panel.addWidget(self.set_destination_button)
+        # Power name
+        self.power_name_label = QLabel("<b>Power:</b>")
+        self.details_panel.addWidget(self.power_name_label)
+
+        # Guild
+        self.guild_label = QLabel("<b>Guild:</b>")
+        self.details_panel.addWidget(self.guild_label)
+
+        # Cost
+        self.cost_label = QLabel("<b>Cost:</b>")
+        self.details_panel.addWidget(self.cost_label)
+
+        # Quest information
+        self.quest_info_text = QTextEdit()
+        self.quest_info_text.setReadOnly(True)
+        self.details_panel.addWidget(QLabel("<b>Quest Info:</b>"))
+        self.details_panel.addWidget(self.quest_info_text)
+
+        # Skill information
+        self.skill_info_text = QTextEdit()
+        self.skill_info_text.setReadOnly(True)
+        self.details_panel.addWidget(QLabel("<b>Skill Info:</b>"))
+        self.details_panel.addWidget(self.skill_info_text)
 
         main_layout.addLayout(self.details_panel)
+
+        # Load all powers into the list
         self.load_powers()
 
-    def create_labeled_field(self, label_text, widget_type=QLabel):
-        """Helper to create a labeled field with a widget."""
-        layout = self.details_panel
-        label = QLabel(f"<b>{label_text}:</b>")
-        widget = widget_type()
-        if isinstance(widget, QTextEdit):
-            widget.setReadOnly(True)
-        layout.addWidget(label)
-        layout.addWidget(widget)
-        return widget
-
     def load_powers(self):
-        """Load all powers from the database into the list widget."""
+        """
+        Load all powers from the SQLite database and populate the list widget.
+        """
         try:
-            with self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute("SELECT power_id, name FROM powers ORDER BY name ASC")
-                powers = cursor.fetchall()
-            logging.debug("Loaded %d powers from database.", len(powers))
+            cursor = self.db_connection.cursor()
+            cursor.execute("SELECT power_id, name FROM powers ORDER BY name ASC")
+            powers = cursor.fetchall()
+            cursor.close()
+
+            # Populate the powers list
             for power_id, name in powers:
                 self.powers_list.addItem(name)
+
         except sqlite3.Error as e:
-            logging.error("Failed to load powers: %s", e)
-            QMessageBox.critical(self, "Database Error", f"Failed to load powers:\n{e}")
+            QMessageBox.critical(self, "Database Error", f"Failed to load powers from the database:\n{e}")
 
     def load_power_info(self, item):
-        """Load and display detailed information for the selected power."""
-        power_name = item.text()
-        logging.debug("Loading info for power: %s", power_name)
+        """
+        Load detailed information for the selected power and display it.
+
+        Args:
+            item: The selected QListWidgetItem containing the power's name.
+        """
         try:
-            with self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute(
-                    "SELECT name, guild, cost, quest_info, skill_info FROM powers WHERE name = ?",
-                    (power_name,)
-                )
-                power_details = cursor.fetchone()
+            power_name = item.text()
+            cursor = self.db_connection.cursor()
 
-                guild_location = None
-                if power_details and power_details[1]:
-                    name, guild, cost, quest_info, skill_info = power_details
-                    if power_name == "Battle Cloak":
-                        self.enable_nearest_peacekeeper_mission()
-                    else:
-                        cursor.execute("SELECT `Column`, `Row` FROM guilds WHERE Name = ?", (guild,))
-                        guild_location = cursor.fetchone()
+            # Query for the power's details
+            cursor.execute(
+                """
+                SELECT name, guild, cost, quest_info, skill_info
+                FROM powers
+                WHERE name = ?
+                """, (power_name,)
+            )
+            power_details = cursor.fetchone()
+            cursor.close()
 
+            # Update the UI with the fetched details
             if power_details:
                 name, guild, cost, quest_info, skill_info = power_details
-                logging.debug("Power details: %s, Guild: %s, Cost: %s", name, guild, cost)
                 self.power_name_label.setText(f"<b>Power:</b> {name}")
                 self.guild_label.setText(f"<b>Guild:</b> {guild}")
                 self.cost_label.setText(f"<b>Cost:</b> {cost} coins" if cost else "<b>Cost:</b> Unknown")
-                self.quest_info_text.setPlainText(quest_info or "None")
-                self.skill_info_text.setPlainText(skill_info or "None")
-
-                if guild_location and guild_location[0] != "NA" and guild_location[1] != "NA":
-                    logging.debug("Guild location: %s at (%s, %s)", guild, *guild_location)
-                    self.configure_destination_button(guild, *guild_location)
-                elif power_name != "Battle Cloak":
-                    logging.debug("Guild location not found or unknown.")
-                    self.set_destination_button.setEnabled(False)
+                self.quest_info_text.setPlainText(quest_info if quest_info else "None")
+                self.skill_info_text.setPlainText(skill_info if skill_info else "None")
             else:
-                logging.warning("No details for power: %s", power_name)
                 QMessageBox.warning(self, "Not Found", f"No details found for '{power_name}'.")
+
         except sqlite3.Error as e:
-            logging.error("Failed to load power details: %s", e)
             QMessageBox.critical(self, "Database Error", f"Failed to load power details:\n{e}")
 
-    def enable_nearest_peacekeeper_mission(self):
-        """Enable the Set Destination button with the nearest Peacekeeper's Mission."""
-        try:
-            with self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute(
-                    "SELECT c.`Coordinate`, r.`Coordinate` FROM `columns` c JOIN `rows` r "
-                    "WHERE (c.`Name` = 'Emerald' AND r.`Name` IN ('67th', '33rd')) "
-                    "OR (c.`Name` = 'Unicorn' AND r.`Name` = '33rd')"
-                )
-                missions = cursor.fetchall()
-            if not missions:
-                logging.warning("No Peacekeeper's Mission locations found.")
-                return
-
-            closest_mission = min(missions, key=lambda m: max(abs(m[0] - self.character_x), abs(m[1] - self.character_y)))
-            logging.debug("Nearest Peacekeeper's Mission at (%d, %d)", *closest_mission)
-            self.configure_destination_button("Peacekeeper's Mission", *closest_mission)
-        except sqlite3.Error as e:
-            logging.error("Database error in enable_nearest_peacekeeper_mission: %s", e)
-
-    def configure_destination_button(self, guild, col, row):
-        """Configure the Set Destination button with guild location properties."""
-        self.set_destination_button.setEnabled(col != "NA" and row != "NA")
-        self.set_destination_button.setProperty("guild", guild)
-        self.set_destination_button.setProperty("Column", col)
-        self.set_destination_button.setProperty("Row", row)
-
-    def set_destination(self):
-        """Set the destination directly in the database and refresh the minimap."""
-        guild = self.set_destination_button.property("guild")
-        col = self.set_destination_button.property("Column")
-        row = self.set_destination_button.property("Row")
-
-        logging.debug("Directly setting destination: %s at (%s, %s)", guild, col, row)
-
-        if not guild or col == "NA" or row == "NA":
-            logging.warning("Cannot set destination: Unknown location.")
-            QMessageBox.warning(self, "Error", "This guild's location is unknown.")
-            return
-
-        if not self.parent.selected_character:
-            logging.warning("No character selected. Cannot set destination.")
-            return
-
-        character_id = self.parent.selected_character['id']
-        connection = sqlite3.connect(self.DB_PATH)
-        cursor = connection.cursor()
-
-        try:
-            # Check if the destination already exists
-            cursor.execute("SELECT id FROM destinations WHERE character_id = ?", (character_id,))
-            existing_destination = cursor.fetchone()
-
-            if existing_destination:
-                cursor.execute('''
-                    UPDATE destinations
-                    SET col = ?, row = ?, timestamp = datetime('now')
-                    WHERE character_id = ?
-                ''', (col, row, character_id))
-            else:
-                cursor.execute('''
-                    INSERT INTO destinations (character_id, col, row, timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                ''', (character_id, col, row))
-
-            connection.commit()
-            logging.info("Database updated: Destination set for character %d at (%d, %d)", character_id, col, row)
-
-            # Immediately update the minimap
-            self.parent.destination = (col, row)
-            self.parent.update_minimap()
-
-            QMessageBox.information(self, "Destination Set", f"Minimap destination set to {guild} at ({col}, {row})")
-
-        except sqlite3.Error as e:
-            logging.error("Failed to set destination in database: %s", e)
-            QMessageBox.critical(self, "Database Error", f"Failed to set destination:\n{e}")
-        finally:
-            connection.close()
-
     def closeEvent(self, event):
-        """Close the SQLite database connection when the dialog closes."""
+        """
+        Ensure the SQLite database connection is closed when the dialog is closed.
+        """
         if self.db_connection:
             self.db_connection.close()
         event.accept()
