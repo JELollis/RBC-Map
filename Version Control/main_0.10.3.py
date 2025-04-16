@@ -239,7 +239,7 @@ def ensure_directories_exist():
     for directory in required_dirs:
         os.makedirs(directory, exist_ok=True)
         logging.debug(f"Ensured directory exists: {directory}")
-
+ensure_directories_exist()
 # -----------------------
 # Logging Setup
 # -----------------------
@@ -270,7 +270,7 @@ logging.info(f"Launching app version {version_number}")
 # -----------------------
 
 # Local Database path
-DB_PATH = 'sessions/rbc_map_data.db'
+DB_PATH = '../testing/sessions/rbc_map_data.db'
 
 def initialize_database(DB_PATH):
     """Initialize the SQLite database with the required schema and data."""
@@ -1440,7 +1440,6 @@ COMMIT;
     connection.close()
 
 # Call database initialization
-ensure_directories_exist()  # Call before logging setup to ensure logs directory exists
 initialize_database(DB_PATH)
 
 # -----------------------
@@ -1692,7 +1691,7 @@ class RBCCommunityMap(QMainWindow):
         self.login_needed = True
 
         # Set up the main window properties
-        self.setWindowIcon(QIcon('images/favicon.ico'))
+        self.setWindowIcon(QIcon('../testing/images/favicon.ico'))
         self.setWindowTitle('RBC Community Map')
         self.setGeometry(100, 100, 1200, 800)
 
@@ -2109,7 +2108,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Load images for back, forward, and refresh buttons
         back_button = QPushButton()
-        back_button.setIcon(QIcon('./images/back.png'))
+        back_button.setIcon(QIcon('../testing/images/back.png'))
         back_button.setIconSize(QSize(30, 30))
         back_button.setFixedSize(30, 30)
         back_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2117,7 +2116,7 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(back_button)
 
         forward_button = QPushButton()
-        forward_button.setIcon(QIcon('images/forward.png'))
+        forward_button.setIcon(QIcon('../testing/images/forward.png'))
         forward_button.setIconSize(QSize(30, 30))
         forward_button.setFixedSize(30, 30)
         forward_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2125,7 +2124,7 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(forward_button)
 
         refresh_button = QPushButton()
-        refresh_button.setIcon(QIcon('images/refresh.png'))
+        refresh_button.setIcon(QIcon('../testing/images/refresh.png'))
         refresh_button.setIconSize(QSize(30, 30))
         refresh_button.setFixedSize(30, 30)
         refresh_button.setStyleSheet("background-color: transparent; border: none;")
@@ -5713,7 +5712,7 @@ def main():
     Main function to run the RBC City Map Application.
     """
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon('./images/favicon.ico'))  # Set the global favicon
+    app.setWindowIcon(QIcon('../testing/images/favicon.ico'))  # Set the global favicon
     window = RBCCommunityMap()
     sys.exit(app.exec())
 

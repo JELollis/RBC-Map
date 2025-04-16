@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.11.1
+# Filename: main_0.11.0
 
 """
 ======================
@@ -23,7 +23,7 @@ limitations under the License.
 
 """
 =================================
-RBC City Map Application (v0.11.1)
+RBC City Map Application (v0.11.0)
 =================================
 This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
 (set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
@@ -53,7 +53,7 @@ Modules Used:
 - **logging**: Captures logs, errors, and system events.
 
 ================================
-Classes and Methods (v0.11.1)
+Classes and Methods (v0.11.0)
 ================================
 
 #### RBCCommunityMap (Core Application)
@@ -219,7 +219,8 @@ def check_and_install_modules(modules: dict[str, str]) -> bool:
     else:
         # Use GUI prompt if PySide6 is partially available
         app = QApplication(sys.argv)  # Minimal app for QMessageBox
-        response = QMessageBox.question(None, "Missing Modules",f"Missing modules: {', '.join(missing_modules)}\n\nInstall with pip ({', '.join(set(pip_installable))})?",
+        response = QMessageBox.question(None, "Missing Modules",
+                                        f"Missing modules: {', '.join(missing_modules)}\n\nInstall with pip ({', '.join(set(pip_installable))})?",
                                         QMessageBox.Yes | QMessageBox.No)
         if response == QMessageBox.No:
             print("Please install the missing modules manually with:")
@@ -279,13 +280,13 @@ import sqlite3
 # Global Constants
 # -----------------------
 # Database Path
-DB_PATH = 'sessions/rbc_map_data.db'
+DB_PATH = '../testing/sessions/rbc_map_data.db'
 
 # Logging Configuration
-LOG_DIR = 'logs'
+LOG_DIR = '../testing/logs'
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
 LOG_LEVEL = logging.DEBUG
-VERSION_NUMBER = "0.11.1"
+VERSION_NUMBER = "0.11.0"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
@@ -428,7 +429,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
             type TEXT NOT NULL,
             color TEXT NOT NULL
         )""",
-        """CREATE TABLE IF NOT EXISTS `columns` (
+        """CREATE TABLE IF NOT EXISTS columns (
             ID INTEGER PRIMARY KEY,
             Name TEXT NOT NULL,
             Coordinate INTEGER NOT NULL
@@ -442,16 +443,6 @@ def create_tables(conn: sqlite3.Connection) -> None:
             expiration TEXT,
             secure INTEGER,
             httponly INTEGER
-        )""",
-        """CREATE TABLE IF NOT EXISTS css_profiles (
-                    profile_name TEXT PRIMARY KEY
-                )""",
-        """CREATE TABLE IF NOT EXISTS custom_css (
-            profile_name TEXT NOT NULL,
-            element TEXT NOT NULL,
-            value TEXT NOT NULL,
-            PRIMARY KEY (profile_name, element),
-            FOREIGN KEY (profile_name) REFERENCES css_profiles(profile_name) ON DELETE CASCADE
         )""",
         """CREATE TABLE IF NOT EXISTS destinations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -494,7 +485,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
         )""",
-        """CREATE TABLE IF NOT EXISTS `rows` (
+        """CREATE TABLE IF NOT EXISTS rows (
             ID INTEGER PRIMARY KEY,
             Name TEXT NOT NULL,
             Coordinate INTEGER NOT NULL
@@ -551,10 +542,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
     cursor = conn.cursor()
     initial_data = [
-        ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
-            ('keybind_config', 1),
-            ('css_profile', 'Default')
-        ]),
+        ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [('keybind_config', 1)]),
         ("INSERT OR IGNORE INTO banks (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Aardvark','82nd','OmniBank'),
             (2,'Alder','40th','OmniBank'),
@@ -774,9 +762,31 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (14, 'button_color', '#b1b1b1'),
             (15, 'cityblock', '#0000dd'),
             (16, 'intersect', '#008800'),
-            (17, 'street', '#444444')
+            (17, 'street', '#444444'),
+            (18, 'human_bg', 'black'),
+            (19, 'vhuman_bg', 'black'),
+            (20, 'phuman_bg', 'black'),
+            (21, 'whuman_bg', 'black'),
+            (22, 'object_color', 'yellow'),
+            (23, 'mo_bg', 'yellow'),
+            (24, 'textad_bg', '#002211'),
+            (25, 'hiscore_border', '#668877'),
+            (26, 'hiscore_first_row', '#004400'),
+            (27, 'table_at_bg', '#333333'),
+            (28, 'sb_bg', '#555533'),
+            (29, 'set_destination', '#1a7f7a'),
+            (30, 'set_destination_transit', '#046380'),
+            (31, 'headline_text', '#ff0000'),
+            (32, 'link_text', '#999999'),
+            (33, 'table_border', 'white'),
+            (34, 'battle_border', 'none'),
+            (35, 'pansy', '#ff8888'),
+            (36, 'cloak', '#00ffff'),
+            (37, 'rich', '#ffff44'),
+            (38, 'mh_bg', 'transparent'),
+            (39, 'mh_text', 'white')
         ]),
-        ("INSERT OR IGNORE INTO `columns` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
+        ("INSERT OR IGNORE INTO columns (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'WCL', '0'),
             ('2', 'Western City Limits', '0'),
             ('3', 'Aardvark', '2'),
@@ -880,65 +890,6 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('101', 'Zinc', '198'),
             ('102', 'Zestless', '200')
         ]),
-        ("INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)", [("Default",)]),
-        ("INSERT OR IGNORE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)", [
-            ("Default", "BODY", "background-color:#000000;"),
-            ("Default", "H1,DIV,BODY,P,A", "font-family:Verdana,Arial,sans-serif;"),
-            ("Default", "BODY,H1", "text-align:center;"),
-            ("Default", "P,A,TD,DIV,BODY", "color:#dddddd;"),
-            ("Default", "P,TD,DIV", "text-align:left;"),
-            ("Default", "TD", "vertical-align:top;"),
-            ("Default", "TD,DIV,BODY,P", "font-size:small;"),
-            ("Default", "FORM", "padding:0px; margin:0px; text-align:center;"),
-            ("Default", "H1", "font-size:x-large; color:#ff0000; padding:0 0 0 0;"),
-            ("Default", "A", "text-decoration:underline;"),
-            ("Default", "UL", "text-align:left; font-size:smaller; padding-left:38px; margin-top:3px;"),
-            ("Default", "P", "padding:5px 10px 0px 10px; margin:0px; font-weight:bold;"),
-            ("Default", "P.ans", "font-style:italic; font-weight:normal; padding:5px 10px 0px 15px; margin:0px;"),
-            ("Default", "DIV.spacey", "text-align:center; width:450px; padding-top:10px;"),
-            ("Default", ".head", "text-align:center; font-weight:bold;"),
-            ("Default", "TD.cityblock", "text-align:center; background-color:#0000dd;"),
-            ("Default", "TD.intersect","text-align:center; background-color:#444444; width:150px; height:100px; position:relative;"),
-            ("Default", "TD.street","text-align:center; background-color:#444444; width:150px; height:100px; position:relative;"),
-            ("Default", "TD.city","text-align:center; border:solid white 1px; width:150px; height:100px; position:relative;"),
-            ("Default", "SPAN.intersect", "background-color:#008800; border:solid white 1px; padding:2px;"),
-            ("Default", "SPAN.transit", "background-color:#880000; border:solid white 1px; padding:2px;"),
-            ("Default", "SPAN.arena","background-color:#ff0000; border:solid white 1px; padding:2px; font-weight:bold; color:white;"),
-            ("Default", "SPAN.pub", "background-color:#887700; border:solid white 1px; padding:2px;"),
-            ("Default", "SPAN.bank", "background-color:#0000ff; border:solid white 1px; padding:2px;"),
-            ("Default", "SPAN.shop", "background-color:#004488; border:solid white 1px; padding:2px;"),
-            ("Default", "SPAN.grave", "background-color:#888888; border:solid white 1px; color:#222222; padding:2px;"),
-            ("Default", "SPAN.pk", "background-color:#000066; border:solid white 1px; color:#ffff00; padding:2px;"),
-            ("Default", "SPAN.lair,SPAN.alchemy","background-color:#660022; border:solid white 1px; color:#cccccc; padding:2px;"),
-            ("Default", "SPAN.sever,SPAN.bind", "border:solid red 1px; color:red; padding:2px;"),
-            ("Default", "SPAN.vhuman", "color:green; background-color:black;"),
-            ("Default", "SPAN.phuman", "color:cyan; background-color:black; font-weight:bold;"),
-            ("Default", "SPAN.whuman", "color:brown; background-color:black; font-weight:bold;"),
-            ("Default", "SPAN.object", "color:yellow;"),
-            ("Default", "UL.possessions", "margin-top:0px; margin-bottom:3px; font-size:small;"),
-            ("Default", "#mo","display:none; position:absolute; left:0; top:0; width:300; padding:2px; font:x-small Verdana,Sans-serif; color:black; background-color:yellow; border: solid black 1px;"),
-            ("Default", "TABLE.textad", "background-color:#002211; border:solid #668877 1px;"),
-            ("Default", "TABLE.hiscore", "border:solid #668877 1px;"),
-            ("Default", "TABLE.hiscore tr:first-child", "background-color: #004400;"),
-            ("Default", "TABLE.hiscore tr:not(:first-child) td", "border-right: solid #668877 1px;"),
-            ("Default", "TD.headline", "font-size:8pt; text-align:center; padding:0px 8px 0px 8px;"),
-            ("Default", "TD.text", "font-size:7pt; text-align:center; padding:0px 8px 0px 8px;"),
-            ("Default", "TD.link", "font-size:6pt; text-align:right; color:#999999; padding:0px 2px 0px 1px;"),
-            ("Default", "TABLE.at", "padding:5px; width:100%;"),
-            ("Default", "TABLE.at TD","background-color:#333333; border:solid white 1px; padding:3px; padding-left:5px;"),
-            ("Default", "TABLE.at TD.ahead", "font-weight:bold; padding-left:2px;"),
-            ("Default", "DIV.asubhead", "font-weight:normal; font-size:80%;"),
-            ("Default", "DIV.sb", "overflow:auto; height:80px; border:solid #bbbbbb 1px; background-color:#555533;"),
-            ("Default", "TABLE.battle", "padding:0px; margin:0px;"),
-            ("Default", "TABLE.battle TD", "border:none; padding:0px; margin:0px; text-align:center;"),
-            ("Default", "TABLE.battle TD.n,TD.f,TD.e", "width:10px;"),
-            ("Default", "TABLE.battle TD.f", "background:white;"),
-            ("Default", "FORM.bq", "display:inline;"),
-            ("Default", ".pansy", "color:#ff8888;"),
-            ("Default", ".cloak", "color:#00ffff;"),
-            ("Default", ".rich", "color:#ffff44;"),
-            ("Default", ".mh","border:none; background-color:transparent; text-decoration:underline; color:white; padding:0px; cursor:hand;")
-        ]),
         ("INSERT OR IGNORE INTO guilds (ID, Name, Column, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1,'Allurists Guild 1','NA','NA',''),
             (2,'Allurists Guild 2','NA','NA',''),
@@ -1004,7 +955,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (33,'Thrift 2','Allurists Guild 2',3000,'Buy 1 Perfect Red Rose from 3 specified shops.','10% chance to keep a used item/scroll instead of it burning up.'),
             (34,'Thrift 3','Allurists Guild 3',10000,'Buy 1 Perfect Red Rose from 6 specified shops.','15% chance to keep a used item/scroll instead of it burning up.')
         ]),
-        ("INSERT OR IGNORE INTO `rows` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
+        ("INSERT OR IGNORE INTO rows (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'NCL', '0'),
             ('2', 'Northern City Limits', '0'),
             ('3', '1st', '2'),
@@ -1672,15 +1623,12 @@ elif not initialize_database(DB_PATH):
 # Load Data from Database
 # -----------------------
 
-def load_data(db_path: str = DB_PATH) -> tuple[
-    dict[Any, Any], dict[Any, Any], dict[str, tuple[Any, Any]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]],
-    dict[Any, tuple[int, int]], dict[Any, QColor], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[
-        Any, tuple[int, int]], int, str | Any]:
+def load_data(db_path: str = DB_PATH) -> tuple[dict[Any, Any], dict[Any, Any], list[tuple[Any, Any, Any]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[Any, QColor], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], dict[Any, tuple[int, int]], int]:
     """
     Load map-related data from the SQLite database efficiently.
 
     Retrieves and processes data for columns, rows, banks, taverns, transits, user buildings,
-    color mappings, shops, guilds, places of interest, keybind configuration, and current CSS profile.
+    color mappings, shops, guilds, places of interest, and keybind configuration.
 
     Args:
         db_path (str): Path to the SQLite database file. Defaults to DB_PATH.
@@ -1689,7 +1637,7 @@ def load_data(db_path: str = DB_PATH) -> tuple[
         tuple: Contains:
             - columns (dict[str, int]): Column names to coordinates.
             - rows (dict[str, int]): Row names to coordinates.
-            - banks_coordinates (dict[str, tuple[int, int, str, str]]): Bank coordinates with optional name and type.
+            - banks_coordinates (list[tuple[int, int, str, str]]): Bank coordinates with optional name and type.
             - taverns_coordinates (dict[str, tuple[int, int]]): Tavern names to coordinates.
             - transits_coordinates (dict[str, tuple[int, int]]): Transit names to coordinates.
             - user_buildings_coordinates (dict[str, tuple[int, int]]): User building names to coordinates.
@@ -1698,7 +1646,6 @@ def load_data(db_path: str = DB_PATH) -> tuple[
             - guilds_coordinates (dict[str, tuple[int, int]]): Guild names to coordinates.
             - places_of_interest_coordinates (dict[str, tuple[int, int]]): POI names to coordinates.
             - keybind_config (int): Keybind configuration value (default 1).
-            - current_css_profile (str): Current CSS profile name (default "Default").
 
     Raises:
         sqlite3.Error: If database access fails (logged and re-raised).
@@ -1725,28 +1672,19 @@ def load_data(db_path: str = DB_PATH) -> tuple[
             for col_name, row_name, _, _ in cursor.fetchall():
                 banks_coordinates[f"{col_name} & {row_name}"] = (col_name, row_name)
 
-            cursor.execute("SELECT Name, `Column`, `Row` FROM taverns")
+            cursor.execute("SELECT Name, Column, Row FROM taverns")
             taverns_coordinates = {name: to_coords(col, row) for name, col, row in cursor.fetchall()}
 
-            cursor.execute("SELECT Name, `Column`, `Row` FROM transits")
+            cursor.execute("SELECT Name, Column, Row FROM transits")
             transits_coordinates = {name: to_coords(col, row) for name, col, row in cursor.fetchall()}
 
-            cursor.execute("SELECT Name, `Column`, `Row` FROM userbuildings")
+            cursor.execute("SELECT Name, Column, Row FROM userbuildings")
             user_buildings_coordinates = {name: to_coords(col, row) for name, col, row in cursor.fetchall()}
 
             cursor.execute("SELECT Type, Color FROM color_mappings")
-            color_mappings = {}
-            for type_, color in cursor.fetchall():
-                try:
-                    qcolor = QColor(color)
-                    if not qcolor.isValid():
-                        logging.warning(f"Invalid color for type '{type_}': '{color}'")
-                    color_mappings[type_] = qcolor
-                except Exception as e:
-                    logging.error(f"Failed to load QColor for '{type_}' = '{color}': {e}")
-                    color_mappings[type_] = QColor('#000000')  # Fallback
+            color_mappings = {type_: QColor(color) for type_, color in cursor.fetchall()}
 
-            cursor.execute("SELECT Name, `Column`, `Row` FROM shops")
+            cursor.execute("SELECT Name, Column, Row FROM shops")
             shops_coordinates = {}
             for name, col, row in cursor.fetchall():
                 if col == "NA" or row == "NA":
@@ -1754,7 +1692,7 @@ def load_data(db_path: str = DB_PATH) -> tuple[
                     continue
                 shops_coordinates[name] = to_coords(col, row)
 
-            cursor.execute("SELECT Name, `Column`, `Row` FROM guilds")
+            cursor.execute("SELECT Name, Column, Row FROM guilds")
             guilds_coordinates = {}
             for name, col, row in cursor.fetchall():
                 if col == "NA" or row == "NA":
@@ -1762,21 +1700,15 @@ def load_data(db_path: str = DB_PATH) -> tuple[
                     continue
                 guilds_coordinates[name] = to_coords(col, row)
 
-            cursor.execute("SELECT Name, `Column`, `Row` FROM placesofinterest")
+            cursor.execute("SELECT Name, Column, Row FROM placesofinterest")
             places_of_interest_coordinates = {name: to_coords(col, row) for name, col, row in cursor.fetchall()}
 
-            # Load keybind_config from settings
             cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
             row = cursor.fetchone()
             keybind_config = int(row[0]) if row else 1  # Default to WASD (1)
 
-            # Load current_css_profile from settings
-            cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'css_profile'")
-            row = cursor.fetchone()
-            current_css_profile = row[0] if row else "Default"  # Default to "Default" if not found
-
             logging.debug("Loaded data from database successfully")
-            return (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config, current_css_profile)
+            return (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config)
 
     except sqlite3.Error as e:
         logging.error(f"Failed to load data from database {db_path}: {e}")
@@ -1787,16 +1719,16 @@ try:
     (
         columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates,
         user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates,
-        places_of_interest_coordinates, keybind_config, current_css_profile
+        places_of_interest_coordinates, keybind_config
     ) = load_data(DB_PATH)
 except sqlite3.Error:
     logging.critical("Database load failed. Using fallback empty data.")
+    # Fallback values to prevent app crash
     columns = rows = taverns_coordinates = transits_coordinates = user_buildings_coordinates = \
         shops_coordinates = guilds_coordinates = places_of_interest_coordinates = {}
-    banks_coordinates = {}
+    banks_coordinates = []
     color_mappings = {'default': QColor('#000000')}  # Minimal fallback
     keybind_config = 1
-    current_css_profile = "Default"
 
 # -----------------------
 # Webview Cookie Database
@@ -1883,6 +1815,20 @@ def clear_cookie_db() -> bool:
         logging.error(f"Failed to clear cookies: {e}")
         return False
 
+# Ensure the cookies table schema supports UPSERT (already in initialize_database, but verify):
+# CREATE TABLE IF NOT EXISTS cookies (
+#     id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     name TEXT,
+#     value TEXT,
+#     domain TEXT,
+#     path TEXT,
+#     expiration TEXT,
+#     secure INTEGER,
+#     httponly INTEGER,
+#     UNIQUE(name, domain, path)  -- Add this constraint for UPSERT
+# )
+
+
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
@@ -1907,17 +1853,15 @@ class RBCCommunityMap(QMainWindow):
         self.webview_loaded = False
 
         # Initialize essential components early
-        self._init_data()
         self._init_scraper()
         self._init_window_properties()
         self._init_web_profile()
-
+        self._init_data()
 
         # UI and character setup
         self._init_ui_state()
         self._init_characters()
         self._init_ui_components()
-
 
         # Final setup steps
         self._finalize_setup()
@@ -1933,7 +1877,7 @@ class RBCCommunityMap(QMainWindow):
     def _init_window_properties(self) -> None:
         """Set up main window properties."""
         try:
-            self.setWindowIcon(QIcon('images/favicon.ico'))
+            self.setWindowIcon(QIcon('../testing/images/favicon.ico'))
             self.setWindowTitle('RBC Community Map')
             self.setGeometry(100, 100, 1200, 800)
             self.load_theme_settings()
@@ -1963,7 +1907,7 @@ class RBCCommunityMap(QMainWindow):
                 self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates,
                 self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings,
                 self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates,
-                self.keybind_config, self.current_css_profile
+                self.keybind_config
             ) = load_data(DB_PATH)
         except sqlite3.Error as e:
             logging.critical(f"Failed to load initial data: {e}")
@@ -2010,22 +1954,6 @@ class RBCCommunityMap(QMainWindow):
             self.website_frame.setFocusPolicy(Qt.StrongFocus)
         else:
             logging.warning("website_frame not initialized before focus setup")
-        css = self.load_current_css()
-        self.apply_custom_css(css)
-
-    def load_current_css(self) -> str:
-        """Load CSS for the current profile from the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'css_profile'")
-                result = cursor.fetchone()
-                profile = result[0] if result else "Default"
-                cursor.execute("SELECT element, value FROM custom_css WHERE profile_name = ?", (profile,))
-                return "\n".join(f"{elem} {{ {val} }}" for elem, val in cursor.fetchall())
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load CSS: {e}")
-            return ""
 
 # -----------------------
 # Keybindings
@@ -2171,30 +2099,54 @@ class RBCCommunityMap(QMainWindow):
             shortcut.deleteLater()  # Ensure cleanup
         logging.debug(f"Cleared {len(shortcuts)} existing keybindings")
 
-    # -----------------------
-    # Load and Apply Customized UI Theme
-    # -----------------------
+# -----------------------
+# Load and Apply Customized UI Theme
+# -----------------------
+
     def load_theme_settings(self) -> None:
         """
         Load theme settings from the SQLite database (settings table).
 
-        Updates self.color_mappings using settings from the database,
-        preserving any other existing color mappings.
+        Populates self.color_mappings with theme settings, falling back to defaults if missing or on error.
         """
+        defaults = {
+            "background": "#d4d4d4",
+            "text_color": "#000000",
+            "button_color": "#b1b1b1",
+            "bank": "blue",
+            "tavern": "orange",
+            "transit": "red",
+            "user_building": "purple",
+            "shop": "green",
+            "guild": "yellow",
+            "placesofinterest": "purple",
+            "set_destination": "#1a7f7a",
+            "set_destination_transit": "#046380",
+            "alley": "grey",
+            "default": "black",
+            "border": "white",
+            "edge": "blue",
+        }
+
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT setting_name, setting_value FROM settings WHERE setting_name LIKE 'theme_%'")
-                settings = dict(cursor.fetchall())
+                settings = dict(cursor.fetchall())  # Direct dict conversion
+                self.color_mappings = {
+                    key.replace("theme_", "", 1): QColor(value)
+                    for key, value in settings.items()
+                }
 
-                # Update existing mappings only for theme-specific keys
-                for key_with_prefix, value in settings.items():
-                    key = key_with_prefix.replace("theme_", "", 1)
-                    self.color_mappings[key] = QColor(value)
+                # Apply defaults for missing keys
+                for key, default in defaults.items():
+                    if key not in self.color_mappings:
+                        self.color_mappings[key] = QColor(default)
 
-                logging.debug(f"Theme settings loaded from DB and applied. Keys updated: {list(settings.keys())}")
+                logging.debug("Theme settings loaded successfully")
         except sqlite3.Error as e:
             logging.error(f"Failed to load theme settings: {e}")
+            self.color_mappings = {key: QColor(value) for key, value in defaults.items()}
 
     def save_theme_settings(self) -> bool:
         """
@@ -2254,10 +2206,11 @@ class RBCCommunityMap(QMainWindow):
                 logging.info("Theme updated and saved")
             else:
                 logging.warning("Theme applied but not saved due to database error")
+   
 
-    # -----------------------
-    # Cookie Handling
-    # -----------------------
+# -----------------------
+# Cookie Handling
+# -----------------------
 
     def setup_cookie_handling(self) -> None:
         """
@@ -2329,9 +2282,10 @@ class RBCCommunityMap(QMainWindow):
         except sqlite3.Error as e:
             logging.error(f"Failed to save cookie '{cookie.name().data()}': {e}")
 
-    # -----------------------
-    # UI Setup
-    # -----------------------
+# -----------------------
+# UI Setup
+# -----------------------
+
     def setup_ui_components(self):
         """
         Set up the main user interface for the RBC Community Map application.
@@ -2365,7 +2319,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Load images for back, forward, and refresh buttons
         back_button = QPushButton()
-        back_button.setIcon(QIcon('./images/back.png'))
+        back_button.setIcon(QIcon('../testing/images/back.png'))
         back_button.setIconSize(QSize(30, 30))
         back_button.setFixedSize(30, 30)
         back_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2373,7 +2327,7 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(back_button)
 
         forward_button = QPushButton()
-        forward_button.setIcon(QIcon('images/forward.png'))
+        forward_button.setIcon(QIcon('../testing/images/forward.png'))
         forward_button.setIconSize(QSize(30, 30))
         forward_button.setFixedSize(30, 30)
         forward_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2381,7 +2335,7 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(forward_button)
 
         refresh_button = QPushButton()
-        refresh_button.setIcon(QIcon('images/refresh.png'))
+        refresh_button.setIcon(QIcon('../testing/images/refresh.png'))
         refresh_button.setIconSize(QSize(30, 30))
         refresh_button.setFixedSize(30, 30)
         refresh_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2605,9 +2559,9 @@ class RBCCommunityMap(QMainWindow):
                 self.show()
                 self.update_minimap()
 
-    # -----------------------
-    # Browser Controls Setup
-    # -----------------------
+# -----------------------
+# Browser Controls Setup
+# -----------------------
 
     def go_back(self):
         """Navigate the web browser back to the previous page."""
@@ -2725,9 +2679,10 @@ class RBCCommunityMap(QMainWindow):
         """Zoom out on the web page displayed in the QWebEngineView."""
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
-    # -----------------------
-    # Error Logging
-    # -----------------------
+# -----------------------
+# Error Logging
+# -----------------------
+
     def setup_console_logging(self):
         """
         Set up console logging within the web engine view by connecting the web channel
@@ -2766,9 +2721,9 @@ class RBCCommunityMap(QMainWindow):
         print(f"Console message: {message}")
         logging.debug(f"Console message: {message}")
 
-    # -----------------------
-    # Menu Control Items
-    # -----------------------
+# -----------------------
+# Menu Control Items
+# -----------------------
 
     def save_webpage_screenshot(self):
         """
@@ -2856,11 +2811,19 @@ class RBCCommunityMap(QMainWindow):
     def load_characters(self):
         """
         Load characters from the SQLite database, including IDs for reference.
-        Only populate the list, do not auto-select.
         """
         try:
             connection = sqlite3.connect(DB_PATH)
             cursor = connection.cursor()
+
+            # Ensure the characters table exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS characters (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    password TEXT
+                )
+            ''')
 
             # Fetch characters from the database including id
             cursor.execute("SELECT id, name, password FROM characters")
@@ -2870,14 +2833,18 @@ class RBCCommunityMap(QMainWindow):
                 for char_id, name, password in character_data
             ]
 
-            # Populate characters list without selecting
+            # Populate characters list and UI element
             self.character_list.clear()
             for character in self.characters:
                 self.character_list.addItem(QListWidgetItem(character['name']))
-            logging.debug(f"Loaded {len(self.characters)} characters from the database.")
+            logging.debug("Characters loaded successfully from the database.")
 
-            # Do not set self.selected_character here; let load_last_active_character handle it
-            if not self.characters:
+            # Automatically select the first character if any exist
+            if self.characters:
+                self.character_list.setCurrentRow(0)
+                self.selected_character = self.characters[0]
+                logging.debug(f"Selected character set: {self.selected_character}")
+            else:
                 logging.warning("No characters found in the database.")
                 self.selected_character = None
 
@@ -2896,16 +2863,26 @@ class RBCCommunityMap(QMainWindow):
         try:
             connection = sqlite3.connect(DB_PATH)
             cursor = connection.cursor()
+
+            # Ensure the characters table exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS characters (
+                    name TEXT PRIMARY KEY,
+                    password TEXT
+                )
+            ''')
+
             # Insert or update each character without encrypting the password
             for character in self.characters:
                 cursor.execute('''
-                    INSERT OR REPLACE INTO characters (id, name, password) VALUES (?, ?, ?)
-                ''', (character.get('id'), character['name'], character['password']))
+                    INSERT OR REPLACE INTO characters (name, password) VALUES (?, ?)
+                ''', (character['name'], character['password']))
+
             connection.commit()
             logging.debug("Characters saved successfully to the database in plaintext.")
+
         except sqlite3.Error as e:
             logging.error(f"Failed to save characters to database: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to save characters: {e}")
         finally:
             connection.close()
 
@@ -3054,7 +3031,6 @@ class RBCCommunityMap(QMainWindow):
             if dialog.exec():
                 character['name'] = dialog.name_edit.text()
                 character['password'] = dialog.password_edit.text()
-                self.selected_character = character  # Sync selected_character with modified data
                 self.save_characters()
                 current_item.setText(character['name'])
                 logging.debug(f"Character {name} modified.")
@@ -3089,8 +3065,7 @@ class RBCCommunityMap(QMainWindow):
 
     def load_last_active_character(self):
         """
-        Load the last active character from the database by character_id, set the selected character,
-        and update the UI for auto-login.
+        Load the last active character from the database by character_id and set the selected character for auto-login.
         """
         try:
             with sqlite3.connect(DB_PATH) as conn:
@@ -3101,69 +3076,49 @@ class RBCCommunityMap(QMainWindow):
                     character_id = result[0]
                     self.selected_character = next((char for char in self.characters if char.get('id') == character_id), None)
                     if self.selected_character:
-                        # Sync UI with last active character
-                        for i in range(self.character_list.count()):
-                            if self.character_list.item(i).text() == self.selected_character['name']:
-                                self.character_list.setCurrentRow(i)
-                                break
-                        logging.debug(f"Last active character loaded and selected: {self.selected_character['name']}")
-                        if len(self.characters) > 1:  # Trigger login only if multiple characters exist
-                            self.login_needed = True
-                            self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+                        logging.debug(f"Last active character loaded: {self.selected_character['name']}")
+                        self.login_needed = True
+                        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
                     else:
                         logging.warning(f"Last active character ID '{character_id}' not found in character list.")
-                        self.set_default_character()
                 else:
                     logging.warning("No last active character found in the database.")
-                    self.set_default_character()
         except sqlite3.Error as e:
             logging.error(f"Failed to load last active character from database: {e}")
-            self.set_default_character()
 
-    def set_default_character(self):
-        """
-        Set the first character in the database as the default selected character,
-        update the UI, and save it as the last active character.
-        """
-        if self.characters:
-            self.selected_character = self.characters[0]
-            self.character_list.setCurrentRow(0)
-            logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
-            self.save_last_active_character(self.selected_character['id'])
-            self.login_needed = True
-            self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
-        else:
-            self.selected_character = None
-            logging.warning("No characters available to set as default.")
-
-    # -----------------------
-    # Web View Handling
-    # -----------------------
+# -----------------------
+# Web View Handling
+# -----------------------
 
     def refresh_webview(self):
         """Refresh the webview content."""
         self.website_frame.reload()
 
-    def apply_custom_css(self, css: str):
-        cursor = sqlite3.connect(DB_PATH).cursor()
-        cursor.execute("SELECT element, value FROM custom_css WHERE profile_name = ?", (self.current_css_profile,))
-        css_rules = cursor.fetchall()
+    def apply_custom_css(self, css=""):
+        """Inject the custom CSS into the webview."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT element, value FROM custom_css")
+                customizations = cursor.fetchall()
+                css_string = "\n".join([f"{element} {{ {value} }}" for element, value in customizations])
 
-        if not css_rules:
-            logging.warning(f"No CSS rules found for profile '{self.current_css_profile}'")
-            return
-
-        css = ""
-        for element, value in css_rules:
-            css += f"{element} {{{value}}}\n"
-
-        script = f"""
-            var style = document.createElement('style');
-            style.type = 'text/css';
-            style.innerHTML = `{css}`;
-            document.head.appendChild(style);
-        """
-        self.website_frame.page().runJavaScript(script)
+            if css_string and hasattr(self, 'website_frame'):
+                logging.info(f"Injecting CSS into webpage:\n{css_string}")
+                self.website_frame.page().runJavaScript(f"""
+                    let styleTag = document.getElementById('custom-css');
+                    if (!styleTag) {{
+                        styleTag = document.createElement('style');
+                        styleTag.id = 'custom-css';
+                        document.head.appendChild(styleTag);
+                    }}
+                    styleTag.innerHTML = `{css_string}`;
+                """)
+                logging.info("Custom CSS injected into webpage.")
+            else:
+                logging.warning("No CSS to apply or website_frame not available.")
+        except sqlite3.Error as e:
+            logging.error(f"Error applying custom CSS: {e}")
 
     def on_webview_load_finished(self, success):
         if not success:
@@ -3172,8 +3127,7 @@ class RBCCommunityMap(QMainWindow):
         else:
             logging.info("Webpage loaded successfully.")
             self.website_frame.page().toHtml(self.process_html)
-            css = self.load_current_css()
-            self.apply_custom_css(css)
+            self.apply_custom_css()  # This will now work
             if self.login_needed:
                 logging.debug("Logging in last active character.")
                 self.login_selected_character()
@@ -3219,12 +3173,12 @@ class RBCCommunityMap(QMainWindow):
 
         logging.debug("Extracting coordinates from HTML...")
 
-        # Find all city limit elements
+        # Check for city limits
         city_limit_cells = soup.find_all('td', class_='cityblock')
-        city_limit_count = len(city_limit_cells)
-        logging.debug(f"Found {city_limit_count} city limit blocks.")
+        if city_limit_cells:
+            logging.debug(f"Found {len(city_limit_cells)} city limit blocks.")
 
-        # Find first available coordinates
+        # Check for first available coordinates
         first_x_input = soup.find('input', {'name': 'x'})
         first_y_input = soup.find('input', {'name': 'y'})
 
@@ -3233,27 +3187,25 @@ class RBCCommunityMap(QMainWindow):
 
         logging.debug(f"First detected coordinate: x={first_x}, y={first_y}")
 
-        # ✅ Special Case: Ignore City Limits if (198,198) is present & 5 cityblocks exist
-        if first_x == 198 and first_y == 198 and city_limit_count == 5:
-            logging.debug("Ignoring city limit adjustment at (198,198) with 5 cityblock elements.")
-            return first_x, first_y
+        if len(city_limit_cells) >= 4:
+            logging.warning("City limits detected in all four edges. Adjusting coordinates.")
 
-        # ✅ Corrected Out-of-Bounds Check: Only adjust to (-1,-1) if **fully enclosed**
-        if city_limit_count >= 4 and (first_x is None or first_y is None or first_x < 0 or first_y < 0):
-            logging.warning("Fully enclosed by City Limits. Adjusting coordinates to (-1,-1).")
-            return -1, -1  # Assign -1,-1 only when completely surrounded
+            if first_x is not None and first_y is not None:
+                return -1, -1  # Assign -1,-1 if surrounded by city limits
+            else:
+                return None, None
 
-        # ✅ Adjust for Northern Edge (Y=0) if it is an actual edge case
-        if first_y == 0 and city_limit_count > 0:
+        # Adjust for Northern Edge (Y=0)
+        if len(city_limit_cells) > 0 and first_y == 0:
             logging.debug(f"Detected Northern City Limit at y={first_y}")
             return first_x, -1
 
-        # ✅ Adjust for Western Edge (X=0) if it is an actual edge case
-        if first_x == 0 and city_limit_count > 0:
+        # Adjust for Western Edge (X=0)
+        if len(city_limit_cells) > 0 and first_x == 0:
             logging.debug(f"Detected Western City Limit at x={first_x}")
             return -1, first_y
 
-        # ✅ If no adjustments needed, return detected values
+        # If no adjustments, return detected values
         return first_x, first_y
 
     def adjust_for_city_limits_with_html(self, x, y, soup):
@@ -3270,34 +3222,22 @@ class RBCCommunityMap(QMainWindow):
         """
         logging.debug(f"Adjusting for city limits: Initial x={x}, y={y}")
 
-        # Find all 'City Limits' blocks
-        city_limits_blocks = soup.find_all('td', class_='cityblock',
-                                           string=lambda text: text and 'City Limits' in text)
+        # Check if city limits blocks are in the first row
+        city_limits_present = soup.find_all('td', class_='cityblock',
+                                            string=lambda text: text and 'City Limits' in text)
 
-        # Count city limits blocks
-        city_limit_count = len(city_limits_blocks)
-        logging.debug(f"Detected {city_limit_count} City Limit blocks.")
+        if city_limits_present:
+            logging.debug(f"Detected city limits in HTML. Adjusting...")
 
-        # ✅ If at (198,198) and exactly 5 cityblock elements exist, do NOT adjust coordinates.
-        if x == 198 and y == 198 and city_limit_count == 5:
-            logging.debug("Special case detected at (198,198) with 5 cityblock elements. No adjustment needed.")
-            return x, y
-
-        # ✅ Ensure that (-1,-1) only happens when *completely surrounded* by City Limits
-        if city_limit_count >= 4 and (x < 0 or y < 0 or x > 199 or y > 199):
-            logging.warning(f"Fully enclosed City Limits at ({x}, {y}). Adjusting to (-1, -1)")
-            return -1, -1
-
-        # ✅ Edge case handling for actual out-of-bounds cases
-        if x == 0 and y == 0:
-            logging.debug("Detected corner case (0,0). Adjusting to (-1, -1)")
-            return -1, -1
-        elif x == 0 and y < 199:
-            logging.debug(f"Detected west edge at x={x}. Adjusting to (-1, {y})")
-            return -1, y
-        elif y == 0 and x < 199:
-            logging.debug(f"Detected north edge at y={y}. Adjusting to ({x}, -1)")
-            return x, -1
+            if x == 0 and y == 0:
+                logging.debug("Detected corner case (0,0). Adjusting to (-1, -1)")
+                return -1, -1
+            elif x == 0:
+                logging.debug(f"Detected west edge at x={x}. Adjusting to (-1, {y})")
+                return -1, y
+            elif y == 0:
+                logging.debug(f"Detected north edge at y={y}. Adjusting to ({x}, -1)")
+                return x, -1
 
         logging.debug(f"Final adjusted coordinates: x={x}, y={y}")
         return x, y
@@ -3378,15 +3318,11 @@ class RBCCommunityMap(QMainWindow):
             conn.commit()
             logging.info(f"Updated coins for character ID {character_id}.")
 
-    def switch_css_profile(self, profile_name: str) -> None:
-        self.current_css_profile = profile_name
-        self.apply_custom_css()
-        logging.info(f"Switched to profile: {profile_name} and applied CSS")
-
 # -----------------------
 # Minimap Drawing and Update
 # -----------------------
-    def draw_minimap(self) -> None:
+
+    def draw_minimap(self):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations,
         with cell lines and dynamically scaled text size.
@@ -3460,8 +3396,6 @@ class RBCCommunityMap(QMainWindow):
                                      block_size - 2 * border_size, QColor(self.color_mappings["alley"]))
 
                 # Draw intersection labels with background box
-                logging.debug(f"self.color_mappings keys: {list(self.color_mappings.keys())}")
-
                 if column_name and row_name:
                     label_text = f"{column_name} & {row_name}"
                     label_height = block_size // 3  # Set label height
@@ -4104,22 +4038,34 @@ class RBCCommunityMap(QMainWindow):
         data = cursor.fetchall()
         return column_names, data
 
-    def apply_theme(self) -> None:
-        """Apply the selected theme colors to the dialog’s stylesheet."""
-        try:
-            bg_color = self.color_mappings.get('background', QColor('white')).name()
-            text_color = self.color_mappings.get('text_color', QColor('black')).name()
-            btn_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
+    def generate_custom_css(self):
+        """
+        Generate a complete CSS string from the saved customizations.
 
-            self.setStyleSheet(
-                f"QWidget {{ background-color: {bg_color}; }}"
-                f"QPushButton {{ background-color: {btn_color}; color: {text_color}; }}"
-                f"QLabel {{ color: {text_color}; }}"
-            )
-            logging.debug("Theme applied to dialog")
-        except Exception as e:
-            logging.error(f"Failed to apply theme to dialog: {e}")
-            self.setStyleSheet("")  # Reset on failure
+        Returns:
+            str: The complete CSS string.
+        """
+        try:
+            connection = sqlite3.connect(DB_PATH)
+            cursor = connection.cursor()
+
+            # Fetch saved customizations
+            cursor.execute("SELECT element, value FROM custom_css")
+            customizations = cursor.fetchall()
+            logging.info("Fetched customizations from database:")
+            for element, value in customizations:
+                logging.info(f"{element}: {value}")
+
+            css_string = "\n".join([f"{element} {{ {value} }}" for element, value in customizations])
+            logging.info("Generated CSS string:")
+            logging.info(css_string)
+
+            return css_string
+        except sqlite3.Error as e:
+            logging.error(f"Error generating custom CSS: {e}")
+            return ""
+        finally:
+            connection.close()
 
 # -----------------------
 # Tools
@@ -4224,54 +4170,65 @@ class DatabaseViewer(QDialog):
 
 class CharacterDialog(QDialog):
     """
-    A dialog for adding or modifying a character.
-
-    This dialog provides a simple interface for entering or editing the name and password
-    of a character. It can be used to add a new character or modify an existing one.
+    Dialog for adding or editing a character’s name and password.
     """
 
-    def __init__(self, parent=None, character=None):
+    def __init__(self, parent=None, character: dict | None = None) -> None:
         """
         Initialize the character dialog.
 
         Args:
-            parent (QWidget): The parent widget for this dialog.
-            character (dict, optional): A dictionary containing the character's information.
-                                        If provided, the dialog will be pre-filled with this data.
-                                        Defaults to None.
+            parent: Parent widget (optional).
+            character: Dict with 'name' and 'password' keys to pre-fill fields (optional).
         """
         super().__init__(parent)
         self.setWindowTitle("Character")
 
-        # Create input fields for the character's name and password
-        self.name_edit = QLineEdit()
-        self.password_edit = QLineEdit()
-        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)  # Hide the password text
+        # Input fields
+        self.name_edit = QLineEdit(self)
+        self.password_edit = QLineEdit(self)
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # If a character is provided, pre-fill the fields with its data
+        # Pre-fill if character data is provided
         if character:
-            self.name_edit.setText(character['name'])
-            self.password_edit.setText(character['password'])
+            self.name_edit.setText(character.get('name', ''))
+            self.password_edit.setText(character.get('password', ''))
 
-        # Set up the form layout with labels and input fields
+        # Form layout
         layout = QFormLayout()
         layout.addRow("Name:", self.name_edit)
         layout.addRow("Password:", self.password_edit)
 
-        # Create OK and Cancel buttons
+        # Buttons
         button_box = QHBoxLayout()
-        ok_button = QPushButton("OK")
-        cancel_button = QPushButton("Cancel")
+        ok_button = QPushButton("OK", self)
+        cancel_button = QPushButton("Cancel", self)
         button_box.addWidget(ok_button)
         button_box.addWidget(cancel_button)
-
-        # Add the buttons to the layout
         layout.addRow(button_box)
+
         self.setLayout(layout)
 
-        # Connect the buttons to the dialog's accept and reject methods
-        ok_button.clicked.connect(self.accept)
+        # Connect signals
+        ok_button.clicked.connect(self.validate_and_accept)
         cancel_button.clicked.connect(self.reject)
+        logging.debug(f"Character dialog initialized{' with existing data' if character else ''}")
+
+    def validate_and_accept(self) -> None:
+        """
+        Validate input fields before accepting the dialog.
+        """
+        name = self.name_edit.text().strip()
+        password = self.password_edit.text()
+
+        if not name:
+            QMessageBox.warning(self, "Input Error", "Name cannot be empty.")
+            return
+        if not password:
+            QMessageBox.warning(self, "Input Error", "Password cannot be empty.")
+            return
+
+        self.accept()
 
 # -----------------------
 # Theme Customization Dialog
@@ -4331,9 +4288,7 @@ class ThemeCustomizationDialog(QDialog):
             color_square = QLabel(self.ui_tab)
             color_square.setFixedSize(20, 20)
             color = self.color_mappings.get(elem, QColor('white'))
-            pixmap = QPixmap(20, 20)
-            pixmap.fill(color)
-            color_square.setPixmap(pixmap)
+            color_square.setPixmap(QPixmap(20, 20).fill(color))
 
             color_button = QPushButton('Change Color', self.ui_tab)
             color_button.clicked.connect(lambda _, e=elem, sq=color_square: self.change_color(e, sq))
@@ -4351,10 +4306,7 @@ class ThemeCustomizationDialog(QDialog):
             color_square = QLabel(self.minimap_tab)
             color_square.setFixedSize(20, 20)
             color = self.color_mappings.get(elem, QColor('white'))
-
-            pixmap = QPixmap(20, 20)
-            pixmap.fill(color)
-            color_square.setPixmap(pixmap)
+            color_square.setPixmap(QPixmap(20, 20).fill(color))
 
             color_button = QPushButton('Change Color', self.minimap_tab)
             color_button.clicked.connect(lambda _, e=elem, sq=color_square: self.change_color(e, sq))
@@ -4374,9 +4326,7 @@ class ThemeCustomizationDialog(QDialog):
         color = QColorDialog.getColor(self.color_mappings.get(element_name, QColor('white')), self)
         if color.isValid():
             self.color_mappings[element_name] = color
-            pixmap = QPixmap(20, 20)
-            pixmap.fill(color)
-            color_square.setPixmap(pixmap)
+            color_square.setPixmap(QPixmap(20, 20).fill(color))
             logging.debug(f"Changed color for '{element_name}' to {color.name()}")
 
     def apply_theme(self) -> None:
@@ -4401,300 +4351,247 @@ class ThemeCustomizationDialog(QDialog):
 # -----------------------
 
 class CSSCustomizationDialog(QDialog):
-    def __init__(self, parent: QWidget = None, current_profile: str = "Default") -> None:
+    """
+    Dialog for customizing CSS settings for the UI.
+    """
+
+    def __init__(self, parent=None) -> None:
+        """
+        Initialize the CSS customization dialog.
+
+        Args:
+            parent: Parent widget (optional).
+        """
         super().__init__(parent)
-        self.parent = parent
-        self.current_profile = current_profile
         self.setWindowTitle("CSS Customization")
-        self.resize(600, 400)
+        self.setMinimumSize(600, 400)
+        self.parent = parent
+
+        self.initialize_css_table()
+
+        self.tab_widget = QTabWidget(self)
         self.tabs = {}
-        self.setup_ui()
-        self.load_existing_customizations()
-        logging.debug(f"CSSCustomizationDialog initialized with profile '{self.current_profile}'")
+        self.add_tab("General", [
+            "BODY", "H1", "DIV", "P", "A", "FORM", "UL", "DIV.spacey", ".head", "DIV.asubhead", "DIV.sb"
+        ])
+        self.add_tab("Tables", [
+            "TD", "TD.cityblock", "TD.intersect", "TD.street", "TD.city", "TABLE.textad", "TABLE.hiscore",
+            "TABLE.hiscore tr:first-child", "TABLE.hiscore tr:not(:first-child) td", "TD.headline", "TD.text",
+            "TD.link", "TABLE.at", "TABLE.at TD", "TABLE.at TD.ahead", "TABLE.battle", "TABLE.battle TD",
+            "TABLE.battle TD.n", "TABLE.battle TD.f", "TABLE.battle TD.e"
+        ])
+        self.add_tab("Text", [
+            "SPAN.intersect", "SPAN.transit", "SPAN.arena", "SPAN.pub", "SPAN.bank", "SPAN.shop",
+            "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy", "SPAN.sever", "SPAN.bind", "SPAN.human",
+            "SPAN.vhuman", "SPAN.phuman", "SPAN.whuman", "SPAN.object", "P.ans", "UL.possessions",
+            ".pansy", ".cloak", ".rich", ".mh"
+        ])
+        self.add_tab("Miscellaneous", ["#mo"])
 
-    def get_current_profile(self) -> str:
-        """Retrieve the current CSS profile from settings."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'css_profile'")
-                result = cursor.fetchone()
-                return result[0] if result else "Default"
-        except sqlite3.Error as e:
-            logging.error(f"Failed to retrieve current profile: {e}")
-            return "Default"
-
-    def update_current_profile(self, profile: str) -> None:
-        """Update the css_profile setting in the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)",
-                    ("css_profile", profile)
-                )
-                conn.commit()
-            self.current_profile = profile
-            logging.debug(f"Updated css_profile to: {profile}")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to update css_profile: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to update profile: {e}")
-
-    def setup_ui(self) -> None:
-        """Set up the UI for CSS customization."""
-        main_layout = QVBoxLayout(self)
-
-        # Profile selection
-        profile_layout = QHBoxLayout()
-        profile_layout.addWidget(QLabel("Profile:"))
-        self.profile_dropdown = QComboBox()
-        self.load_profiles()
-        self.profile_dropdown.setCurrentText(self.current_profile)
-        self.profile_dropdown.currentTextChanged.connect(self.on_profile_change)
-        profile_layout.addWidget(self.profile_dropdown)
-
-        new_profile_btn = QPushButton("New Profile")
-        new_profile_btn.clicked.connect(self.create_new_profile)
-        profile_layout.addWidget(new_profile_btn)
-
-        delete_profile_btn = QPushButton("Delete Profile")
-        delete_profile_btn.clicked.connect(self.delete_profile)
-        profile_layout.addWidget(delete_profile_btn)
-
-        main_layout.addLayout(profile_layout)
-
-        # Tabs for CSS categories
-        self.tab_widget = QTabWidget()
-        self.add_tab("Background", ["BODY"])
-        self.add_tab("Text", ["H1", "P", "A", "TD", "DIV"])
-        self.add_tab("City Elements", ["TD.cityblock", "TD.intersect", "TD.street", "TD.city"])
-        self.add_tab("Special Elements", ["SPAN.intersect", "SPAN.transit", "SPAN.pub", "SPAN.bank", "SPAN.shop", "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy"])
-        main_layout.addWidget(self.tab_widget)
-
-        # Buttons
         button_layout = QHBoxLayout()
-        upload_btn = QPushButton("Upload CSS File")
-        upload_btn.clicked.connect(self.upload_css_file)
-        button_layout.addWidget(upload_btn)
+        self.save_button = QPushButton("Save and Apply", self)
+        self.save_button.clicked.connect(self.save_and_apply_changes)
+        self.upload_button = QPushButton("Upload CSS File", self)
+        self.upload_button.clicked.connect(self.upload_css_file)
+        self.clear_button = QPushButton("Clear All Customizations", self)
+        self.clear_button.clicked.connect(self.clear_all_customizations)
+        button_layout.addWidget(self.save_button)
+        button_layout.addWidget(self.upload_button)
+        button_layout.addWidget(self.clear_button)
 
-        clear_btn = QPushButton("Clear All")
-        clear_btn.clicked.connect(self.clear_all_customizations)
-        button_layout.addWidget(clear_btn)
-
-        apply_btn = QPushButton("Apply")
-        apply_btn.clicked.connect(self.save_and_apply_changes)
-        button_layout.addWidget(apply_btn)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
-
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.tab_widget)
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
-    def on_profile_change(self, profile: str) -> None:
-        """Handle profile change: save current changes, load new profile, and apply CSS."""
-        if profile == self.current_profile:
-            return
-        # Update the css_profile setting in the database
-        self.update_current_profile(profile)
-        # Reload customizations for the new profile in the UI
         self.load_existing_customizations()
-        # Generate and apply the new profile's CSS to the webview
-        css = self.generate_custom_css()
-        if css and self.parent:
-            self.parent.apply_custom_css(css)
-            self.parent.website_frame.reload()
-        logging.info(f"Switched to profile: {profile} and applied CSS")
+        logging.debug("CSS customization dialog initialized")
 
-    def load_profiles(self) -> None:
-        """Load available CSS profiles from the database."""
+    def initialize_css_table(self) -> None:
+        """Initialize or verify the custom_css table in the database."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT profile_name FROM css_profiles")
-                profiles = [row[0] for row in cursor.fetchall()]
-            self.profile_dropdown.clear()
-            self.profile_dropdown.addItems(profiles)
-            logging.debug(f"Loaded {len(profiles)} profiles")
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS custom_css (
+                        element TEXT PRIMARY KEY,
+                        value TEXT
+                    )
+                """)
+                conn.commit()
+            logging.debug("Custom CSS table verified")
         except sqlite3.Error as e:
-            logging.error(f"Failed to load profiles: {e}")
-            QMessageBox.critical(self, "Error", "Failed to load profiles")
+            logging.error(f"Failed to initialize custom_css table: {e}")
 
-    def create_new_profile(self) -> None:
-        """Create a new CSS profile."""
-        profile_name, ok = QInputDialog.getText(self, "New Profile", "Enter profile name:")
-        if ok and profile_name:
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)", (profile_name,))
-                    conn.commit()
-                self.load_profiles()
-                self.profile_dropdown.setCurrentText(profile_name)
-                self.on_profile_change(profile_name)
-                logging.info(f"Created new profile: {profile_name}")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to create profile: {e}")
-                QMessageBox.critical(self, "Error", "Failed to create profile")
+    def add_tab(self, title: str, css_items: list[str]) -> None:
+        """Add a tab for CSS customization with aligned headers and controls."""
+        tab = QWidget(self)
+        main_layout = QVBoxLayout(tab)
+        grid_layout = QGridLayout()
 
-    def delete_profile(self) -> None:
-        """Delete the selected CSS profile."""
-        profile = self.profile_dropdown.currentText()
-        if profile == "Default":
-            QMessageBox.warning(self, "Warning", "Cannot delete the Default profile")
-            return
-        reply = QMessageBox.question(self, "Confirm Delete", f"Delete profile '{profile}'?", QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM css_profiles WHERE profile_name = ?", (profile,))
-                    conn.commit()
-                self.load_profiles()
-                self.profile_dropdown.setCurrentText("Default")
-                self.on_profile_change("Default")
-                logging.info(f"Deleted profile: {profile}")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to delete profile: {e}")
-                QMessageBox.critical(self, "Error", "Failed to delete profile")
+        headers = ["Element", "Image", "Color", "Font", "Size", "Border", "Radius", "Shadow", "Custom CSS", "Reset"]
+        column_widths = [150, 80, 80, 120, 50, 60, 60, 80, 180, 80]
+        for col, (header, width) in enumerate(zip(headers, column_widths)):
+            label = QLabel(header, tab)
+            label.setAlignment(Qt.AlignCenter)
+            label.setStyleSheet("font-weight: bold; padding: 5px; border-bottom: 2px solid gray;")
+            label.setFixedWidth(width)
+            grid_layout.addWidget(label, 0, col)
+            grid_layout.setColumnMinimumWidth(col, width)
 
-    def add_tab(self, tab_title: str, elements: list[str]) -> None:
-        """Add a tab for a category of CSS elements."""
-        tab = QWidget()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        container = QWidget()
-        grid = QGridLayout(container)
-
-        grid.addWidget(QLabel("Element"), 0, 0)
-        grid.addWidget(QLabel("Preview"), 0, 1)
-        grid.addWidget(QLabel("Color"), 0, 2)
-        grid.addWidget(QLabel("Image"), 0, 3)
-        grid.addWidget(QLabel("Shadow"), 0, 4)
-        grid.addWidget(QLabel("Reset"), 0, 5)
-
-        for i, element in enumerate(elements, 1):
-            label = QLabel(element)
-            preview = QLabel("Preview")
-            preview.setFixedSize(100, 30)
+        for row, item in enumerate(css_items, 1):
+            label = QLabel(item, tab)
+            label.setFixedWidth(column_widths[0])
+            preview = QLabel(tab)
+            preview.setFixedSize(50, 20)
             preview.setStyleSheet("border: 1px solid black;")
-            color_btn = QPushButton("Pick Color")
-            color_btn.clicked.connect(lambda _, e=element, p=preview: self.pick_color(e, p))
-            image_btn = QPushButton("Pick Image")
-            image_btn.clicked.connect(lambda _, e=element, p=preview: self.pick_image(e, p))
-            shadow_btn = QPushButton("Add Shadow")
-            shadow_btn.clicked.connect(lambda _, e=element: self.add_shadow(e))
-            reset_btn = QPushButton("Reset")
-            reset_btn.clicked.connect(lambda _, e=element, p=preview: self.reset_css_item(e, p))
-            grid.addWidget(label, i, 0)
-            grid.addWidget(preview, i, 1)
-            grid.addWidget(color_btn, i, 2)
-            grid.addWidget(image_btn, i, 3)
-            grid.addWidget(shadow_btn, i, 4)
-            grid.addWidget(reset_btn, i, 5)
 
-        scroll.setWidget(container)
-        tab.setLayout(QVBoxLayout())
-        tab.layout().addWidget(scroll)
-        self.tab_widget.addTab(tab, tab_title)
-        self.tabs[tab_title] = tab
-        # Store the grid for later access
-        tab.grid = grid
+            image_btn = QPushButton("Pick", tab)
+            image_btn.clicked.connect(lambda _, i=item, p=preview: self.pick_image(i, p))
+            color_btn = QPushButton("Pick", tab)
+            color_btn.clicked.connect(lambda _, i=item, p=preview: self.pick_color(i, p))
+            font_combo = QFontComboBox(tab)
+            font_combo.currentFontChanged.connect(lambda f, i=item: self.save_css_item(i, f'font-family: {f.family()};'))
+            size_spin = QSpinBox(tab)
+            size_spin.setRange(8, 32)
+            size_spin.setValue(14)
+            size_spin.valueChanged.connect(lambda s, i=item: self.save_css_item(i, f'font-size: {s}px;'))
+            border_spin = QSpinBox(tab)
+            border_spin.setRange(0, 10)
+            border_spin.valueChanged.connect(lambda w, i=item: self.save_css_item(i, f'border-width: {w}px;'))
+            radius_spin = QSpinBox(tab)
+            radius_spin.setRange(0, 50)
+            radius_spin.valueChanged.connect(lambda r, i=item: self.save_css_item(i, f'border-radius: {r}px;'))
+            shadow_btn = QPushButton("Set", tab)
+            shadow_btn.clicked.connect(lambda _, i=item: self.pick_box_shadow(i))
+            css_input = QLineEdit(tab)
+            css_input.setPlaceholderText("Custom CSS...")
+            css_input.textChanged.connect(lambda t, i=item: self.save_css_item(i, t))
+            reset_btn = QPushButton("Reset", tab)
+            reset_btn.clicked.connect(lambda _, i=item, p=preview: self.reset_css_item(i, p))
+
+            grid_layout.addWidget(label, row, 0)
+            grid_layout.addWidget(image_btn, row, 1)
+            grid_layout.addWidget(color_btn, row, 2)
+            grid_layout.addWidget(font_combo, row, 3)
+            grid_layout.addWidget(size_spin, row, 4)
+            grid_layout.addWidget(border_spin, row, 5)
+            grid_layout.addWidget(radius_spin, row, 6)
+            grid_layout.addWidget(shadow_btn, row, 7)
+            grid_layout.addWidget(css_input, row, 8)
+            grid_layout.addWidget(reset_btn, row, 9)
+            grid_layout.addWidget(preview, row, 10)  # Preview last for alignment
+
+        main_layout.addWidget(QWidget(tab, layout=grid_layout))
+        self.tab_widget.addTab(tab, title)
+        self.tabs[title] = tab
+        logging.debug(f"Added tab '{title}' with {len(css_items)} items")
+
+    def pick_box_shadow(self, css_item: str) -> None:
+        """Open a dialog to configure box-shadow for a CSS item."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Box Shadow Settings")
+        layout = QVBoxLayout(dialog)
+
+        h_offset = QSpinBox(dialog); h_offset.setRange(-20, 20)
+        v_offset = QSpinBox(dialog); v_offset.setRange(-20, 20)
+        blur = QSpinBox(dialog); blur.setRange(0, 30); blur.setValue(5)
+        spread = QSpinBox(dialog); spread.setRange(0, 30)
+        color_btn = QPushButton("Pick Color", dialog)
+        color = QColor('gray')
+        color_btn.clicked.connect(lambda: [setattr(color_btn, 'color', QColorDialog.getColor()),
+                                          color_btn.setStyleSheet(f"background-color: {color_btn.color.name()}")])
+        apply_btn = QPushButton("Apply", dialog)
+        apply_btn.clicked.connect(lambda: [self.save_css_item(css_item,
+            f'box-shadow: {h_offset.value()}px {v_offset.value()}px {blur.value()}px {spread.value()}px {color_btn.color.name()};'),
+            dialog.accept()])
+
+        layout.addWidget(QLabel("H Offset", dialog)); layout.addWidget(h_offset)
+        layout.addWidget(QLabel("V Offset", dialog)); layout.addWidget(v_offset)
+        layout.addWidget(QLabel("Blur", dialog)); layout.addWidget(blur)
+        layout.addWidget(QLabel("Spread", dialog)); layout.addWidget(spread)
+        layout.addWidget(color_btn); layout.addWidget(apply_btn)
+        dialog.exec()
 
     def pick_color(self, css_item: str, preview: QLabel) -> None:
-        """Open a color picker and apply the selected color."""
+        """Pick a color and update the CSS item."""
         color = QColorDialog.getColor()
         if color.isValid():
-            style = f"background-color: {color.name()};"
-            preview.setStyleSheet(style)
-            self.save_css_item(css_item, style)
-            logging.debug(f"Set color for '{css_item}': {color.name()}")
+            value = f"background-color: {color.name()};"
+            self.save_css_item(css_item, value)
+            preview.setStyleSheet(value)
+            logging.debug(f"Set color {color.name()} for '{css_item}'")
 
     def pick_image(self, css_item: str, preview: QLabel) -> None:
-        """Open a file dialog to select an image and apply it as a background."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.png *.jpg *.jpeg)")
+        """Pick an image file and apply it as a background."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.png *.jpg *.jpeg *.bmp)")
         if file_path:
-            style = f"background-image: url({file_path}); background-size: cover;"
-            preview.setStyleSheet(style)
-            self.save_css_item(css_item, style)
-            logging.debug(f"Set image for '{css_item}': {file_path}")
-
-    def add_shadow(self, css_item: str) -> None:
-        """Add a default shadow effect to the element."""
-        style = "box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);"
-        self.save_css_item(css_item, style)
-        self.load_existing_customizations()
-        logging.debug(f"Added shadow to '{css_item}'")
+            value = f"background-image: url('file:///{file_path}'); background-size: cover;"
+            self.save_css_item(css_item, value)
+            preview.setStyleSheet(value)
+            logging.debug(f"Set image {file_path} for '{css_item}'")
 
     def save_css_item(self, css_item: str, value: str) -> None:
-        """Save a CSS customization to the database under the current profile."""
+        """Save a CSS customization to the database."""
         if not value.strip():
             return
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)",
-                    (self.current_profile, css_item, value)
-                )
+                cursor.execute("INSERT OR REPLACE INTO custom_css (element, value) VALUES (?, ?)", (css_item, value))
                 conn.commit()
-                cursor.execute("SELECT COUNT(*) FROM custom_css WHERE profile_name = ?", (self.current_profile,))
-                logging.debug(f"Rows in custom_css for '{self.current_profile}': {cursor.fetchone()[0]}")
+            logging.debug(f"Saved CSS for '{css_item}': {value}")
         except sqlite3.Error as e:
             logging.error(f"Failed to save CSS for '{css_item}': {e}")
-            QMessageBox.critical(self, "Error", f"Failed to save CSS: {e}")
 
     def load_existing_customizations(self) -> None:
-        """Load and apply existing CSS customizations for the current profile."""
+        """Load and apply existing CSS customizations to the UI."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT element, value FROM custom_css WHERE profile_name = ?",
-                    (self.current_profile,)
-                )
+                cursor.execute("SELECT element, value FROM custom_css")
                 customizations = dict(cursor.fetchall())
 
             for tab_title, tab in self.tabs.items():
-                grid = tab.grid
+                grid = tab.layout().itemAt(0).widget().layout()
                 for row in range(1, grid.rowCount()):
                     label = grid.itemAtPosition(row, 0).widget()
-                    preview = grid.itemAtPosition(row, 1).widget()
+                    preview = grid.itemAtPosition(row, 10).widget()
                     if label.text() in customizations:
                         preview.setStyleSheet(customizations[label.text()])
-                    else:
-                        preview.setStyleSheet("")
-            logging.debug(f"Loaded {len(customizations)} CSS customizations for profile '{self.current_profile}'")
+            logging.debug(f"Loaded {len(customizations)} CSS customizations")
         except sqlite3.Error as e:
             logging.error(f"Failed to load CSS customizations: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load customizations: {e}")
 
     def save_and_apply_changes(self) -> None:
-        css = self.generate_custom_css()
+        """Save changes and apply CSS to the parent webview."""
+        css = self.parent.generate_custom_css()
         if css and self.parent:
-            self.parent.current_css_profile = self.current_profile
-            self.parent.apply_custom_css(css)
+            self.apply_custom_css(css)
             self.parent.website_frame.reload()
         self.accept()
         logging.info("CSS changes saved and applied")
 
+    def apply_custom_css(self, css: str | None = None) -> None:
+        """Apply CSS to the parent webview (proxy to parent method)."""
+        if self.parent:
+            self.parent.apply_custom_css(css or self.parent.generate_custom_css())
+        else:
+            logging.warning("No parent to apply CSS to")
+
     def generate_custom_css(self) -> str:
-        """Generate CSS string from database customizations for the current profile."""
+        """Generate CSS string from database customizations."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT element, value FROM custom_css WHERE profile_name = ?",
-                    (self.current_profile,)
-                )
+                cursor.execute("SELECT element, value FROM custom_css")
                 return "\n".join(f"{elem} {{ {val} }}" for elem, val in cursor.fetchall())
         except sqlite3.Error as e:
             logging.error(f"Failed to generate CSS: {e}")
             return ""
 
     def upload_css_file(self) -> None:
-        """Upload and apply a CSS file to the current profile."""
+        """Upload and apply a CSS file."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select CSS", "", "CSS Files (*.css)")
         if file_path:
             try:
@@ -4702,48 +4599,42 @@ class CSSCustomizationDialog(QDialog):
                     css = f.read()
                     rules = re.findall(r'([^{]+){([^}]+)}', css, re.DOTALL)
                     cursor = conn.cursor()
-                    cursor.executemany(
-                        "INSERT OR REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)",
-                        [(self.current_profile, sel.strip(), prop.strip()) for sel, prop in rules]
-                    )
+                    cursor.executemany("INSERT OR REPLACE INTO custom_css (element, value) VALUES (?, ?)",
+                                      [(sel.strip(), prop.strip()) for sel, prop in rules])
                     conn.commit()
                 self.load_existing_customizations()
-                self.parent.apply_custom_css(css)
+                self.apply_custom_css(css)
                 if self.parent:
                     self.parent.website_frame.reload()
-                logging.info(f"Uploaded CSS file: {file_path} to profile '{self.current_profile}'")
+                logging.info(f"Uploaded CSS file: {file_path}")
             except (IOError, sqlite3.Error) as e:
                 logging.error(f"Failed to upload CSS file: {e}")
                 QMessageBox.critical(self, "Error", f"Upload failed: {e}")
 
     def reset_css_item(self, css_item: str, preview: QLabel) -> None:
-        """Reset a specific CSS item to default for the current profile."""
+        """Reset a specific CSS item to default."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "DELETE FROM custom_css WHERE profile_name = ? AND element = ?",
-                    (self.current_profile, css_item)
-                )
+                cursor.execute("DELETE FROM custom_css WHERE element = ?", (css_item,))
                 conn.commit()
             preview.setStyleSheet("")
-            logging.debug(f"Reset CSS for '{css_item}' in profile '{self.current_profile}'")
+            logging.debug(f"Reset CSS for '{css_item}'")
         except sqlite3.Error as e:
             logging.error(f"Failed to reset CSS for '{css_item}': {e}")
-            QMessageBox.critical(self, "Error", f"Failed to reset CSS: {e}")
 
     def clear_all_customizations(self) -> None:
-        """Clear all CSS customizations for the current profile."""
+        """Clear all CSS customizations."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM custom_css WHERE profile_name = ?", (self.current_profile,))
+                cursor.execute("DELETE FROM custom_css")
                 conn.commit()
             self.load_existing_customizations()
-            self.parent.apply_custom_css("")
+            self.apply_custom_css("")
             if self.parent:
                 self.parent.website_frame.reload()
-            logging.info(f"Cleared all CSS customizations for profile '{self.current_profile}'")
+            logging.info("Cleared all CSS customizations")
         except sqlite3.Error as e:
             logging.error(f"Failed to clear CSS customizations: {e}")
             QMessageBox.critical(self, "Error", "Failed to clear customizations")
@@ -5753,7 +5644,7 @@ class PowersDialog(QDialog):
 def main() -> None:
     """Run the RBC City Map Application."""
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon('./images/favicon.ico'))
+    app.setWindowIcon(QIcon('../testing/images/favicon.ico'))
     window = RBCCommunityMap()
     window.show()  # Explicitly show the window
     sys.exit(app.exec())

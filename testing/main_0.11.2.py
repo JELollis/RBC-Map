@@ -265,7 +265,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QComboBox, \
     QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem, QFileDialog, \
     QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, QSpinBox, \
-    QFontComboBox, QSplashScreen
+    QFontComboBox, QSplashScreen, QCompleter
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, QShortcut, QKeySequence
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
 from PySide6.QtCore import Slot as pyqtSlot
@@ -277,6 +277,12 @@ from PySide6.QtNetwork import QNetworkCookie
 from typing import List, Tuple, Any
 from collections.abc import KeysView
 import sqlite3
+
+# -----------------------
+# Define App Icon
+# -----------------------
+
+APP_ICON = None
 
 # -----------------------
 # Startup Splash
@@ -329,6 +335,7 @@ DEFAULT_KEYBINDS = {
 
 # Required Directories
 REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
+
 
 # -----------------------
 # Directory Setup
@@ -2561,6 +2568,12 @@ class RBCCommunityMap(QMainWindow):
         combo_go_layout.addWidget(self.combo_rows)
         combo_go_layout.addWidget(go_button)
 
+        # Label for dropdowns to indicate their function
+        dropdown_label = QLabel("Recenter Minimap to Location")
+        dropdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        dropdown_label.setStyleSheet("font-size: 12px; padding: 5px;")
+        left_layout.addWidget(dropdown_label)
+
         left_layout.addLayout(combo_go_layout)
 
         # Zoom and action buttons
@@ -2827,21 +2840,30 @@ class RBCCommunityMap(QMainWindow):
     # Menu Control Items
     # -----------------------
 
+    def get_default_screenshot_path(self, suffix: str) -> str:
+        pictures_dir = os.path.join(os.path.expanduser("~"), "Pictures", "RBC Map")
+        os.makedirs(pictures_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        default_filename = f"{timestamp}_{suffix}.png"
+        return os.path.join(pictures_dir, default_filename)
+
     def save_webpage_screenshot(self):
         """
-        Save the current webpage as a screenshot.
-        Opens a file dialog to specify the location and filename for saving the screenshot in PNG format.
+        Save the current webpage as a screenshot to Pictures/RBC Map with a timestamped filename.
         """
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", "", "PNG Files (*.png);;All Files (*)")
+        default_path = self.get_default_screenshot_path("webpage")
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Webpage Screenshot", default_path,
+                                                   "PNG Files (*.png);;All Files (*)")
         if file_name:
             self.website_frame.grab().save(file_name)
 
     def save_app_screenshot(self):
         """
-        Save the current application window as a screenshot.
-        Opens a file dialog to specify the location and filename for saving the screenshot in PNG format.
+        Save the current application window as a screenshot to Pictures/RBC Map with a timestamped filename.
         """
-        file_name, _ = QFileDialog.getSaveFileName(self, "Save App Screenshot", "", "PNG Files (*.png);;All Files (*)")
+        default_path = self.get_default_screenshot_path("app")
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save App Screenshot", default_path,
+                                                   "PNG Files (*.png);;All Files (*)")
         if file_name:
             self.grab().save(file_name)
 
@@ -3263,18 +3285,14 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Unexpected error in process_html: {e}")
 
     def extract_coordinates_from_html(self, html):
-        """
-        Extract coordinates from the HTML content, prioritizing the player's current location.
 
-        Args:
-            html (str): HTML content as a string.
-
-        Returns:
-            tuple: x and y coordinates, or (None, None) if not found.
-        """
         soup = BeautifulSoup(html, 'html.parser')
-
         logging.debug("Extracting coordinates from HTML...")
+
+        # Try to extract the intersection label (like "Aardvark and 1st")
+        intersect_span = soup.find('span', class_='intersect')
+        text = intersect_span.text.strip() if intersect_span else ""
+        logging.debug(f"Intersection label found: {text}")
 
         # Check for city limits
         city_limit_cells = soup.find_all('td', class_='cityblock')
@@ -3290,60 +3308,126 @@ class RBCCommunityMap(QMainWindow):
 
         logging.debug(f"First detected coordinate: x={first_x}, y={first_y}")
 
-        if len(city_limit_cells) >= 4:
-            logging.warning("City limits detected in all four edges. Adjusting coordinates.")
-
-            if first_x is not None and first_y is not None:
-                return -1, -1  # Assign -1,-1 if surrounded by city limits
-            else:
-                return None, None
-
-        # Adjust for Northern Edge (Y=0)
-        if len(city_limit_cells) > 0 and first_y == 0:
-            logging.debug(f"Detected Northern City Limit at y={first_y}")
-            return first_x, -1
-
-        # Adjust for Western Edge (X=0)
-        if len(city_limit_cells) > 0 and first_x == 0:
-            logging.debug(f"Detected Western City Limit at x={first_x}")
-            return -1, first_y
-
-        # If no adjustments, return detected values
-        return first_x, first_y
-
-    def adjust_for_city_limits_with_html(self, x, y, soup):
-        """
-        Adjust coordinates based on city limits in the HTML content.
-
-        Args:
-            x (int): X coordinate.
-            y (int): Y coordinate.
-            soup (BeautifulSoup): Parsed HTML content.
-
-        Returns:
-            tuple: Adjusted x and y coordinates.
-        """
-        logging.debug(f"Adjusting for city limits: Initial x={x}, y={y}")
-
-        # Check if city limits blocks are in the first row
-        city_limits_present = soup.find_all('td', class_='cityblock',
-                                            string=lambda text: text and 'City Limits' in text)
-
-        if city_limits_present:
-            logging.debug(f"Detected city limits in HTML. Adjusting...")
-
-            if x == 0 and y == 0:
-                logging.debug("Detected corner case (0,0). Adjusting to (-1, -1)")
+        if self.zoom_level == 3:
+            if text == "Aardvark and 1st" and len(city_limit_cells) == 5:
+                logging.debug("Top-left corner detected with full border row: Aardvark and 1st")
                 return -1, -1
-            elif x == 0:
-                logging.debug(f"Detected west edge at x={x}. Adjusting to (-1, {y})")
-                return -1, y
-            elif y == 0:
-                logging.debug(f"Detected north edge at y={y}. Adjusting to ({x}, -1)")
-                return x, -1
 
-        logging.debug(f"Final adjusted coordinates: x={x}, y={y}")
-        return x, y
+            elif text == "Zestless and 1st" and len(city_limit_cells) == 5:
+                logging.debug("Top-right corner detected: Zestless and 1st")
+                return 198, -1
+
+            elif text == "Aardvark and 100th" and len(city_limit_cells) == 5:
+                logging.debug("Bottom-left corner detected: Aardvark and 100th")
+                return -1, 198
+
+            elif text == "Zestless and 100th" and len(city_limit_cells) == 5:
+                logging.debug("Bottom-right corner detected: Zestless and 100th")
+                return 198, 198
+
+            # Adjust for WCL and 1st (0,1)
+            elif len(city_limit_cells) == 3 and first_y == 0 and first_x == 0:
+                logging.debug(f"Detected Cell 0,1.")
+                return -1, 0
+
+            # Adjust for ON Zestless and 1st (198,1)
+            elif len(city_limit_cells) == 3 and first_x == 198 and first_y == 0:
+                logging.debug("Detected special case: on Zestless and 1st")
+                return first_x, first_y
+
+            # Adjust for Northern Edge (Y=0)
+            elif len(city_limit_cells) == 3 and first_y == 0:
+                logging.debug(f"Detected Northern City Limit at y={first_y}")
+                return first_x, -1
+
+            # Adjust for Western Edge (X=0)
+            elif len(city_limit_cells) == 3 and first_x == 0:
+                logging.debug(f"Detected Western City Limit at x={first_x}")
+                return -1, first_y
+
+            # If no adjustments, return detected values
+            return first_x, first_y
+
+        elif self.zoom_level == 5:
+            if text == "Aardvark and 1st" and len(city_limit_cells) == 5:
+                logging.debug("Top-left corner detected with full border row: Aardvark and 1st")
+                return -2, -2
+
+            elif text == "Zestless and 1st" and len(city_limit_cells) == 5:
+                logging.debug("Top-right corner detected: Zestless and 1st")
+                return 197, -2
+
+            elif text == "Aardvark and 100th" and len(city_limit_cells) == 5:
+                logging.debug("Bottom-left corner detected: Aardvark and 100th")
+                return -2, 197
+
+            elif text == "Zestless and 100th" and len(city_limit_cells) == 5:
+                logging.debug("Bottom-right corner detected: Zestless and 100th")
+                return 197, 197
+
+            # Adjust for WCL and 1st (0,1)
+            elif len(city_limit_cells) == 3 and first_y == 0 and first_x == 0:
+                logging.debug(f"Detected Cell 0,1.")
+                return -2, -1
+
+            # Adjust for ON Zestless and 1st (198,1)
+            elif len(city_limit_cells) == 3 and first_x == 198 and first_y == 0:
+                logging.debug("Detected special case: on Zestless and 1st")
+                return first_x - 1, first_y - 1
+
+            # Adjust for Northern Edge (Y=0)
+            elif len(city_limit_cells) == 3 and first_y == 0:
+                logging.debug(f"Detected Northern City Limit at y={first_y}")
+                return first_x - 1, -2
+
+            # Adjust for Western Edge (X=0)
+            elif len(city_limit_cells) == 3 and first_x == 0:
+                logging.debug(f"Detected Western City Limit at x={first_x}")
+                return -2, first_y - 1
+
+            # If no adjustments, return detected values
+            return first_x - 1, first_y - 1
+
+        elif self.zoom_level == 7:
+            if text == "Aardvark and 1st" and len(city_limit_cells) == 5:
+                logging.debug("Top-left corner detected with full border row: Aardvark and 1st")
+                return -3, -3
+
+            elif text == "Zestless and 1st" and len(city_limit_cells) == 5:
+                logging.debug("Top-right corner detected: Zestless and 1st")
+                return 196, -3
+
+            elif text == "Aardvark and 100th" and len(city_limit_cells) == 5:
+                logging.debug("Bottom-left corner detected: Aardvark and 100th")
+                return -3, 196
+
+            elif text == "Zestless and 100th" and len(city_limit_cells) == 5:
+                logging.debug("Bottom-right corner detected: Zestless and 100th")
+                return 196, 196
+
+            # Adjust for WCL and 1st (0,1)
+            elif len(city_limit_cells) == 3 and first_y == 0 and first_x == 0:
+                logging.debug(f"Detected Cell 0,1.")
+                return -3, -2
+
+            # Adjust for ON Zestless and 1st (198,1)
+            elif len(city_limit_cells) == 3 and first_x == 198 and first_y == 0:
+                logging.debug("Detected special case: on Zestless and 1st")
+                return first_x - 2, first_y - 2
+
+            # Adjust for Northern Edge (Y=0)
+            elif len(city_limit_cells) == 3 and first_y == 0:
+                logging.debug(f"Detected Northern City Limit at y={first_y}")
+                return first_x - 2, -3
+
+            # Adjust for Western Edge (X=0)
+            elif len(city_limit_cells) == 3 and first_x == 0:
+                logging.debug(f"Detected Western City Limit at x={first_x}")
+                return -3, first_y - 2
+
+            # If no adjustments, return detected values
+            return first_x - 2, first_y - 2
+        return first_x, first_y
 
     def extract_coins_from_html(self, html):
         """
@@ -3796,13 +3880,21 @@ class RBCCommunityMap(QMainWindow):
         logging.debug(f"Before recentering: character_x={self.character_x}, character_y={self.character_y}")
 
         # Calculate zoom offset (-1 for 5x5, -2 for 7x7, etc.)
-        zoom_offset = (self.zoom_level - 4) // 2
+        if self.zoom_level == 3:
+            zoom_offset = -1
+        elif self.zoom_level == 5:
+            zoom_offset = -2
+        elif self.zoom_level == 7:
+            zoom_offset = -3
+        else:
+            zoom_offset = -(self.zoom_level // 2)  # Safe fallback
+        logging.debug(f"Zoom Level: {self.zoom_level}")
         logging.debug(f"Zoom Offset: {zoom_offset}")
         logging.debug(f"Debug: char_y={self.character_y}, row_start={self.row_start}, zoom_offset={zoom_offset}")
-        logging.debug(f"Clamping min: {min(self.character_y - zoom_offset, 200 - self.zoom_level)}")
+        logging.debug(f"Clamping min: {min(self.character_y + zoom_offset, 200 - self.zoom_level)}")
 
-        self.column_start = max(0, min(self.character_x - zoom_offset, max(198, 202 - self.zoom_level)))
-        self.row_start = max(0, min(self.character_y - zoom_offset, max(198, 202 - self.zoom_level)))
+        self.column_start = self.character_x + 1
+        self.row_start = self.character_y + 1
 
         logging.debug(
             f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
@@ -4013,31 +4105,34 @@ class RBCCommunityMap(QMainWindow):
 
     def get_intersection_name(self, coords):
         """
-        Get the intersection name for the given coordinates, including special cases for map edges.
+        Get the intersection name for the given coordinates, including edge cases.
 
         Args:
             coords (tuple): Coordinates (x, y).
 
         Returns:
-            str: Intersection name.
+            str: Readable intersection like "Nickel & 55th" or fallback "x, y".
         """
         x, y = coords
 
-        # Special cases for edges of the map
-        if x <= min(self.columns.values()) - 1:
-            column_name = "Edge of Map"
-        else:
-            column_name = next((name for name, coord in self.columns.items() if coord == x - 1), "Edge of Map")
+        # Try direct match
+        column_name = next((name for name, coord in self.columns.items() if coord == x), None)
+        row_name = next((name for name, coord in self.rows.items() if coord == y), None)
 
-        if y <= min(self.rows.values()) - 1:
-            row_name = "Edge of Map"
-        else:
-            row_name = next((name for name, coord in self.rows.items() if coord == y - 1), "Edge of Map")
+        # Fallback to offset-based match
+        if not column_name:
+            column_name = next((name for name, coord in self.columns.items() if coord == x - 1), None)
+        if not row_name:
+            row_name = next((name for name, coord in self.rows.items() if coord == y - 1), None)
 
-        if column_name == "Edge of Map" or row_name == "Edge of Map":
-            return "Edge of Map"
-        else:
+        if column_name and row_name:
             return f"{column_name} & {row_name}"
+        elif column_name:
+            return f"{column_name} & Unknown Row"
+        elif row_name:
+            return f"Unknown Column & {row_name}"
+        else:
+            return f"{x}, {y}"  # raw coords as fallback
 
 # -----------------------
 # Menu Actions
@@ -4083,6 +4178,7 @@ class RBCCommunityMap(QMainWindow):
 
         credits_dialog = QDialog()
         credits_dialog.setWindowTitle('Credits')
+        self.setWindowIcon(APP_ICON)
         credits_dialog.setFixedSize(650, 400)
 
         layout = QVBoxLayout(credits_dialog)
@@ -4180,6 +4276,7 @@ class DatabaseViewer(QDialog):
         """
         super().__init__(parent)  # Ensure it gets QDialog properties
         self.setWindowTitle('SQLite Database Viewer')
+        self.setWindowIcon(APP_ICON)
         self.setGeometry(100, 100, 800, 600)
 
         # Main layout
@@ -4282,6 +4379,7 @@ class CharacterDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle("Character")
+        self.setWindowIcon(APP_ICON)
 
         # Create input fields for the character's name and password
         self.name_edit = QLineEdit()
@@ -4332,6 +4430,7 @@ class ThemeCustomizationDialog(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle('Theme Customization')
+        self.setWindowIcon(APP_ICON)
         self.setMinimumSize(400, 300)
 
         self.color_mappings = color_mappings.copy() if color_mappings else {}
@@ -4446,6 +4545,7 @@ class CSSCustomizationDialog(QDialog):
         self.parent = parent
         self.current_profile = current_profile
         self.setWindowTitle("CSS Customization")
+        self.setWindowIcon(APP_ICON)
         self.resize(600, 400)
         self.tabs = {}
         self.setup_ui()
@@ -4980,22 +5080,18 @@ class SetDestinationDialog(QDialog):
         Args:
             parent: Reference to RBCCommunityMap.
         """
-        super().__init__(parent)  # Ensures QDialog is properly initialized
+        super().__init__(parent)
         self.setWindowTitle("Set Destination")
-        self.resize(200, 250)
+        self.setWindowIcon(APP_ICON)
+        self.resize(650, 300)
         self.parent = parent
         logging.debug("SetDestinationDialog initialized")
 
         main_layout = QVBoxLayout(self)
         dropdown_style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
 
-        # Recent destinations
+        # Create all dropdowns
         self.recent_destinations_dropdown = QComboBox()
-        self.recent_destinations_dropdown.setStyleSheet(dropdown_style)
-        self.populate_recent_destinations()
-
-        # Predefined destination dropdowns
-        dropdown_layout = QFormLayout()
         self.tavern_dropdown = QComboBox()
         self.bank_dropdown = QComboBox()
         self.transit_dropdown = QComboBox()
@@ -5003,14 +5099,36 @@ class SetDestinationDialog(QDialog):
         self.guild_dropdown = QComboBox()
         self.poi_dropdown = QComboBox()
         self.user_building_dropdown = QComboBox()
-        for dropdown in (
+        self.columns_dropdown = QComboBox()
+        self.rows_dropdown = QComboBox()
+        self.directional_dropdown = QComboBox()
+
+        # Apply style and search to all dropdowns
+        all_dropdowns = [
+            self.recent_destinations_dropdown,
             self.tavern_dropdown, self.bank_dropdown, self.transit_dropdown,
             self.shop_dropdown, self.guild_dropdown, self.poi_dropdown,
-            self.user_building_dropdown
-        ):
-            dropdown.setStyleSheet(dropdown_style)
+            self.user_building_dropdown,
+            self.columns_dropdown, self.rows_dropdown, self.directional_dropdown,
+        ]
 
+        for dropdown in all_dropdowns:
+            dropdown.setStyleSheet(dropdown_style)
+            dropdown.setEditable(True)
+            dropdown.setInsertPolicy(QComboBox.NoInsert)
+            completer = dropdown.completer()
+            completer.setCompletionMode(QCompleter.PopupCompletion)
+            completer.setFilterMode(Qt.MatchContains)
+
+        # Populate dropdowns
+        self.populate_recent_destinations()
         self._populate_initial_dropdowns()
+        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys() if self.parent else [])
+        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys() if self.parent else [])
+        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
+
+        # Layout: Predefined dropdowns
+        dropdown_layout = QFormLayout()
         dropdown_layout.addRow("Recent:", self.recent_destinations_dropdown)
         dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
         dropdown_layout.addRow("Bank:", self.bank_dropdown)
@@ -5020,24 +5138,20 @@ class SetDestinationDialog(QDialog):
         dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
         dropdown_layout.addRow("User Building:", self.user_building_dropdown)
 
-        # Custom location
+        # Layout: Custom XY + direction
         custom_layout = QHBoxLayout()
-        self.columns_dropdown = QComboBox()
-        self.rows_dropdown = QComboBox()
-        self.directional_dropdown = QComboBox()
-        for dropdown in (self.columns_dropdown, self.rows_dropdown, self.directional_dropdown):
-            dropdown.setStyleSheet(dropdown_style)
-        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys() if self.parent else [])
-        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys() if self.parent else [])
-        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
         custom_layout.addWidget(QLabel("ABC Street:"))
-        custom_layout.addWidget(self.columns_dropdown)
+        custom_layout.addWidget(self.columns_dropdown, 1)
         custom_layout.addWidget(QLabel("123 Street:"))
-        custom_layout.addWidget(self.rows_dropdown)
+        custom_layout.addWidget(self.rows_dropdown, 1)
         custom_layout.addWidget(QLabel("Direction:"))
-        custom_layout.addWidget(self.directional_dropdown)
+        custom_layout.addWidget(self.directional_dropdown, 1)
 
-        # Buttons
+        self.columns_dropdown.setMinimumWidth(120)
+        self.rows_dropdown.setMinimumWidth(120)
+        self.directional_dropdown.setMinimumWidth(120)
+
+        # Layout: Buttons
         button_layout = QGridLayout()
         set_btn = QPushButton("Set")
         set_btn.clicked.connect(self.set_destination)
@@ -5052,10 +5166,11 @@ class SetDestinationDialog(QDialog):
         button_layout.addWidget(update_btn, 1, 0)
         button_layout.addWidget(cancel_btn, 1, 1)
 
+        # Final layout
         main_layout.addLayout(dropdown_layout)
         main_layout.addLayout(custom_layout)
         main_layout.addLayout(button_layout)
-        self.setLayout(main_layout)  # Ensure QDialog layout is set
+        self.setLayout(main_layout)
 
     def _populate_initial_dropdowns(self) -> None:
         """Populate predefined destination dropdowns with initial data."""
@@ -5251,34 +5366,100 @@ class SetDestinationDialog(QDialog):
 class ShoppingListTool(QDialog):
     """Tool for managing a character’s shopping list with SQLite-backed shop data."""
 
-    def __init__(self, character_name: str, db_path: str, parent=None) -> None:
+    def __init__(self, parent: QWidget = None) -> None:
         """
-        Initialize the Shopping List Tool.
+        Initialize the Set Destination dialog.
 
         Args:
-            character_name: Name of the character using the tool.
-            db_path: Path to the SQLite database.
-            parent: Parent widget (default is None).
+            parent: Reference to RBCCommunityMap.
         """
-        super().__init__(parent)  # Ensure it gets QDialog properties
-        self.setWindowTitle("Shopping List Tool")
-        self.setGeometry(100, 100, 600, 400)
-        self.character_name = character_name
-        self.DB_PATH = db_path
-        self.list_total = 0
+        super().__init__(parent)
+        self.setWindowTitle("Set Destination")
+        self.setWindowIcon(APP_ICON)
+        self.resize(200, 250)
+        self.parent = parent
+        logging.debug("SetDestinationDialog initialized")
 
-        try:
-            self.sqlite_connection = sqlite3.connect(self.DB_PATH)
-            self.sqlite_cursor = self.sqlite_connection.cursor()
-        except sqlite3.Error as e:
-            logging.error(f"Failed to connect to database: {e}")
-            self.sqlite_connection = None
-            self.sqlite_cursor = None
+        main_layout = QVBoxLayout(self)
+        dropdown_style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
 
-        self.setup_ui()
-        if self.sqlite_connection:
-            self.populate_shop_dropdown()
-        logging.debug(f"ShoppingListTool initialized for {character_name}")
+        # Create all dropdowns
+        self.recent_destinations_dropdown = QComboBox()
+        self.tavern_dropdown = QComboBox()
+        self.bank_dropdown = QComboBox()
+        self.transit_dropdown = QComboBox()
+        self.shop_dropdown = QComboBox()
+        self.guild_dropdown = QComboBox()
+        self.poi_dropdown = QComboBox()
+        self.user_building_dropdown = QComboBox()
+        self.columns_dropdown = QComboBox()
+        self.rows_dropdown = QComboBox()
+        self.directional_dropdown = QComboBox()
+
+        # Apply style and search to all dropdowns
+        all_dropdowns = [
+            self.recent_destinations_dropdown,
+            self.tavern_dropdown, self.bank_dropdown, self.transit_dropdown,
+            self.shop_dropdown, self.guild_dropdown, self.poi_dropdown,
+            self.user_building_dropdown,
+            self.columns_dropdown, self.rows_dropdown, self.directional_dropdown,
+        ]
+
+        for dropdown in all_dropdowns:
+            dropdown.setStyleSheet(dropdown_style)
+            dropdown.setEditable(True)
+            dropdown.setInsertPolicy(QComboBox.NoInsert)
+            completer = dropdown.completer()
+            completer.setCompletionMode(QCompleter.PopupCompletion)
+            completer.setFilterMode(Qt.MatchContains)
+
+        # Populate dropdowns
+        self.populate_recent_destinations()
+        self._populate_initial_dropdowns()
+        self.populate_dropdown(self.columns_dropdown, self.parent.columns.keys() if self.parent else [])
+        self.populate_dropdown(self.rows_dropdown, self.parent.rows.keys() if self.parent else [])
+        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
+
+        # Layout: Predefined dropdowns
+        dropdown_layout = QFormLayout()
+        dropdown_layout.addRow("Recent:", self.recent_destinations_dropdown)
+        dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
+        dropdown_layout.addRow("Bank:", self.bank_dropdown)
+        dropdown_layout.addRow("Transit:", self.transit_dropdown)
+        dropdown_layout.addRow("Shop:", self.shop_dropdown)
+        dropdown_layout.addRow("Guild:", self.guild_dropdown)
+        dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
+        dropdown_layout.addRow("User Building:", self.user_building_dropdown)
+
+        # Layout: Custom XY + direction
+        custom_layout = QHBoxLayout()
+        custom_layout.addWidget(QLabel("ABC Street:"))
+        custom_layout.addWidget(self.columns_dropdown)
+        custom_layout.addWidget(QLabel("123 Street:"))
+        custom_layout.addWidget(self.rows_dropdown)
+        custom_layout.addWidget(QLabel("Direction:"))
+        custom_layout.addWidget(self.directional_dropdown)
+
+        # Layout: Buttons
+        button_layout = QGridLayout()
+        set_btn = QPushButton("Set")
+        set_btn.clicked.connect(self.set_destination)
+        clear_btn = QPushButton("Clear")
+        clear_btn.clicked.connect(self.clear_destination)
+        update_btn = QPushButton("Update Data")
+        update_btn.clicked.connect(self.update_comboboxes)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(set_btn, 0, 0)
+        button_layout.addWidget(clear_btn, 0, 1)
+        button_layout.addWidget(update_btn, 1, 0)
+        button_layout.addWidget(cancel_btn, 1, 1)
+
+        # Final layout
+        main_layout.addLayout(dropdown_layout)
+        main_layout.addLayout(custom_layout)
+        main_layout.addLayout(button_layout)
+        self.setLayout(main_layout)
 
     def setup_ui(self) -> None:
         """Set up the UI elements and layout."""
@@ -5490,6 +5671,7 @@ class DamageCalculator(QDialog):
         self.db_connection = db_connection
         self.charisma_level = 0
         self.setWindowTitle("Damage Calculator")
+        self.setWindowIcon(APP_ICON)
         self.setMinimumWidth(400)
 
         main_layout = QVBoxLayout(self)  # Use QVBoxLayout for QDialog
@@ -5614,6 +5796,7 @@ class PowersDialog(QDialog):
         """
         super().__init__(parent)  # Ensure QDialog properties are inherited
         self.setWindowTitle("Powers Information")
+        self.setWindowIcon(APP_ICON)
         self.setMinimumSize(600, 400)
         self.parent = parent
         self.character_x = character_x
@@ -5790,23 +5973,37 @@ class PowersDialog(QDialog):
 
 def main() -> None:
     """Run the RBC City Map Application."""
+    global APP_ICON
     app = QApplication(sys.argv)
-    app.setWindowIcon(QIcon('./images/favicon.ico'))
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
+    APP_ICON = QIcon('./images/favicon.ico')
+    app.setWindowIcon(APP_ICON)
 
     splash = SplashScreen("images/loading.png")
     splash.show()
     splash.show_message("Starting up...")
 
-    init_methods = [ '_init_scraper', '_init_window_properties', '_init_web_profile', '_init_ui_state', '_init_characters', '_init_ui_components', '_finalize_setup' ]
-    for name in init_methods:
-        method = getattr(RBCCommunityMap, name)
-        setattr(RBCCommunityMap, name, splash_message(splash)(method))
-
+    # Delay decorating until instance is created
     main_window = RBCCommunityMap()
+
+    init_methods = [
+        '_init_scraper',
+        '_init_window_properties',
+        '_init_web_profile',
+        '_init_ui_state',
+        '_init_characters',
+        '_init_ui_components',
+        '_finalize_setup'
+    ]
+
+    for name in init_methods:
+        method = getattr(main_window, name)
+        setattr(main_window, name, splash_message(splash)(method))
+
     main_window.splash = splash
     main_window.show()
     splash.finish(main_window)
 
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

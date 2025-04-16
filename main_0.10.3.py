@@ -240,6 +240,8 @@ def ensure_directories_exist():
         os.makedirs(directory, exist_ok=True)
         logging.debug(f"Ensured directory exists: {directory}")
 
+ensure_directories_exist()
+
 # -----------------------
 # Logging Setup
 # -----------------------
