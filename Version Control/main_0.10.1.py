@@ -356,27 +356,27 @@ CREATE TABLE IF NOT EXISTS `banks` (
 PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS characters (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    password TEXT
-                );
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    password TEXT
+);
 CREATE TABLE IF NOT EXISTS coins (
-                    character_id INTEGER,
-                    pocket INTEGER DEFAULT 0,
-                    bank INTEGER DEFAULT 0,
-                    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-                );
+    character_id INTEGER,
+    pocket INTEGER DEFAULT 0,
+    bank INTEGER DEFAULT 0,
+    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS `color_mappings` (
-`id` int NOT NULL ,
-`type` TEXT NOT NULL,
-`color` TEXT NOT NULL,
-PRIMARY KEY (`id`)
+    `id` int NOT NULL ,
+    `type` TEXT NOT NULL,
+    `color` TEXT NOT NULL,
+    PRIMARY KEY (`id`)
 );
 CREATE TABLE IF NOT EXISTS `columns` (
-`ID` int NOT NULL ,
-`Name` TEXT NOT NULL,
-`Coordinate` int NOT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Name` TEXT NOT NULL,
+    `Coordinate` int NOT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS `cookies` (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -389,90 +389,90 @@ CREATE TABLE IF NOT EXISTS `cookies` (
     httponly INTEGER
 );
 CREATE TABLE IF NOT EXISTS destinations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    character_id INTEGER,
-                    col INTEGER,
-                    row INTEGER,
-                    timestamp TEXT,
-                    FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
-                );
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id INTEGER,
+    col INTEGER,
+    row INTEGER,
+    timestamp TEXT,
+    FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS `guilds` (
-`ID` int NOT NULL ,
-`Name` TEXT NOT NULL,
-`Column` TEXT NOT NULL,
-`Row` TEXT NOT NULL,
-`next_update` timestamp NULL DEFAULT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Name` TEXT NOT NULL,
+    `Column` TEXT NOT NULL,
+    `Row` TEXT NOT NULL,
+    `next_update` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS last_active_character (
-                    character_id INTEGER,
-                    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-                );
+    character_id INTEGER,
+    FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS `placesofinterest` (
-`ID` int NOT NULL ,
-`Name` TEXT NOT NULL,
-`Column` TEXT NOT NULL,
-`Row` TEXT NOT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Name` TEXT NOT NULL,
+    `Column` TEXT NOT NULL,
+    `Row` TEXT NOT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS `powers` (
-`power_id` int NOT NULL ,
-`name` TEXT NOT NULL,
-`guild` TEXT NOT NULL,
-`cost` int DEFAULT NULL,
-`quest_info` text,
-`skill_info` text,
-PRIMARY KEY (`power_id`)
+    `power_id` int NOT NULL ,
+    `name` TEXT NOT NULL,
+    `guild` TEXT NOT NULL,
+    `cost` int DEFAULT NULL,
+    `quest_info` text,
+    `skill_info` text,
+    PRIMARY KEY (`power_id`)
 );
 CREATE TABLE IF NOT EXISTS recent_destinations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    character_id INTEGER,
-                    col INTEGER,
-                    row INTEGER,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
-                );
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id INTEGER,
+    col INTEGER,
+    row INTEGER,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS `rows` (
-`ID` int NOT NULL ,
-`Name` TEXT NOT NULL,
-`Coordinate` int NOT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Name` TEXT NOT NULL,
+    `Coordinate` int NOT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS settings (
-                    setting_name TEXT PRIMARY KEY,
-                    setting_value BLOB
-                );
+    setting_name TEXT PRIMARY KEY,
+    setting_value BLOB
+);
 CREATE TABLE IF NOT EXISTS `shop_items` (
-`id` int NOT NULL ,
-`shop_name` TEXT DEFAULT NULL,
-`item_name` TEXT DEFAULT NULL,
-`base_price` int DEFAULT NULL,
-`charisma_level_1` int DEFAULT NULL,
-`charisma_level_2` int DEFAULT NULL,
-`charisma_level_3` int DEFAULT NULL,
-PRIMARY KEY (`id`)
+    `id` int NOT NULL ,
+    `shop_name` TEXT DEFAULT NULL,
+    `item_name` TEXT DEFAULT NULL,
+    `base_price` int DEFAULT NULL,
+    `charisma_level_1` int DEFAULT NULL,
+    `charisma_level_2` int DEFAULT NULL,
+    `charisma_level_3` int DEFAULT NULL,
+    PRIMARY KEY (`id`)
 );
 CREATE TABLE IF NOT EXISTS `shops` (
-`ID` int NOT NULL ,
-`Name` TEXT NOT NULL,
-`Column` TEXT NOT NULL,
-`Row` TEXT NOT NULL,
-`next_update` timestamp NULL DEFAULT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Name` TEXT NOT NULL,
+    `Column` TEXT NOT NULL,
+    `Row` TEXT NOT NULL,
+    `next_update` timestamp NULL DEFAULT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS `taverns` (
-`ID` int NOT NULL ,
-`Column` TEXT NOT NULL,
-`Row` TEXT NOT NULL,
-`Name` TEXT NOT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Column` TEXT NOT NULL,
+    `Row` TEXT NOT NULL,
+    `Name` TEXT NOT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS `transits` (
-`ID` int NOT NULL ,
-`Column` TEXT NOT NULL,
-`Row` TEXT NOT NULL,
-`Name` TEXT NOT NULL,
-PRIMARY KEY (`ID`)
+    `ID` int NOT NULL ,
+    `Column` TEXT NOT NULL,
+    `Row` TEXT NOT NULL,
+    `Name` TEXT NOT NULL,
+    PRIMARY KEY (`ID`)
 );
 CREATE TABLE IF NOT EXISTS `userbuildings` (
 `ID` int NOT NULL ,
@@ -817,9 +817,9 @@ INSERT OR IGNORE INTO  "guilds" ("ID","Name","Column","Row","next_update") VALUE
  (13,'Travellers Guild 1','NA','NA',''),
  (14,'Travellers Guild 2','NA','NA',''),
  (15,'Travellers Guild 3','NA','NA',''),
- (16,'Peacekkeepers Mission 1','Emerald','67th',''),
- (17,'Peacekkeepers Mission 2','Unicorn','33rd',''),
- (18,'Peacekkeepers Mission 3','Emerald','33rd','');
+ (16,'Peacekeepers Mission 1','Emerald','67th',''),
+ (17,'Peacekeepers Mission 2','Unicorn','33rd',''),
+ (18,'Peacekeepers Mission 3','Emerald','33rd','');
 INSERT OR IGNORE INTO  "placesofinterest" ("ID","Name","Column","Row") VALUES (1,'Battle Arena','Zelkova','52nd'),
  (2,'Hall of Binding','Vervain','40th'),
  (3,'Hall of Severance','Walrus','40th'),
@@ -4618,7 +4618,7 @@ class AVITDScraper:
                 cursor.execute(f"""
                     UPDATE {table}
                     SET `Column`='NA', `Row`='NA', `next_update`=?
-                    WHERE Name NOT LIKE 'Peacekkeepers Mission%'
+                    WHERE Name NOT LIKE 'Peacekeepers Mission%'
                 """, (next_update,))
             else:  # If updating 'shops', clear all without exception
                 cursor.execute(f"""
@@ -4631,7 +4631,7 @@ class AVITDScraper:
 
         # Step 2: Insert or update entries, excluding Peacekeeper's Missions in shops
         for name, column, row in data:
-            if table == "shops" and "Peacekkeepers Mission" in name:
+            if table == "shops" and "Peacekeepers Mission" in name:
                 logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
                 continue  # Skip Peacekeeper's Missions when updating shops
 
@@ -4661,9 +4661,9 @@ class AVITDScraper:
                         `Row`=excluded.`Row`,
                         `next_update`=excluded.`next_update`
                 """, [
-                    ("Peacekkeepers Mission 1", "Emerald", "67th", next_update),
-                    ("Peacekkeepers Mission 2", "Unicorn", "33rd", next_update),
-                    ("Peacekkeepers Mission 3", "Emerald", "33rd", next_update),
+                    ("Peacekeepers Mission 1", "Emerald", "67th", next_update),
+                    ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update),
+                    ("Peacekeepers Mission 3", "Emerald", "33rd", next_update),
                 ])
             except sqlite3.Error as e:
                 logging.error(f"Failed to persist Peacekeeper's Missions in guilds: {e}")

@@ -1,5 +1,86 @@
 ### Changelog for RBC City Map Application
 
+### Version 0.11.3
+
+#### Final Polishing & Full System Debug:
+- **Coordinate Extraction Overhaul**:
+  - Fixed edge cases for **map corners and borders** using full rule-based logic.
+  - Added dynamic rules for **zoom-level offsets**, using `first_x`, `first_y`, `last_x`, `last_y`.
+- **Coin Scraper Improvements**:
+  - Recognizes `Money: X coins` pattern as a valid coin readout.
+  - Improved logging of **coin loss/gain events** and updated match rules.
+- **Powers Dialog Bug Fixes**:
+  - Fixed integer conversion error from non-coordinate strings (e.g., "Tapir").
+  - Power info loads properly, and **Set Destination** now triggers cleanly for all entries.
+- **Guild/Shop Scraper Working**:
+  - `AVITDScraper` now correctly updates rows for all known guild/shop entries.
+  - Peacekeeper entries persist regardless of updates.
+- **Bug Fixes**:
+  - Fixed persistent crash on startup related to cookies table handling.
+  - Improved fallback behavior for invalid grid scrapes.
+- **Release Ready**:
+  - This version is stable and marks a **milestone toward a future public release.**
+
+---
+
+### Version 0.11.2
+
+#### Internal Changes:
+- **Refactor Scraper Logic** *(Partial)*:
+  - Introduced structural changes to `AVITDScraper` for handling verbose and quiet modes.
+  - Implemented early groundwork for **split-mode updates**.
+- **Testing & Preparation for 0.11.3**:
+  - Updated coin and guild test entries.
+  - Logged verbose output for corner-case coordinate scraping.
+
+
+---
+
+### Version 0.11.1
+
+#### Feature Enhancements:
+- **Peacekeeper’s Mission Handling**:
+  - Added custom handling of **Peacekeeper’s Missions** in guild logic.
+  - Ensured these locations are **preserved and not overwritten** by scraper updates.
+- **Power Button Smart Routing**:
+  - Introduced logic to always route **Battle Cloak** to the **nearest Peacekeeper’s Mission**.
+- **Bug Fixes**:
+  - Resolved race condition where **Set Destination button** failed for guilds with partial data.
+  - Improved fallback logic for missing street coordinates.
+
+---
+
+### Version 0.11.0
+
+#### Major Enhancements:
+- **Complete Powers System**:
+  - Added a fully functional **Powers dialog** with power info, quest hints, and Set Destination integration.
+- **Set Destination Dialog Refactor**:
+  - Improved **destination-setting workflow** with validation and feedback.
+- **Expanded Coin Detection**:
+  - Upgraded coin extractor to recognize **deposits, withdrawals, stealing**, and **bags of coins**.
+- **Database Schema Updates**:
+  - Refined structure of `powers`, `guilds`, and `cookies` tables for stability.
+- **Bug Fixes & UI Polish**:
+  - Fixed broken guild destination routing.
+  - Improved Powers dialog alignment and accessibility.
+
+---
+
+### Version 0.10.3
+
+#### Feature Additions:
+- **Settings Dialog**:
+  - Introduced a dedicated **settings menu** with toggles for startup scraper and verbose logging.
+- **Improved Database Handling**:
+  - Added logic to **initialize new databases** with default tables on first run.
+- **Bug Fixes**:
+  - Fixed **duplicate log file entries** on app restart.
+  - Improved detection for **first-time setup scenarios**.
+
+---
+
+
 ### Version 0.10.2
 
 #### Feature Enhancements:
