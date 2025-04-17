@@ -89,20 +89,6 @@ This project is an attempt to create an interactive map coded in Python for use 
 
 ---
 
-## Recent Updates (v0.10.3)
-- **Keybinding Support**:
-  - Users can now toggle between **WASD** and **Arrow Key** movement.
-  - Persistent storage in SQLite for keybind preferences.
-- **CSS Customization Enhancements**:
-  - Added **Box Shadow, Font Selection, and Background Image Support**.
-  - Improved layout and usability for a cleaner interface.
-- **Minimap Grid Fixes**:
-  - Improved alignment and color handling for destination markers.
-- **Performance Optimizations**:
-  - Various database and UI speed improvements.
-
----
-
 ## Development
 
 This project is hosted on GitHub: [RBC-Map GitHub Repository](https://github.com/JELollis/RBC-Map). Contributions and feedback are always welcome!
