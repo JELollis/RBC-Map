@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.11.3
+# Filename: main_0.12.0
 
 """
 ======================
@@ -23,7 +23,7 @@ limitations under the License.
 
 """
 =================================
-RBC City Map Application (v0.11.3)
+RBC City Map Application (v0.12.0)
 =================================
 This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
 (set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
@@ -53,7 +53,7 @@ Modules Used:
 - **logging**: Captures logs, errors, and system events.
 
 ================================
-Classes and Methods (v0.11.3)
+Classes and Methods (v0.12.0)
 ================================
 
 #### RBCCommunityMap (Core Application)
@@ -155,9 +155,21 @@ DB_PATH = 'sessions/rbc_map_data.db'
 
 # Logging Configuration
 LOG_DIR = 'logs'
+DEFAULT_LOG_LEVEL = logging.DEBUG
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
-LOG_LEVEL = logging.DEBUG
-VERSION_NUMBER = "0.11.3"
+def get_logging_level_from_db(default=logging.INFO) -> int:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'log_level'")
+            row = cursor.fetchone()
+            if row:
+                return int(row[0])
+    except Exception as e:
+        print(f"Failed to load log level from DB: {e}", file=sys.stderr)
+    return default
+
+VERSION_NUMBER = "0.12.0"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
@@ -290,9 +302,11 @@ from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QComboBox, \
     QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem, QFileDialog, \
-    QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, QSplashScreen, QCompleter
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, QShortcut, QKeySequence
-from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime
+    QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, QSplashScreen, \
+    QCompleter, QCheckBox, QGroupBox, QMenu
+from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, \
+    QShortcut, QKeySequence, QDesktopServices
+from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime, QMimeData
 from PySide6.QtCore import Slot as pyqtSlot
 from PySide6.QtWidgets import QMainWindow, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -366,7 +380,7 @@ def ensure_directories_exist(directories: list[str] = REQUIRED_DIRECTORIES) -> b
             # Check existence first to avoid unnecessary syscalls
             if not os.path.isdir(directory):
                 os.makedirs(directory, exist_ok=True)
-                #logging.debug(f"Created directory: {directory}")
+                logging.debug(f"Created directory: {directory}")
             else:
                 logging.debug(f"Directory already exists: {directory}")
         except OSError as e:
@@ -381,7 +395,7 @@ if not ensure_directories_exist():
 # -----------------------
 # Logging Setup
 # -----------------------
-def setup_logging(log_dir: str = LOG_DIR, log_level: int = LOG_LEVEL, log_format: str = LOG_FORMAT) -> bool:
+def setup_logging(log_dir: str = LOG_DIR, log_level: int = DEFAULT_LOG_LEVEL, log_format: str = LOG_FORMAT) -> bool:
     """
     Set up logging configuration to save logs in the specified directory with daily rotation.
 
@@ -390,7 +404,7 @@ def setup_logging(log_dir: str = LOG_DIR, log_level: int = LOG_LEVEL, log_format
 
     Args:
         log_dir (str, optional): Directory to store log files. Defaults to LOG_DIR ('logs').
-        log_level (int, optional): Logging level (e.g., #logging.debug). Defaults to LOG_LEVEL.
+        log_level (int, optional): Logging level (e.g., logging.debug). Defaults to LOG_LEVEL.
         log_format (str, optional): Log message format. Defaults to LOG_FORMAT.
 
     Returns:
@@ -428,12 +442,28 @@ def setup_logging(log_dir: str = LOG_DIR, log_level: int = LOG_LEVEL, log_format
         return False
 
 # Initialize logging at startup
-if not setup_logging():
+if not setup_logging(log_level=get_logging_level_from_db()):
     print("Logging setup failed. Continuing without file logging.", file=sys.stderr)
-    logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT, stream=sys.stderr)  # Fallback to console
+    logging.basicConfig(level=DEFAULT_LOG_LEVEL, format=LOG_FORMAT, stream=sys.stderr)  # Fallback to console
 
 # Log app version
 logging.info(f"Launching app version {VERSION_NUMBER}")
+
+def save_logging_level_to_db(level: int) -> bool:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO settings (setting_name, setting_value)
+                VALUES (?, ?)
+                ON CONFLICT(setting_name) DO UPDATE SET setting_value=excluded.setting_value
+            """, ('log_level', str(level)))
+            conn.commit()
+            logging.info(f"Log level updated to {logging.getLevelName(level)} in settings")
+            return True
+    except Exception as e:
+        logging.error(f"Failed to save log level: {e}")
+        return False
 
 # -----------------------
 # SQLite Setup
@@ -577,7 +607,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
     for table_sql in tables:
         try:
             cursor.execute(table_sql)
-            #logging.debug(f"Created table: {table_sql.split('(')[0].strip()}")
+            logging.debug(f"Created table: {table_sql.split('(')[0].strip()}")
         except sqlite3.Error as e:
             logging.error(f"Failed to create table: {e}")
             raise
@@ -589,8 +619,10 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     initial_data = [
         ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
             ('keybind_config', 1),
-            ('css_profile', 'Default')
+            ('css_profile', 'Default'),
+            ('log_level', str(DEFAULT_LOG_LEVEL))
         ]),
+
         ("INSERT OR IGNORE INTO banks (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Aardvark','82nd','OmniBank'),
             (2,'Alder','40th','OmniBank'),
@@ -1671,7 +1703,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     for query, data in initial_data:
         try:
             cursor.executemany(query, data)
-            #logging.debug(f"Inserted initial data into: {query.split('INTO ')[1].split(' ')[0]}")
+            logging.debug(f"Inserted initial data into: {query.split('INTO ')[1].split(' ')[0]}")
         except sqlite3.Error as e:
             logging.error(f"Failed to insert data into {query.split('INTO ')[1].split(' ')[0]}: {e}")
             raise
@@ -1783,7 +1815,7 @@ def load_data(DB_PATH):
             shops_coordinates = {}
             for name, col, row in cursor.fetchall():
                 if col == "NA" or row == "NA":
-                    #logging.debug(f"Skipping shop '{name}' with 'NA' coordinates")
+                    logging.debug(f"Skipping shop '{name}' with 'NA' coordinates")
                     continue
                 shops_coordinates[name] = to_coords(col, row)
 
@@ -1791,7 +1823,7 @@ def load_data(DB_PATH):
             guilds_coordinates = {}
             for name, col, row in cursor.fetchall():
                 if col == "NA" or row == "NA":
-                    #logging.debug(f"Skipping guild '{name}' with 'NA' coordinates")
+                    logging.debug(f"Skipping guild '{name}' with 'NA' coordinates")
                     continue
                 guilds_coordinates[name] = to_coords(col, row)
 
@@ -1808,7 +1840,7 @@ def load_data(DB_PATH):
             row = cursor.fetchone()
             current_css_profile = row[0] if row else "Default"  # Default to "Default" if not found
 
-            #logging.debug("Loaded data from database successfully")
+            logging.debug("Loaded data from database successfully")
             return (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates, keybind_config, current_css_profile)
 
     except sqlite3.Error as e:
@@ -1863,7 +1895,7 @@ def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
             ''', (name, value, domain, path, expiration, secure, httponly))
 
             conn.commit()
-            #logging.debug(f"Saved/updated cookie: {name} for domain {domain}")
+            logging.debug(f"Saved/updated cookie: {name} for domain {domain}")
             return True
     except sqlite3.Error as e:
         logging.error(f"Failed to save/update cookie {cookie.name().data()}: {e}")
@@ -1893,7 +1925,7 @@ def load_cookies_from_db() -> List[QNetworkCookie]:
                 cookie.setSecure(bool(secure))
                 cookie.setHttpOnly(bool(httponly))
                 cookies.append(cookie)
-            #logging.debug(f"Loaded {len(cookies)} cookies from database")
+            logging.debug(f"Loaded {len(cookies)} cookies from database")
     except sqlite3.Error as e:
         logging.error(f"Failed to load cookies: {e}")
     return cookies
@@ -1981,7 +2013,7 @@ class RBCCommunityMap(QMainWindow):
         # Use QThread for non-blocking scraping (assuming AVITDScraper supports it)
         from PySide6.QtCore import QThreadPool
         QThreadPool.globalInstance().start(lambda: self.AVITD_scraper.scrape_guilds_and_shops())
-        #logging.debug("Started scraper in background thread")
+        logging.debug("Started scraper in background thread")
 
     @splash_message(None)
     def _init_window_properties(self) -> None:
@@ -2126,7 +2158,7 @@ class RBCCommunityMap(QMainWindow):
         }
 
         self.movement_keys = movement_configs.get(self.keybind_config, movement_configs[1])
-        #logging.debug(f"Setting up keybindings: {self.movement_keys}")
+        logging.debug(f"Setting up keybindings: {self.movement_keys}")
 
         self.clear_existing_keybindings()
 
@@ -2142,7 +2174,7 @@ class RBCCommunityMap(QMainWindow):
         for key, move_index in self.movement_keys.items():
             shortcut = QShortcut(QKeySequence(key), self.website_frame, context=Qt.ShortcutContext.ApplicationShortcut)
             shortcut.activated.connect(lambda idx=move_index: self.move_character(idx))
-            #logging.debug(f"Bound key {key} to move index {move_index}")
+            logging.debug(f"Bound key {key} to move index {move_index}")
 
     def move_character(self, move_index: int) -> None:
         """
@@ -2155,7 +2187,7 @@ class RBCCommunityMap(QMainWindow):
             logging.warning("Cannot move character: website_frame or page not initialized")
             return
 
-        #logging.debug(f"Attempting move to grid index: {move_index}")
+        logging.debug(f"Attempting move to grid index: {move_index}")
         js_code = """
             (function() {
                 const table = document.querySelector('table table');
@@ -2216,19 +2248,19 @@ class RBCCommunityMap(QMainWindow):
         self.keybind_wasd_action.setChecked(self.keybind_config == 1)
         self.keybind_arrow_action.setChecked(self.keybind_config == 2)
         self.keybind_off_action.setChecked(self.keybind_config == 0)
-        #logging.debug(f"Updated keybind menu: WASD={self.keybind_config == 1}, Arrows={self.keybind_config == 2}, Off={self.keybind_config == 0}")
+        logging.debug(f"Updated keybind menu: WASD={self.keybind_config == 1}, Arrows={self.keybind_config == 2}, Off={self.keybind_config == 0}")
 
     def clear_existing_keybindings(self) -> None:
         """Remove existing shortcuts from website_frame to prevent duplicates."""
         if not hasattr(self, 'website_frame'):
-            #logging.debug("No website_frame to clear keybindings from")
+            logging.debug("No website_frame to clear keybindings from")
             return
 
         shortcuts = self.website_frame.findChildren(QShortcut)
         for shortcut in shortcuts:
             shortcut.setParent(None)
             shortcut.deleteLater()  # Ensure cleanup
-        #logging.debug(f"Cleared {len(shortcuts)} existing keybindings")
+        logging.debug(f"Cleared {len(shortcuts)} existing keybindings")
 
     # -----------------------
     # Load and Apply Customized UI Theme
@@ -2251,7 +2283,7 @@ class RBCCommunityMap(QMainWindow):
                     key = key_with_prefix.replace("theme_", "", 1)
                     self.color_mappings[key] = QColor(value)
 
-                #logging.debug(f"Theme settings loaded from DB and applied. Keys updated: {list(settings.keys())}")
+                logging.debug(f"Theme settings loaded from DB and applied. Keys updated: {list(settings.keys())}")
         except sqlite3.Error as e:
             logging.error(f"Failed to load theme settings: {e}")
 
@@ -2275,7 +2307,7 @@ class RBCCommunityMap(QMainWindow):
                     [(f"theme_{key}", color.name()) for key, color in self.color_mappings.items()]
                 )
                 conn.commit()
-                #logging.debug("Theme settings saved successfully")
+                logging.debug("Theme settings saved successfully")
                 return True
         except sqlite3.Error as e:
             logging.error(f"Failed to save theme settings: {e}")
@@ -2294,7 +2326,7 @@ class RBCCommunityMap(QMainWindow):
                 f"QLabel {{ color: {text_color}; }}"
             )
             self.setStyleSheet(stylesheet)
-            #logging.debug("Theme applied successfully")
+            logging.debug("Theme applied successfully")
         except Exception as e:
             logging.error(f"Failed to apply theme: {e}")
             self.setStyleSheet("")  # Reset to default on failure
@@ -2325,7 +2357,7 @@ class RBCCommunityMap(QMainWindow):
         self.cookie_store = self.web_profile.cookieStore()
         self.cookie_store.cookieAdded.connect(self.on_cookie_added)
         self.load_cookies()
-        #logging.debug("Cookie handling initialized")
+        logging.debug("Cookie handling initialized")
 
     def load_cookies(self) -> None:
         """
@@ -2355,7 +2387,7 @@ class RBCCommunityMap(QMainWindow):
                         except ValueError as e:
                             logging.warning(f"Failed to parse expiration '{expiration}' for cookie '{name}': {e}")
                     self.cookie_store.setCookie(cookie, QUrl(f"https://{domain}"))
-                #logging.debug(f"Loaded {len(cookies)} cookies from database")
+                logging.debug(f"Loaded {len(cookies)} cookies from database")
         except sqlite3.Error as e:
             logging.error(f"Failed to load cookies: {e}")
 
@@ -2447,9 +2479,19 @@ class RBCCommunityMap(QMainWindow):
         refresh_button.clicked.connect(lambda: self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl')))
         self.browser_controls_layout.addWidget(refresh_button)
 
+        kofi_button = QPushButton()
+        kofi_button.setIcon(QIcon("images/Ko-Fi.png"))
+        kofi_button.setIconSize(QSize(30, 30))
+        kofi_button.setToolTip("Support me on Ko-fi")
+        kofi_button.setCursor(Qt.PointingHandCursor)
+        kofi_button.setFlat(True)
+        kofi_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://ko-fi.com/jelollis")))
+
         # Set spacing between buttons to make them closer together
+        # Add spacing and the Ko-fi button to the end of the toolbar
         self.browser_controls_layout.setSpacing(5)
         self.browser_controls_layout.addStretch(1)
+        self.browser_controls_layout.addWidget(kofi_button)
 
         # Create a container widget for the webview and controls
         webview_container = QWidget()
@@ -2744,6 +2786,28 @@ class RBCCommunityMap(QMainWindow):
         # Update checkmark based on current keybind setting
         self.update_keybind_menu()
 
+        # Logging Level Submenu
+        log_level_menu = settings_menu.addMenu("Logging Level")
+
+        self.log_level_actions = {}
+
+        log_levels = [
+            ("DEBUG", logging.DEBUG),
+            ("INFO", logging.INFO),
+            ("WARNING", logging.WARNING),
+            ("ERROR", logging.ERROR),
+            ("CRITICAL", logging.CRITICAL),
+            ("OFF", logging.CRITICAL + 10)  # OFF = disables all logging
+        ]
+
+        for name, level in log_levels:
+            action = QAction(name, self, checkable=True)
+            action.triggered.connect(lambda checked, lvl=level: self.set_log_level(lvl))
+            log_level_menu.addAction(action)
+            self.log_level_actions[level] = action
+
+        self.update_log_level_menu()
+
         # Tools menu
         tools_menu = menu_bar.addMenu('Tools')
 
@@ -2763,6 +2827,10 @@ class RBCCommunityMap(QMainWindow):
         power_reference_action.triggered.connect(self.open_powers_dialog)
         tools_menu.addAction(power_reference_action)
 
+        logs_action = QAction('View Logs', self)
+        logs_action.triggered.connect(self.open_log_viewer)
+        tools_menu.addAction(logs_action)
+
         # Help menu
         help_menu = menu_bar.addMenu('Help')
 
@@ -2781,6 +2849,7 @@ class RBCCommunityMap(QMainWindow):
         credits_action = QAction('Credits', self)
         credits_action.triggered.connect(self.show_credits_dialog)
         help_menu.addAction(credits_action)
+
 
     def zoom_in_browser(self):
         """Zoom in on the web page displayed in the QWebEngineView."""
@@ -2829,7 +2898,7 @@ class RBCCommunityMap(QMainWindow):
             message (str): The console message to be logged.
         """
         print(f"Console message: {message}")
-        #logging.debug(f"Console message: {message}")
+        logging.debug(f"Console message: {message}")
 
     # -----------------------
     # Menu Control Items
@@ -2923,7 +2992,36 @@ class RBCCommunityMap(QMainWindow):
         dialog = CSSCustomizationDialog(self)
         dialog.exec()
 
-# -----------------------
+    def update_log_level_menu(self) -> None:
+        """
+        Update the check state of log level actions based on current level from DB.
+        """
+        current_level = get_logging_level_from_db()
+        for level, action in self.log_level_actions.items():
+            action.setChecked(level == current_level)
+
+    def set_log_level(self, level: int) -> None:
+        """
+        Set the log level and persist it in the database.
+        """
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO settings (setting_name, setting_value)
+                    VALUES ('log_level', ?)
+                    ON CONFLICT(setting_name) DO UPDATE SET setting_value = excluded.setting_value
+                """, (level,))
+                conn.commit()
+
+            logging.getLogger().setLevel(level)
+            self.update_log_level_menu()
+            logging.info(f"Log level set to {logging.getLevelName(level)}")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save log level to database: {e}")
+
+    # -----------------------
 # Character Management
 # -----------------------
 
@@ -2948,7 +3046,7 @@ class RBCCommunityMap(QMainWindow):
             self.character_list.clear()
             for character in self.characters:
                 self.character_list.addItem(QListWidgetItem(character['name']))
-            #logging.debug(f"Loaded {len(self.characters)} characters from the database.")
+            logging.debug(f"Loaded {len(self.characters)} characters from the database.")
 
             # Do not set self.selected_character here; let load_last_active_character handle it
             if not self.characters:
@@ -2976,7 +3074,7 @@ class RBCCommunityMap(QMainWindow):
                     INSERT OR REPLACE INTO characters (id, name, password) VALUES (?, ?, ?)
                 ''', (character.get('id'), character['name'], character['password']))
             connection.commit()
-            #logging.debug("Characters saved successfully to the database in plaintext.")
+            logging.debug("Characters saved successfully to the database in plaintext.")
         except sqlite3.Error as e:
             logging.error(f"Failed to save characters to database: {e}")
             QMessageBox.critical(self, "Error", f"Failed to save characters: {e}")
@@ -2997,7 +3095,7 @@ class RBCCommunityMap(QMainWindow):
         selected_character = next((char for char in self.characters if char['name'] == character_name), None)
 
         if selected_character:
-            #logging.debug(f"Selected character: {character_name}")
+            logging.debug(f"Selected character: {character_name}")
             self.selected_character = selected_character
 
             # Fetch character ID if missing
@@ -3009,7 +3107,7 @@ class RBCCommunityMap(QMainWindow):
                     character_row = cursor.fetchone()
                     if character_row:
                         self.selected_character['id'] = character_row[0]
-                        #logging.debug(f"Character '{character_name}' ID set to {self.selected_character['id']}.")
+                        logging.debug(f"Character '{character_name}' ID set to {self.selected_character['id']}.")
                     else:
                         logging.error(f"Character '{character_name}' not found in characters table.")
                 except sqlite3.Error as e:
@@ -3033,7 +3131,7 @@ class RBCCommunityMap(QMainWindow):
         """
         Logout the current character by navigating to the logout URL.
         """
-        #logging.debug("Logging out current character.")
+        logging.debug("Logging out current character.")
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
         QTimer.singleShot(1000, self.login_selected_character)
 
@@ -3042,7 +3140,7 @@ class RBCCommunityMap(QMainWindow):
         if not self.selected_character:
             logging.warning("No character selected for login.")
             return
-        #logging.debug(f"Logging in character: {self.selected_character['name']} with ID: {self.selected_character.get('id')}")
+        logging.debug(f"Logging in character: {self.selected_character['name']} with ID: {self.selected_character.get('id')}")
         name = self.selected_character['name']
         password = self.selected_character['password']
         login_script = f"""
@@ -3062,7 +3160,7 @@ class RBCCommunityMap(QMainWindow):
         Handles the first-run character creation, saving the character in plaintext,
         initializing default coin values in the coins table, and setting this character as the last active.
         """
-        #logging.debug("First-run character creation.")
+        logging.debug("First-run character creation.")
         dialog = CharacterDialog(self)
 
         if dialog.exec():
@@ -3078,7 +3176,7 @@ class RBCCommunityMap(QMainWindow):
                     self.save_last_active_character(character_id)
                     self.characters.append({'name': name, 'password': password, 'id': character_id})
                     self.character_list.addItem(QListWidgetItem(name))
-                    #logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
+                    logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
                 except sqlite3.Error as e:
                     logging.error(f"Failed to create character '{name}': {e}")
                     QMessageBox.critical(self, "Error", f"Failed to create character: {e}")
@@ -3090,7 +3188,7 @@ class RBCCommunityMap(QMainWindow):
         Add a new character to the list, saving the password in plaintext,
         initializing default coin values in the coins table, and setting this character as the last active.
         """
-        #logging.debug("Adding a new character.")
+        logging.debug("Adding a new character.")
         dialog = CharacterDialog(self)
 
         if dialog.exec():
@@ -3106,7 +3204,7 @@ class RBCCommunityMap(QMainWindow):
                     self.save_last_active_character(character_id)
                     self.characters.append({'name': name, 'password': password, 'id': character_id})
                     self.character_list.addItem(QListWidgetItem(name))
-                    #logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
+                    logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
                 except sqlite3.Error as e:
                     logging.error(f"Failed to add character '{name}': {e}")
                     QMessageBox.critical(self, "Error", f"Failed to add character: {e}")
@@ -3123,7 +3221,7 @@ class RBCCommunityMap(QMainWindow):
         name = current_item.text()
         character = next((char for char in self.characters if char['name'] == name), None)
         if character:
-            #logging.debug(f"Modifying character: {name}")
+            logging.debug(f"Modifying character: {name}")
             dialog = CharacterDialog(self, character)
             if dialog.exec():
                 character['name'] = dialog.name_edit.text()
@@ -3131,7 +3229,7 @@ class RBCCommunityMap(QMainWindow):
                 self.selected_character = character  # Sync selected_character with modified data
                 self.save_characters()
                 current_item.setText(character['name'])
-                #logging.debug(f"Character {name} modified.")
+                logging.debug(f"Character {name} modified.")
 
     def delete_character(self):
         """Delete the selected character from the list."""
@@ -3144,7 +3242,7 @@ class RBCCommunityMap(QMainWindow):
         self.characters = [char for char in self.characters if char['name'] != name]
         self.save_characters()
         self.character_list.takeItem(self.character_list.row(current_item))
-        #logging.debug(f"Character {name} deleted.")
+        logging.debug(f"Character {name} deleted.")
 
     def save_last_active_character(self, character_id):
         """
@@ -3157,7 +3255,7 @@ class RBCCommunityMap(QMainWindow):
                 cursor.execute("DELETE FROM last_active_character")
                 cursor.execute('INSERT INTO last_active_character (character_id) VALUES (?)', (character_id,))
                 conn.commit()
-                #logging.debug(f"Last active character set to character_id: {character_id}")
+                logging.debug(f"Last active character set to character_id: {character_id}")
             except sqlite3.Error as e:
                 logging.error(f"Failed to save last active character: {e}")
 
@@ -3180,7 +3278,7 @@ class RBCCommunityMap(QMainWindow):
                             if self.character_list.item(i).text() == self.selected_character['name']:
                                 self.character_list.setCurrentRow(i)
                                 break
-                        #logging.debug(f"Last active character loaded and selected: {self.selected_character['name']}")
+                        logging.debug(f"Last active character loaded and selected: {self.selected_character['name']}")
                         if len(self.characters) > 1:  # Trigger login only if multiple characters exist
                             self.login_needed = True
                             self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
@@ -3202,7 +3300,7 @@ class RBCCommunityMap(QMainWindow):
         if self.characters:
             self.selected_character = self.characters[0]
             self.character_list.setCurrentRow(0)
-            #logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
+            logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
             self.save_last_active_character(self.selected_character['id'])
             self.login_needed = True
             self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
@@ -3249,7 +3347,7 @@ class RBCCommunityMap(QMainWindow):
             css = self.load_current_css()
             self.apply_custom_css(css)
             if self.login_needed:
-                #logging.debug("Logging in last active character.")
+                logging.debug("Logging in last active character.")
                 self.login_selected_character()
                 self.login_needed = False
 
@@ -3268,14 +3366,14 @@ class RBCCommunityMap(QMainWindow):
             if x_coord is not None and y_coord is not None:
                 # Set character coordinates directly
                 self.character_x, self.character_y = x_coord, y_coord
-                #logging.debug(f"Set character coordinates to x={self.character_x}, y={self.character_y}")
+                logging.debug(f"Set character coordinates to x={self.character_x}, y={self.character_y}")
 
                 # Call recenter_minimap to update the minimap based on character's position
                 self.recenter_minimap()
 
             # Call the method to extract bank coins and pocket changes from the HTML
             self.extract_coins_from_html(html)
-            #logging.debug("HTML processed successfully for coordinates and coin count.")
+            logging.debug("HTML processed successfully for coordinates and coin count.")
         except Exception as e:
             logging.error(f"Unexpected error in process_html: {e}")
 
@@ -3561,7 +3659,7 @@ class RBCCommunityMap(QMainWindow):
 
         font_metrics = QFontMetrics(font)
 
-        #logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "f"zoom_level={self.zoom_level}, block_size={block_size}")
+        logging.debug(f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "f"zoom_level={self.zoom_level}, block_size={block_size}")
 
         def draw_label_box(x, y, width, height, bg_color, text):
             """
@@ -3591,7 +3689,7 @@ class RBCCommunityMap(QMainWindow):
                 row_index = self.row_start + i
 
                 x0, y0 = j * block_size, i * block_size
-                #logging.debug(f"Drawing grid cell at column_index={column_index}, row_index={row_index}, "f"x0={x0}, y0={y0}")
+                logging.debug(f"Drawing grid cell at column_index={column_index}, row_index={row_index}, "f"x0={x0}, y0={y0}")
 
                 # Draw the cell background
                 painter.setPen(QColor('white'))
@@ -3878,7 +3976,7 @@ class RBCCommunityMap(QMainWindow):
                     ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
                 """, (self.zoom_level, self.zoom_level))
                 conn.commit()
-                #logging.debug(f"Zoom level saved to database: {self.zoom_level}")
+                logging.debug(f"Zoom level saved to database: {self.zoom_level}")
         except sqlite3.Error as e:
             logging.error(f"Failed to save zoom level to database: {e}")
 
@@ -3892,7 +3990,7 @@ class RBCCommunityMap(QMainWindow):
                 cursor = conn.cursor()
                 result = cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'minimap_zoom'").fetchone()
                 self.zoom_level = int(result[0]) if result else 3
-                #logging.debug(f"Zoom level loaded from database: {self.zoom_level}")
+                logging.debug(f"Zoom level loaded from database: {self.zoom_level}")
         except sqlite3.Error as e:
             self.zoom_level = 3  # Fallback default zoom level
             logging.error(f"Failed to load zoom level from database: {e}")
@@ -3906,7 +4004,7 @@ class RBCCommunityMap(QMainWindow):
             logging.error("Character position not set. Cannot recenter minimap.")
             return
 
-        #logging.debug(f"Before recentering: character_x={self.character_x}, character_y={self.character_y}")
+        logging.debug(f"Before recentering: character_x={self.character_x}, character_y={self.character_y}")
 
         # Calculate zoom offset (-1 for 5x5, -2 for 7x7, etc.)
         if self.zoom_level == 3:
@@ -3917,15 +4015,15 @@ class RBCCommunityMap(QMainWindow):
             zoom_offset = -3
         else:
             zoom_offset = -(self.zoom_level // 2)  # Safe fallback
-        #logging.debug(f"Zoom Level: {self.zoom_level}")
-        #logging.debug(f"Zoom Offset: {zoom_offset}")
-        #logging.debug(f"Debug: char_y={self.character_y}, row_start={self.row_start}, zoom_offset={zoom_offset}")
-        #logging.debug(f"Clamping min: {min(self.character_y + zoom_offset, 200 - self.zoom_level)}")
+        logging.debug(f"Zoom Level: {self.zoom_level}")
+        logging.debug(f"Zoom Offset: {zoom_offset}")
+        logging.debug(f"Debug: char_y={self.character_y}, row_start={self.row_start}, zoom_offset={zoom_offset}")
+        logging.debug(f"Clamping min: {min(self.character_y + zoom_offset, 200 - self.zoom_level)}")
 
         self.column_start = self.character_x + 1
         self.row_start = self.character_y + 1
 
-        #logging.debug(f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
+        logging.debug(f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
         self.update_minimap()
 
     def go_to_location(self):
@@ -3938,13 +4036,13 @@ class RBCCommunityMap(QMainWindow):
 
         if column_name in self.columns:
             self.column_start = self.columns[column_name] - self.zoom_level // 2
-            #logging.debug(f"Set column_start to {self.column_start} for column '{column_name}'")
+            logging.debug(f"Set column_start to {self.column_start} for column '{column_name}'")
         else:
             logging.error(f"Column '{column_name}' not found in self.columns")
 
         if row_name in self.rows:
             self.row_start = self.rows[row_name] - self.zoom_level // 2
-            #logging.debug(f"Set row_start to {self.row_start} for row '{row_name}'")
+            logging.debug(f"Set row_start to {self.row_start} for row '{row_name}'")
         else:
             logging.error(f"Row '{row_name}' not found in self.rows")
 
@@ -3968,8 +4066,8 @@ class RBCCommunityMap(QMainWindow):
                 min_start, max_start = -(self.zoom_level // 2), 201 + (self.zoom_level // 2) - self.zoom_level
                 self.column_start = max(min_start, min(clicked_column - center_offset, max_start))
                 self.row_start = max(min_start, min(clicked_row - center_offset, max_start))
-                #logging.debug(f"Click at ({click_x}, {click_y}) -> Cell: ({clicked_column}, {clicked_row})")
-                #logging.debug(f"New minimap start: column={self.column_start}, row={self.row_start}")
+                logging.debug(f"Click at ({click_x}, {click_y}) -> Cell: ({clicked_column}, {clicked_row})")
+                logging.debug(f"New minimap start: column={self.column_start}, row={self.row_start}")
 
                 # Update the minimap display
                 self.update_minimap()
@@ -4251,6 +4349,10 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Error opening Database Viewer: {e}")
             QMessageBox.critical(self, "Error", f"Error opening Database Viewer: {e}")
 
+    def open_log_viewer(self):
+        self.log_viewer = LogViewer(self, LOG_DIR)  # or pass None if you want it fully standalone
+        self.log_viewer.show()
+
     def fetch_table_data(self, cursor, table_name):
         """
         Fetch data from the specified table and return it as a list of tuples, including column names.
@@ -4280,7 +4382,7 @@ class RBCCommunityMap(QMainWindow):
                 f"QPushButton {{ background-color: {btn_color}; color: {text_color}; }}"
                 f"QLabel {{ color: {text_color}; }}"
             )
-            #logging.debug("Theme applied to dialog")
+            logging.debug("Theme applied to dialog")
         except Exception as e:
             logging.error(f"Failed to apply theme to dialog: {e}")
             self.setStyleSheet("")  # Reset on failure
@@ -4321,7 +4423,7 @@ class DatabaseViewer(QDialog):
             for table_name in tables:
                 column_names, data = self.get_table_data(table_name)
                 self.add_table_tab(table_name, column_names, data)
-            #logging.debug(f"Loaded {len(tables)} tables into viewer")
+            logging.debug(f"Loaded {len(tables)} tables into viewer")
         except sqlite3.Error as e:
             logging.error(f"Failed to load tables: {e}")
             QMessageBox.critical(self, "Error", "Failed to load database tables.")
@@ -4366,7 +4468,7 @@ class DatabaseViewer(QDialog):
 
         table_widget.resizeColumnsToContents()  # Improve readability
         self.tab_widget.addTab(table_widget, table_name)
-        #logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
+        logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
 
     def closeEvent(self, event) -> None:
         """
@@ -4378,7 +4480,7 @@ class DatabaseViewer(QDialog):
         try:
             self.cursor.close()
             self.db_connection.close()
-            #logging.debug("Database connection closed")
+            logging.debug("Database connection closed")
         except sqlite3.Error as e:
             logging.error(f"Failed to close database connection: {e}")
         event.accept()
@@ -4487,7 +4589,7 @@ class ThemeCustomizationDialog(QDialog):
         button_layout.addWidget(cancel_button)
         layout.addLayout(button_layout)
 
-        #logging.debug("Theme customization dialog initialized")
+        logging.debug("Theme customization dialog initialized")
 
     def setup_ui_tab(self) -> None:
         """Set up the UI tab for background, text, and button color customization."""
@@ -4544,7 +4646,7 @@ class ThemeCustomizationDialog(QDialog):
             pixmap = QPixmap(20, 20)
             pixmap.fill(color)
             color_square.setPixmap(pixmap)
-            #logging.debug(f"Changed color for '{element_name}' to {color.name()}")
+            logging.debug(f"Changed color for '{element_name}' to {color.name()}")
 
     def apply_theme(self) -> None:
         """Apply the selected theme colors to the dialog’s stylesheet."""
@@ -4558,7 +4660,7 @@ class ThemeCustomizationDialog(QDialog):
                 f"QPushButton {{ background-color: {btn_color}; color: {text_color}; }}"
                 f"QLabel {{ color: {text_color}; }}"
             )
-            #logging.debug("Theme applied to dialog")
+            logging.debug("Theme applied to dialog")
         except Exception as e:
             logging.error(f"Failed to apply theme to dialog: {e}")
             self.setStyleSheet("")  # Reset on failure
@@ -4578,7 +4680,7 @@ class CSSCustomizationDialog(QDialog):
         self.tabs = {}
         self.setup_ui()
         self.load_existing_customizations()
-        #logging.debug(f"CSSCustomizationDialog initialized with profile '{self.current_profile}'")
+        logging.debug(f"CSSCustomizationDialog initialized with profile '{self.current_profile}'")
 
     def get_current_profile(self) -> str:
         """Retrieve the current CSS profile from settings."""
@@ -4603,7 +4705,7 @@ class CSSCustomizationDialog(QDialog):
                 )
                 conn.commit()
             self.current_profile = profile
-            #logging.debug(f"Updated css_profile to: {profile}")
+            logging.debug(f"Updated css_profile to: {profile}")
         except sqlite3.Error as e:
             logging.error(f"Failed to update css_profile: {e}")
             QMessageBox.critical(self, "Error", f"Failed to update profile: {e}")
@@ -4684,7 +4786,7 @@ class CSSCustomizationDialog(QDialog):
                 profiles = [row[0] for row in cursor.fetchall()]
             self.profile_dropdown.clear()
             self.profile_dropdown.addItems(profiles)
-            #logging.debug(f"Loaded {len(profiles)} profiles")
+            logging.debug(f"Loaded {len(profiles)} profiles")
         except sqlite3.Error as e:
             logging.error(f"Failed to load profiles: {e}")
             QMessageBox.critical(self, "Error", "Failed to load profiles")
@@ -4777,7 +4879,7 @@ class CSSCustomizationDialog(QDialog):
             style = f"background-color: {color.name()};"
             preview.setStyleSheet(style)
             self.save_css_item(css_item, style)
-            #logging.debug(f"Set color for '{css_item}': {color.name()}")
+            logging.debug(f"Set color for '{css_item}': {color.name()}")
 
     def pick_image(self, css_item: str, preview: QLabel) -> None:
         """Open a file dialog to select an image and apply it as a background."""
@@ -4786,14 +4888,14 @@ class CSSCustomizationDialog(QDialog):
             style = f"background-image: url({file_path}); background-size: cover;"
             preview.setStyleSheet(style)
             self.save_css_item(css_item, style)
-            #logging.debug(f"Set image for '{css_item}': {file_path}")
+            logging.debug(f"Set image for '{css_item}': {file_path}")
 
     def add_shadow(self, css_item: str) -> None:
         """Add a default shadow effect to the element."""
         style = "box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);"
         self.save_css_item(css_item, style)
         self.load_existing_customizations()
-        #logging.debug(f"Added shadow to '{css_item}'")
+        logging.debug(f"Added shadow to '{css_item}'")
 
     def save_css_item(self, css_item: str, value: str) -> None:
         """Save a CSS customization to the database under the current profile."""
@@ -4808,7 +4910,7 @@ class CSSCustomizationDialog(QDialog):
                 )
                 conn.commit()
                 cursor.execute("SELECT COUNT(*) FROM custom_css WHERE profile_name = ?", (self.current_profile,))
-                #logging.debug(f"Rows in custom_css for '{self.current_profile}': {cursor.fetchone()[0]}")
+                logging.debug(f"Rows in custom_css for '{self.current_profile}': {cursor.fetchone()[0]}")
         except sqlite3.Error as e:
             logging.error(f"Failed to save CSS for '{css_item}': {e}")
             QMessageBox.critical(self, "Error", f"Failed to save CSS: {e}")
@@ -4833,7 +4935,7 @@ class CSSCustomizationDialog(QDialog):
                         preview.setStyleSheet(customizations[label.text()])
                     else:
                         preview.setStyleSheet("")
-            #logging.debug(f"Loaded {len(customizations)} CSS customizations for profile '{self.current_profile}'")
+            logging.debug(f"Loaded {len(customizations)} CSS customizations for profile '{self.current_profile}'")
         except sqlite3.Error as e:
             logging.error(f"Failed to load CSS customizations: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load customizations: {e}")
@@ -4895,7 +4997,7 @@ class CSSCustomizationDialog(QDialog):
                 )
                 conn.commit()
             preview.setStyleSheet("")
-            #logging.debug(f"Reset CSS for '{css_item}' in profile '{self.current_profile}'")
+            logging.debug(f"Reset CSS for '{css_item}' in profile '{self.current_profile}'")
         except sqlite3.Error as e:
             logging.error(f"Failed to reset CSS for '{css_item}': {e}")
             QMessageBox.critical(self, "Error", f"Failed to reset CSS: {e}")
@@ -5271,7 +5373,7 @@ class SetDestinationDialog(QDialog):
         self.recent_destinations_dropdown.clear()
         self.recent_destinations_dropdown.addItem("Select a recent destination")
         if not self.parent or not self.parent.selected_character:
-            #logging.debug("No parent or character selected; skipping recent destinations")
+            logging.debug("No parent or character selected; skipping recent destinations")
             return
 
         character_id = self.parent.selected_character.get('id')
@@ -5764,12 +5866,12 @@ class DamageCalculator(QDialog):
             "Garlic Spray": [700, 678, 651, 630],
             "Wooden Stake": [2800, 2715, 2604, 2520],
         }
-        #logging.debug("DamageCalculator initialized")
+        logging.debug("DamageCalculator initialized")
 
     def update_charisma_level(self) -> None:
         """Update charisma level based on dropdown selection."""
         self.charisma_level = self.charisma_dropdown.currentIndex()
-        #logging.debug(f"Charisma level set to {self.charisma_level}")
+        logging.debug(f"Charisma level set to {self.charisma_level}")
 
     def calculate_damage(self) -> None:
         """Calculate weapons needed to reduce target BP to 0."""
@@ -5824,7 +5926,7 @@ class DamageCalculator(QDialog):
         results.append(f"Totals: Hits: {total_hits} Coins: {total_cost:,}")
         self.result_display.setText("\n".join(results))
         self.total_cost_label.setText(f"Total Cost: {total_cost:,} Coins")
-        #logging.debug(f"Calculated for BP {target_bp}: {total_hits} hits, {total_cost} coins")
+        logging.debug(f"Calculated for BP {target_bp}: {total_hits} hits, {total_cost} coins")
 
 # -----------------------
 # Powers Reference Tool
@@ -5886,7 +5988,7 @@ class PowersDialog(QDialog):
             self.load_powers()
 
         self.setLayout(main_layout)  # Set QDialog layout
-        #logging.debug(f"PowersDialog initialized at ({character_x}, {character_y})")
+        logging.debug(f"PowersDialog initialized at ({character_x}, {character_y})")
 
     def _create_labeled_field(self, label_text: str, widget_type=QLabel) -> QWidget:
         """Create a labeled field with a widget."""
@@ -5906,7 +6008,7 @@ class PowersDialog(QDialog):
                 cursor.execute("SELECT name FROM powers ORDER BY name ASC")
                 for name, in cursor.fetchall():
                     self.powers_list.addItem(name)
-            #logging.debug(f"Loaded {self.powers_list.count()} powers")
+            logging.debug(f"Loaded {self.powers_list.count()} powers")
         except sqlite3.Error as e:
             logging.error(f"Failed to load powers: {e}")
             QMessageBox.critical(self, "Database Error", "Failed to load powers")
@@ -5949,7 +6051,7 @@ class PowersDialog(QDialog):
                         self.set_destination_button.setEnabled(False)
                 else:
                     self.set_destination_button.setEnabled(False)
-            #logging.debug(f"Loaded info for {power_name}")
+            logging.debug(f"Loaded info for {power_name}")
         except (sqlite3.Error, ValueError) as e:
             logging.error(f"Failed to load power info for {power_name}: {e}")
             QMessageBox.warning(self, "Error", f"Failed to load details for '{power_name}'")
@@ -5970,7 +6072,7 @@ class PowersDialog(QDialog):
                 self._configure_destination_button("Peacekeeper's Mission", closest[0], closest[1])
             else:
                 self.set_destination_button.setEnabled(False)
-                #logging.debug("No Peacekeeper's Missions found")
+                logging.debug("No Peacekeeper's Missions found")
         except sqlite3.Error as e:
             logging.error(f"Failed to find Peacekeeper's Mission: {e}")
 
@@ -5982,7 +6084,7 @@ class PowersDialog(QDialog):
             self.set_destination_button.setProperty("guild", guild)
             self.set_destination_button.setProperty("Column", int(col))
             self.set_destination_button.setProperty("Row", int(row))
-        #logging.debug(f"Destination button {'enabled' if enabled else 'disabled'} for {guild} at ({col}, {row})")
+        logging.debug(f"Destination button {'enabled' if enabled else 'disabled'} for {guild} at ({col}, {row})")
 
     def set_destination(self) -> None:
         """Set the destination in the database and update the minimap."""
@@ -6018,10 +6120,149 @@ class PowersDialog(QDialog):
         if self.db_connection:
             try:
                 self.db_connection.close()
-                #logging.debug("Database connection closed")
+                logging.debug("Database connection closed")
             except sqlite3.Error as e:
                 logging.error(f"Failed to close database: {e}")
         event.accept()
+
+# -----------------------
+# Log Viewer
+# -----------------------
+class LogViewer(QDialog):
+    """A dialog window to view and optionally send application logs."""
+
+    def __init__(self, parent: QWidget, log_directory: str):
+        super().__init__(parent)
+        self.setWindowTitle("Log Viewer")
+        self.setWindowIcon(APP_ICON)
+        self.resize(900, 600)
+
+        self.log_directory = LOG_DIR
+        self.current_log_lines = []
+
+        # Layouts
+        main_layout = QHBoxLayout(self)
+        left_layout = QVBoxLayout()
+        right_layout = QVBoxLayout()
+
+        # File List
+        self.log_list = QListWidget()
+        self.log_list.itemClicked.connect(self.load_log)
+        left_layout.addWidget(QLabel("Available Logs"))
+        left_layout.addWidget(self.log_list)
+
+        # Populate Log Files
+        for file in sorted(os.listdir(log_directory), reverse=True):
+            if file.endswith(".log"):
+                self.log_list.addItem(file)
+
+        # Log Viewer Text Area
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+
+        # Filter checkboxes
+        self.levels = {
+            "DEBUG": QCheckBox("DEBUG"),
+            "INFO": QCheckBox("INFO"),
+            "WARNING": QCheckBox("WARNING"),
+            "ERROR": QCheckBox("ERROR"),
+            "CRITICAL": QCheckBox("CRITICAL")
+        }
+        for cb in self.levels.values():
+            cb.setChecked(True)
+            cb.stateChanged.connect(self.apply_filter)
+
+        filter_box = QGroupBox("Log Level Filters")
+        filter_layout = QHBoxLayout()
+        for cb in self.levels.values():
+            filter_layout.addWidget(cb)
+        filter_box.setLayout(filter_layout)
+
+        # Buttons
+        # Buttons
+        delete_button = QPushButton("Delete Log")
+        delete_button.clicked.connect(self.delete_log)
+
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(self.close)
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(delete_button)
+        button_layout.addStretch(1)
+        button_layout.addWidget(close_button)
+
+        # Assemble Right Layout
+        right_layout.addWidget(QLabel("Log Contents"))
+        right_layout.addWidget(self.log_text)
+        right_layout.addWidget(filter_box)
+        right_layout.addLayout(button_layout)
+
+        # Final Layout
+        main_layout.addLayout(left_layout, 2)
+        main_layout.addLayout(right_layout, 5)
+
+    def load_log(self, item: QListWidgetItem):
+        file_path = os.path.join(self.log_directory, item.text())
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                self.current_log_lines = f.readlines()
+            self.apply_filter()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open file: {e}")
+
+    def apply_filter(self):
+        enabled_levels = [level for level, cb in self.levels.items() if cb.isChecked()]
+        filtered = [
+            line for line in self.current_log_lines
+            if any(level in line for level in enabled_levels)
+        ]
+        self.log_text.setPlainText("".join(filtered))
+
+    def delete_log(self):
+        selected_item = self.log_list.currentItem()
+        if not selected_item:
+            QMessageBox.warning(self, "No File Selected", "Please select a log file first.")
+            return
+
+        filename = selected_item.text()
+        file_path = os.path.join(self.log_directory, filename)
+
+        confirm = QMessageBox.warning(
+            self, "WARNING!",
+            "Are you sure you want to delete this log file?\n\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            os.remove(file_path)
+            self.log_list.takeItem(self.log_list.currentRow())
+            self.log_text.clear()
+            self.current_log_lines = []
+            QMessageBox.information(self, "Deleted", f"Successfully deleted: {filename}")
+
+        except Exception as delete_error:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.truncate(0)
+                self.current_log_lines = []
+                self.log_text.clear()
+                QMessageBox.information(
+                    self, "Cleared Instead",
+                    f"Could not delete '{filename}' (in use), so its contents were cleared instead."
+                )
+            except Exception as clear_error:
+                QMessageBox.critical(
+                    self, "Error",
+                    f"Failed to delete or clear the log file:\n{delete_error}\n\nAlso failed to clear contents:\n{clear_error}"
+                )
+
+    def copy_log_file_to_clipboard(self, file_path: str):
+        mime_data = QMimeData()
+        mime_data.setUrls([QUrl.fromLocalFile(file_path)])
+        QApplication.clipboard().setMimeData(mime_data)
 
 # -----------------------
 # Main Entry Point
