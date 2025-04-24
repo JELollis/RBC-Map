@@ -23,4 +23,5 @@ Version Control/__pycache__/variables.cpython-312.pyc
 /testing/*.txt
 /.vs/*
 /.vs
+*/.vs/
 /Qonda

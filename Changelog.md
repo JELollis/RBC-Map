@@ -1,574 +1,834 @@
 ### Changelog for RBC City Map Application
 
-### Version 0.11.3
+## Version 0.1.0
 
-#### Final Polishing & Full System Debug:
-- **Coordinate Extraction Overhaul**:
-  - Fixed edge cases for **map corners and borders** using full rule-based logic.
-  - Added dynamic rules for **zoom-level offsets**, using `first_x`, `first_y`, `last_x`, `last_y`.
-- **Coin Scraper Improvements**:
-  - Recognizes `Money: X coins` pattern as a valid coin readout.
-  - Improved logging of **coin loss/gain events** and updated match rules.
-- **Powers Dialog Bug Fixes**:
-  - Fixed integer conversion error from non-coordinate strings (e.g., "Tapir").
-  - Power info loads properly, and **Set Destination** now triggers cleanly for all entries.
-- **Guild/Shop Scraper Working**:
-  - `AVITDScraper` now correctly updates rows for all known guild/shop entries.
-  - Peacekeeper entries persist regardless of updates.
-- **Bug Fixes**:
-  - Fixed persistent crash on startup related to cookies table handling.
-  - Improved fallback behavior for invalid grid scrapes.
-- **Release Ready**:
-  - This version is stable and marks a **milestone toward a future public release.**
-
----
-
-### Version 0.11.2
-
-#### Internal Changes:
-- **Refactor Scraper Logic** *(Partial)*:
-  - Introduced structural changes to `AVITDScraper` for handling verbose and quiet modes.
-  - Implemented early groundwork for **split-mode updates**.
-- **Testing & Preparation for 0.11.3**:
-  - Updated coin and guild test entries.
-  - Logged verbose output for corner-case coordinate scraping.
+### 💡 Summary
+## Version 0.1.0 of the RBCMap app is a functional prototype built with tkinter, focusing on a minimap interface and manual street navigation using dropdowns and zooming. This version is highly procedural and uses no class-based structure.
 
 
----
+### 🧩 Key Features in 0.1.0
+🗺️ Minimap
+Grid-style minimap rendered using a Canvas.
 
-### Version 0.11.1
+Visualizes intersections of N-S and E-W streets.
 
-#### Feature Enhancements:
-- **Peacekeeper’s Mission Handling**:
-  - Added custom handling of **Peacekeeper’s Missions** in guild logic.
-  - Ensured these locations are **preserved and not overwritten** by scraper updates.
-- **Power Button Smart Routing**:
-  - Introduced logic to always route **Battle Cloak** to the **nearest Peacekeeper’s Mission**.
-- **Bug Fixes**:
-  - Resolved race condition where **Set Destination button** failed for guilds with partial data.
-  - Improved fallback logic for missing street coordinates.
+Dynamically adjusts based on zoom_level.
 
----
+Clickable grid allows repositioning the viewport (on_minimap_click).
 
-### Version 0.11.0
+🧭 Zoom Controls
+Buttons for "Zoom In" and "Zoom Out".
 
-#### Major Enhancements:
-- **Complete Powers System**:
-  - Added a fully functional **Powers dialog** with power info, quest hints, and Set Destination integration.
-- **Set Destination Dialog Refactor**:
-  - Improved **destination-setting workflow** with validation and feedback.
-- **Expanded Coin Detection**:
-  - Upgraded coin extractor to recognize **deposits, withdrawals, stealing**, and **bags of coins**.
-- **Database Schema Updates**:
-  - Refined structure of `powers`, `guilds`, and `cookies` tables for stability.
-- **Bug Fixes & UI Polish**:
-  - Fixed broken guild destination routing.
-  - Improved Powers dialog alignment and accessibility.
+Zoom affects how many streets are shown in the viewport (range 3–10).
+
+🏙️ Street Navigation
+Dropdowns for selecting a specific N-S and E-W intersection.
+
+“Go” button jumps the map to that location via go_to_location().
+
+
+📌 Map Refresh & Extra Buttons
+Buttons included:
+
+“Refresh Map” – calls update_minimap().
+
+“Discord” – placeholder for community link.
+
+“Modify Buildings” – placeholder for webpage/editor.
+
+
+### 📦 Placeholder Functions
+Functions like open_webpage(), open_discord(), and set_destination() exist but are unimplemented — suggesting planned features like building editing, community integration, and character destination logic.
+
+
+### 🛠️ Utilities
+generate_ew_streets() builds E-W street names from 1st to 100th with ordinal suffixes.
+
+Static N-S street list contains both natural and thematic naming (e.g., “Pine”, “Torment”, “Despair”).
+
+
+### 🧱 Technical Notes
+Hardcoded GUI using absolute grid placements.
+
+Pure procedural code — no object-oriented design.
+
+No data persistence or external file/database integration.
+
+Initial zoom logic and bounds checking are in place for stability.
 
 ---
 
-### Version 0.10.3
+## Version 0.2.0
+🚀 Summary
+## Version 0.2.0 introduces data-driven enhancements to the map rendering logic and begins to externalize key configuration data, indicating a move toward modularity and semantic enrichment of the map. It remains procedural and GUI-based, using tkinter, but introduces data overlay logic and better street metadata.
 
-#### Feature Additions:
-- **Settings Dialog**:
-  - Introduced a dedicated **settings menu** with toggles for startup scraper and verbose logging.
-- **Improved Database Handling**:
-  - Added logic to **initialize new databases** with default tables on first run.
-- **Bug Fixes**:
-  - Fixed **duplicate log file entries** on app restart.
-  - Improved detection for **first-time setup scenarios**.
+
+📌 Key Enhancements Over 0.1.0
+1. Landmark Overlays
+Introduced color-coding for specific locations:
+
+blue → Banks
+
+orange → Pubs
+
+red → Transit points
+
+gray → Normal intersections
+
+Determined by checking (ns_street, ew_street) membership in banks, pubs, and transits.
+
+2. Data Externalization
+New import: from variables import *
+
+Suggests landmark data (banks, pubs, transits) now reside in a separate variables.py module.
+
+Moves away from hardcoding everything in main, enabling easier expansion/maintenance.
+
+3. Visual Refinement
+Changed alley color from blue → black, clearly separating structural roads from data-flagged locations.
+
+Cleaned up layout by switching label order in dropdowns to N-S first, then E-W (likely for readability).
+
+
+🧠 Architectural Implications
+Although still not object-oriented, this update clearly shows domain-aware thinking — streets are now data-bearing, not just labels.
+
+The minimap canvas becomes semantically meaningful beyond layout, taking first steps toward a GIS-style data layer system.
+
+🧭 GUI & Interaction Logic
+GUI layout and functionality are largely unchanged from 0.1.0.
+
+Retains the same controls, buttons, and logic for zoom, refresh, and movement.
+
+Placeholder functions (set_destination, open_discord, open_webpage) still do nothing — their implementation remains pending.
+
+---
+
+0.3.0 – Initial Refactor (Tkinter OOP)
+**Key **Changes:****
+
+First version to introduce class-based design with CityMapApp.
+
+Clean separation of:
+
+GUI setup (setup_gui)
+
+Logic for zooming, refreshing, and updating maps
+
+Integrated proximity logic: nearest bank/pub/transit display.
+
+Map display using two canvases (map_canvas, minimap_canvas).
+
+Dropdowns for selecting X/Y streets (rows/columns).
+
+Uses rows and columns dicts for grid logic.
+
+> **Assessment:** Experimental OO version, still using tkinter, but paving the way for future Qt refactor.
+
+
+### 🧱 0.3.1 – Partial Rework + Abstracted Map Logic
+**Key **Changes:****
+
+Introduced a Map class encapsulating core minimap data (zoom, center).
+
+Partial backslide to procedural code in UI setup.
+
+Minimap placeholder logic present, but not implemented.
+
+Suggests a transitional stage from 0.3.0 to something Qt-based.
+
+> **Assessment:** Attempt to modularize backend (Map class) before a full GUI transition.
+
+
+### 💼 0.3.2 – PyQt5 Migration Begins
+**Key **Changes:****
+
+Switched GUI toolkit from tkinter to PyQt5.
+
+Replaced Canvas with QLabel + QPixmap for drawing.
+
+Introduced sidebar with:
+
+Minimap
+
+Closest location buttons
+
+Combo boxes for street selection
+
+Zoom/Go/Destination controls
+
+Refresh, Discord, and Website buttons
+
+Basic structure for character list panel added.
+
+Map rendering was still placeholder (load_minimap()), no actual drawing logic.
+
+> **Assessment:** Foundation of the modern UI — PyQt5 layout, modular widgets, and QWebEngine for in-game site.
+
+🧭 0.3.3 – Minimap Rendering Engine Implemented
+**Key **Changes:****
+
+Fully functional minimap drawing using QPainter on QPixmap.
+
+Differentiates cell types:
+
+Alleys, street edges, banks, pubs, transits, user buildings
+
+Labels added to:
+
+Named intersections
+
+User buildings
+
+Adds click detection on minimap (mouse events).
+
+Combo box to go to a specific location using street names.
+
+> **Assessment:** This version solidified the interactive PyQt-based minimap engine, replacing prior tkinter logic.
+
+
+### 🧩 0.3.4 – Enhanced Qt Layout + Post-Load Coordination
+**Key **Changes:****
+
+Live HTML parsing from embedded WebView using BeautifulSoup.
+
+Extracts player coordinates (x, y) and recenters minimap dynamically.
+
+Greatly improved integration between map UI and game logic.
+
+Map render logic abstracted to draw_minimap(), coordinates validated, text centered precisely.
+
+> **Assessment:** Fully matured prototype of Qt-based RBCMap — bridging game backend data and GUI map interaction.
 
 ---
 
 
-### Version 0.10.2
+### 🧱 0.4.0 – Enhanced HTML Integration & Drawing Logic
+**Key **Changes:****
 
-#### Feature Enhancements:
-- **WASD Movement Support**:
-  - Added support for navigating the map using **W, A, S, D** keys for improved movement control.
-  - Ensured **keyboard input handling** is consistent across different UI elements.
-- **Bug Fixes & Refinements**:
-  - Addressed **key input recognition issues** to ensure smoother movement interaction.
-  - Fixed **minor UI inconsistencies** with character selection.
+Adds extract_coordinates_from_html() using BeautifulSoup.
 
----
+Pulls player coordinates dynamically from the embedded web view.
 
-### Version 0.10.1
+Minimap centers based on real in-game location.
 
-#### UI & Performance Improvements:
-- **Optimized User Interface**:
-  - Adjusted **layout structure** for better usability.
-  - Improved **character list management**.
-- **Performance Enhancements**:
-  - Refined **database query execution** for faster load times.
-  - Improved **memory handling** in web scraping operations.
-- **Bug Fixes**:
-  - Resolved an issue with **incorrect coordinate tracking**.
-  - Fixed a **rare crash** related to **destination setting**.
+Introduced structured minimap drawing via draw_minimap(), with:
 
----
+Street overlays
 
-### Version 0.10.0 (Public Beta Release)
+Color-coded special locations (banks, pubs, transits, user buildings)
 
-#### Major System Upgrades:
-- **Minimap System Overhaul**:
-  - Fully redesigned **zooming and scaling** functionality for better user control.
-  - **Nearest POI indicators** now highlight the closest banks, taverns, and transit stations.
-- **Character Management Enhancements**:
-  - Introduced **multi-character support**, allowing users to manage multiple game accounts.
-  - Implemented **secure login handling** with encrypted credentials.
-- **Database System Migration**:
-  - Moved to a **fully integrated SQLite database** for managing map data, destinations, and user settings.
-- **Web Scraping & Integration**:
-  - Improved **guild and shop tracking** with automated updates from "A View in the Dark."
-  - Enhanced **coordinate extraction accuracy** for in-game location tracking.
-- **UI & Theming**:
-  - Introduced **customizable themes** for the application UI.
-  - Improved **label positioning** and **grid rendering** for better readability.
-- **Bug Fixes & Refinements**:
-  - Addressed **inconsistent street labeling issues**.
-  - Fixed **map rendering artifacts** when zooming or resizing the window.
+Destination setting stub added (Set Destination button).
 
----
 
-### Version 0.9.1
+✅ Introduced web-integrated positioning and a persistent GUI foundation.
 
-#### Feature Enhancements:
-- **Refactored Database Management**:
-  - Improved **SQLite database schema** for faster queries and better data integrity.
-  - Optimized **data fetching** for in-game points of interest.
-- **Advanced Web Scraping Integration**:
-  - Improved **guild/shop tracking** by fetching updates from "A View in the Dark".
-  - Implemented **background update scheduler** for periodic data refreshing.
-- **Minimap Rendering Updates**:
-  - **Better alignment** of street labels for readability.
-  - Fixed **overlapping UI elements** on smaller screen resolutions.
+💥 0.4.1 – Nearest-Location Line Drawing (with caveat)
+**Key **Additions:****
 
----
+Draws lines to 1st/2nd/3rd closest banks, pubs, and transits from center.
 
-### Version 0.9.0
+Implements closest_level logic tied to three new buttons.
 
-#### Major System Upgrades:
-- **Encryption & Security Enhancements**:
-  - Integrated **cryptography module** for secure **password and cookie storage**.
-  - Cookies are now **encrypted** before being stored in the database.
-- **Expanded Web Engine Capabilities**:
-  - Added **JavaScript injection** to capture web events from the game.
-  - Improved **coordinate extraction accuracy** when parsing game data.
-- **User Account Management Improvements**:
-  - Implemented **persistent login handling** using secure cookies.
-  - Enhanced **character switching system** for seamless account changes.
-- **Database Transition Enhancements**:
-  - Improved **MySQL performance** by restructuring how guild and shop data is stored.
-  - Introduced **automatic database migrations** to maintain data consistency.
 
----
+☠️ Bug note: Selecting closest levels other than 1 causes stack buffer overflow.
 
-### Version 0.8.1
 
-#### Feature Enhancements:
-- **Improved Character Management**:
-  - Users can now **store and manage multiple characters**.
-  - Auto-login feature implemented for **last active character**.
-- **Persistent Web Sessions**:
-  - Cookies are now **stored in an SQLite database**, ensuring persistent login across sessions.
-  - Implemented **cookie injection** to maintain web session states.
-- **Database Optimizations**:
-  - Streamlined **MySQL and SQLite interactions** for improved performance.
-  - Added new **indexes** to speed up frequent queries.
+⚠️ Functionally ambitious but structurally unstable. Good idea, flawed execution.
 
----
 
-### Version 0.8.0
+🔧 0.4.2 – Stability Rework, Feature Isolation
+**Changes:**
 
-#### Major System Upgrades:
-- **Full Integration of MySQL Database**:
-  - Transitioned **map data storage** from SQLite to **MySQL**.
-  - Data for **banks, taverns, transit stations, guilds, and shops** is dynamically fetched.
-- **Web Scraping Enhancements**:
-  - Improved **guild and shop tracking** using "A View in the Dark".
-  - Added a **scheduler** for automatic periodic updates.
-- **Expanded Minimap Features**:
-  - Implemented **Action Point (AP) cost calculation** for movement.
-  - Nearest **banks, pubs, and transit stations** now display AP cost.
-- **User Interface Enhancements**:
-  - Added **theme customization support**, allowing users to modify UI colors.
-  - Improved **label positioning** on the minimap for better readability.
-- **Enhanced Security & Encryption**:
-  - Integrated **cryptography** module for **secure password storage**.
-  - Web session cookies are now **securely stored and managed**.
+Removed interactive closest-location levels due to instability.
 
----
+Simplified to show only nearest (1st) bank/pub/transit.
 
-### Version 0.7.3
+Preserved:
 
-#### Feature Enhancements:
-- **Database Improvements**:
-  - **Optimized MySQL queries** for fetching city map data.
-  - **Improved caching mechanism** to reduce redundant database calls.
-- **Web Scraping Enhancements**:
-  - Implemented a **scheduler** for automatic guild/shop data updates.
-  - Improved **error handling** in the `AVITDScraper` class to handle unexpected webpage changes.
+Map rendering
 
----
+Real-time location pulling from HTML
 
-### Version 0.7.2
+Zoom and go-to logic
 
-#### UI & Functionality Improvements:
-- **Map UI Enhancements**:
-  - **Dynamic minimap updates** based on live coordinate extraction.
-  - Improved **text rendering on the minimap** for better visibility.
-- **Bug Fixes**:
-  - Fixed an issue where **some destinations failed to save** properly.
-  - Resolved a **web scraping timeout issue** with `requests`.
+Prepared code for restoring closest_level logic later.
 
----
 
-### Version 0.7.1
+🔁 Rollback and cleanup patch, focusing on reliability and readiness for persistence.
 
-#### Core System Updates:
-- **Cookie Management System**:
-  - Added **persistent cookies storage** using SQLite.
-  - Improved **web session handling** for a seamless login experience.
-- **Performance Enhancements**:
-  - Reduced **memory usage** by optimizing loaded data objects.
-  - Improved **logging system** for better debugging.
 
----
+✅ 0.4.3 – Destination Logic & Visual Feedback
+Major **Additions:**
 
-### Version 0.7.0
+Implements:
 
-#### Major System Overhaul:
-- **Migration to PySide6**:
-  - Fully transitioned the UI framework from **PyQt5 to PySide6**.
-  - Improved **QtWebEngineView integration** for a smoother browsing experience.
-- **Expanded Character Management**:
-  - Added **character list storage** with an improved selection interface.
-  - Implemented **auto-login** for last active character.
-- **Web Integration Upgrades**:
-  - Introduced **JavaScript console logging** to capture web events.
-  - Improved **coordinate extraction accuracy** from the game’s webpage.
+Persistent destination setting via pickle
+
+Green path to destination drawn on minimap
+
+Restores draw_location() abstraction, applies to all entity types.
+
+Adds find_nearest_*() logic to draw paths to closest pub, bank, transit.
+
+Maintains full parsing/rendering integrity from earlier versions.
+
+
+🎯 Feature complete version for:
+
+Destination persistence
+
+Full nearest-location visual feedback
+
+Refined GUI controls
+
+--
+
+
+### 🧱 0.5.0 – 
+### 🧩 First Database-Driven Release
+**Highlights:**
+
+Introduced connect_to_database() with fallback to remote host.
+
+Loaded columns, rows, banks, taverns, transits, user buildings, and color_mappings from MySQL.
+
+draw_minimap() adjusted to reflect color mappings from DB (color_map).
+
+HTML extraction now pulls from <span class='intersect'>.
+
+
+✅ First integration of live data from a structured MySQL schema.
+
+
+### 🛠️ 0.5.1 – 🌈 Qt Color Fix & Code Clarity
+**Changes:**
+
+Converts color strings from DB directly into QColor objects in color_map.
+
+Ensures all dynamic visual updates (e.g. edges, alleys, etc.) honor the loaded palette.
+
+Renamed color_map -> self.color_map inside the class for scope clarity.
+
+
+🧠 Improved visual configuration and reduced hardcoded rendering logic.
+
+
+🔁 0.5.2 – 🛍️ Shops & Guilds Integrated
+**Additions:**
+
+Loads shops and guilds from the database.
+
+Parses their coordinates and next update timestamps.
+
+Includes logic for rendering shop/guild icons on minimap.
+
+Drawn using same draw_location() routine with new categories.
+
+
+🎯 Adds merchant and faction overlays with live update hooks (timestamp support).
+
+
+### 📅 0.5.3 – 🔍 Improved HTML Coordinate Extraction
+**Enhancements:**
+
+Improved fallback HTML parsing:
+
+Now checks for <input name="x"> and <input name="y"> if <span class='intersect'> is missing.
+
+Alternative fallback: parses <td class='street'> block with embedded <form>.
+
+More robust against A View in the Dark HTML variations.
+
+🛡️ Enhanced HTML fault tolerance in response to inconsistent site markup.
+
+
+🧠 0.5.4 – 
+### 📊 Data Scraper & Next-Update Forecasting
+Major New Logic:
+
+Adds scrape_avitd_data():
+
+Scrapes guilds and shops from the A View in the Dark site.
+
+Updates DB rows with next update timestamps.
+
+Adds:
+
+extract_next_update_time()
+
+update_guild(), update_shop()
+
+update_guilds(), update_shops()
+
+get_next_update_times() exposed for use in UI/notifications.
+
+
+### 🔄 Fully automated sync of key game structures to app backend via web scraping.
 
 ---
 
-### Version 0.6.3
+0.6.0 – 
+### 🧬 Modular Cleanup + Persistence Prep
+**Changes:**
 
-#### Feature Enhancements:
-- **Logging System Introduced**:
-  - Implemented **file-based logging** to track application activity.
-  - Logs stored in the `logs/` directory with daily rotation.
-- **Improved Character Management**:
-  - Introduced **character selection list** with persistent storage.
-  - Players can now **log in and out** of characters directly from the UI.
-- **Web Integration Enhancements**:
-  - Improved **login handling** using JavaScript injection.
-  - Implemented a **"Website Coming Soon"** popup for future website integration.
+Cleaned database schema queries, including color_mappings, shops, and guilds with next_update.
 
----
+Refactored data loading into load_data() with tight dictionary comprehensions.
 
-### Version 0.6.2
+get_next_update_times() pulls guilds and shops update cycles.
 
-#### UI & Performance Improvements:
-- **Optimized Database Queries**:
-  - Improved **MySQL connection handling** for better efficiency.
-  - Reduced **redundant database calls** on startup.
-- **Bug Fixes**:
-  - Fixed an issue where **map labels overlapped incorrectly**.
-  - Corrected **coordinate extraction logic** from the game’s HTML.
+🔗 Reliable DB-backed backend with clean data type safety.
 
----
 
-### Version 0.6.1
+### 🧪 0.6.1 – 
+### 📊 Added placesofinterest & Fault-Resilient DB Reads
+Improvements:
 
-#### Core Enhancements:
-- **Database Stability Fixes**:
-  - Improved **error handling for failed MySQL connections**.
-  - Enhanced **logging of database interactions** for debugging.
-- **UI Adjustments**:
-  - Modified **layout structure** for better scalability.
-  - Adjusted **button sizing and alignment**.
+Integrated placesofinterest table from DB.
 
----
+Improved resilience on coordinate mapping: filters out entries with None from failed columns.get(...).
 
-### Version 0.6.0
+Reduced potential for GUI crashes from missing data.
 
-#### Major System Upgrades:
-- **New Data Management System**:
-  - Added **session management** for tracking login states.
-  - Expanded **database structure** to support **places of interest**.
-- **MySQL Performance Improvements**:
-  - Optimized **query efficiency** for location lookups.
-  - Improved **data storage for guilds and shops**.
-- **Web Scraping Enhancements**:
-  - Implemented **scheduled scraping** for guild/shop updates.
-  - Extracted **next update timestamps** from "A View in the Dark".
+🛡️ Adds soft failure protections in data loading.
 
----
 
-### Version 0.5.4
+### 🧩 0.6.2 – 
+### 🛠️ Setup Scripts & AP Cost UI
+**Key **Additions:****
 
-#### Feature Enhancements:
-- **Shop & Guild Data Updates**:
-  - Integrated **data scraping** from "A View in the Dark" for guilds and shops.
-  - Added **automatic next update timestamps** for guild/shop tracking.
-- **Database Enhancements**:
-  - Improved **MySQL integration** to store shop and guild locations.
-  - Optimized **query performance** for location lookups.
+Added automatic module installation prompt (pip install) with delay-based relaunch (great for first-time users).
 
----
+load_characters() tied into dropdown, allowing users to select, add, or remove characters.
 
-### Version 0.5.3
+Minor GUI tweaks for padding and layout alignment.
 
-#### Performance & UI Fixes:
-- **Improved Web Scraping Efficiency**:
-  - Optimized **HTML parsing logic** for extracting player coordinates.
-  - Reduced **redundant requests** to "A View in the Dark" to avoid unnecessary loads.
-- **Map Labeling Fixes**:
-  - Addressed **overlapping street name rendering issues**.
-  - Improved **text alignment** for street intersections.
+
+### 📦 Packs usability improvements and setup streamlining.
+
+
+### 🔥 0.6.3 – 
+🧠 Intelligent Character Login + Logging System
+Major **Upgrades:**
+
+🔑 Character login/logout via in-game site using QWebEngineView JS injection.
+
+Logs out current character → injects name/password → logs back in
+
+
+## 🧾 Logging system added:
+
+logs/rbc_YYYY-MM-DD.log
+
+Uses logging.debug, info, warning, error
+
+
+### 🗃 Character list transitioned from QComboBox → QListWidget for better interactivity.
+
+
+🎨 GUI polish: Highlighted labels (banks, taverns, destination), “Coming Soon” website dialog.
+
+
+### 📁 Added ensure_directories_exist() to create logs/ and sessions/ if missing.
+
+
+🧠 Smart automation, session persistence, and robust logging define this release.
 
 ---
 
-### Version 0.5.2
 
-#### Core Improvements:
-- **Enhanced Webview Integration**:
-  - Improved coordinate extraction from the game’s **HTML structure**.
-  - Enhanced support for **auto-updating minimap positions**.
-- **New MySQL Data Handling**:
-  - Extended database to **track next update timestamps** for guilds and shops.
-  - Improved **error handling for failed MySQL connections**.
+### 🧱 0.7.0 – 🚀 Migration to PySide6
+Key Shifts:
 
----
+Fully switched from PyQt5 → PySide6.
 
-### Version 0.5.1
+Introduced:
 
-#### Bug Fixes & Refinements:
-- **Database Stability Fixes**:
-  - Fixed **intermittent connection failures** with MySQL.
-  - Improved **data retrieval logic** for user locations.
-- **UI Enhancements**:
-  - Minor improvements to **minimap rendering**.
+QWebEngineProfile for persistent cookies
 
----
+Modularized HTML, database, and logging setup
 
-### Version 0.5.0
+Introduced persistent character management with fallback if no characters exist.
 
-#### Major Enhancements:
-- **MySQL Database Integration**:
-  - Fully transitioned from **SQLite to MySQL**.
-  - Now retrieves **banks, taverns, transit stations, and user buildings** dynamically.
-- **Improved Character Management System**:
-  - Placeholder UI for **adding, modifying, and deleting** saved characters.
-- **Optimized Map Rendering**:
-  - **QPainter rendering updates** for smoother UI performance.
-- **Updated Web Browser**:
-  - Replaced older implementation with **QWebEngineView** for better in-game site support.
 
----
+🧠 This version modernizes the foundation and boosts future-proofing.
 
-### Version 0.4.3
 
-#### Feature Enhancements:
-- **Destination Tracking**:
-  - Users can now **set a destination** on the minimap.
-  - A **green line** is drawn from the player's location to the destination.
-  - The destination is **saved** between sessions using `pickle`.
+🧠 0.7.1 – 
+🎨 Theme Customization + Persistent Cookies
+**New Features:**
 
-- **Improved Nearest Location Tracking**:
-  - Identifies and displays **the closest bank, pub, and transit station**.
-  - **Color-coded paths**:
-    - **Blue**: Path to the nearest bank.
-    - **Orange**: Path to the nearest pub.
-    - **Red**: Path to the nearest transit station.
+Added load_theme_settings() and apply_theme() for UI color theming.
 
-- **Web Integration Improvements**:
-  - Coordinates now **auto-extract from the game's webpage**.
-  - The **minimap updates dynamically** based on extracted coordinates.
+Implemented persistent QWebEngineProfile with stored cookies in sessions/cookies.
 
----
+Abstracted cookie handling:
 
-### Version 0.4.2
+Load/save cookies via pickle
 
-#### Bug Fixes & Refinements:
-- **Fixed pathfinding logic**:
-  - Addressed inconsistencies in nearest-location tracking.
-  - Improved **minimap rendering** when zooming.
+Auto-reapply cookies to quiz.ravenblack.net
 
-- **Performance Enhancements**:
-  - Reduced unnecessary **web view refreshes**.
-  - Optimized **HTML parsing** for extracting coordinates.
 
----
+🎨 Theming + 🍪 cookies = UX enhancement and session persistency.
 
-### Version 0.4.1
 
-#### Critical Bug Fixes:
-- **Fixed Stack Overflow Bug**:
-  - Selecting **1st, 2nd, or 3rd closest locations** previously caused a **stack buffer overflow**.
-  - Temporarily disabled these buttons while reworking the logic.
+### 📦 0.7.2 – 📋 SQLite Cookie Storage & Character Persistence
+**Upgrades:**
 
-- **Minimap Navigation Updates**:
-  - Clicking the minimap **centers the view more accurately**.
-  - **Street labels** now display more consistently.
+Replaced pickle-based cookies with SQLite-backed cookie DB (cookies.db).
+
+Introduced:
+
+initialize_cookie_db(), save_cookie_to_db(), load_cookies_from_db()
+
+Character persistence logic now loads last active character automatically.
+
+AVITDScraper integrated into app load to update DB automatically.
+
+💾 First use of SQLite local state. Better for scaling.
+
+
+🔧 0.7.3 – 
+### 🧩 Componentization, Multi-Dialog System, JS Injection
+Massive Refactor:
+
+App now includes:
+
+DatabaseViewer for tab-based DB browsing
+
+ThemeCustomizationDialog for visual tuning
+
+SetDestinationDialog and CharacterDialog modularized
+
+JavaScript logging via inject_console_logging()
+
+Supports reading JS console logs from WebView.
+
+Expanded load_data() to include new POIs.
+
+
+### 🧱 RBCMap becomes a modular, maintainable toolkit, not just a map viewer.
 
 ---
 
-### Version 0.4.0
 
-#### Major Enhancements:
-- **Improved Minimap UI**:
-  - Increased **scalability** for different zoom levels.
-  - Implemented **QPainter-based rendering**.
+### 🧱 0.8.0 – 🗄️ SQLite Conversion & Persistent UX Foundation
+**Changes:**
 
-- **Integrated Web Browser**:
-  - Embedded the **game’s website** inside the application using `QWebEngineView`.
-  - The game page **loads automatically** when launching the application.
+Fully transitioned backend from MySQL to SQLite for offline and portable deployment.
 
-- **Character Management System**:
-  - Placeholder for **adding, modifying, and deleting** saved characters.
-  - **Character list panel** added to the UI.
+connect_to_database() and load_data() now point to local rbc_map_data.db.
 
-- **New Buttons & Controls**:
-  - **Refresh Button**: Reloads the game’s web page.
-  - **Discord & Website Buttons**: Quick links to community resources.
+Introduced theme, coin, and cookie persistence tables under a centralized sessions/ directory.
 
----
+Modularized:
 
-### Version 0.3.4
+initialize_cookie_db()
 
-#### UI & Feature Enhancements:
-- **PyQt5 Migration Completed**:
-  - Fully transitioned from **Tkinter** to **PyQt5** for a more modern UI.
-  - Improved **layout structure** with frames, buttons, and widgets.
-- **Minimap Overhaul**:
-  - **QPainter-based rendering** for a smoother and scalable minimap.
-  - **Street names** dynamically displayed at intersections.
-  - New **color-mapped locations**:
-    - **Banks** (Blue)
-    - **Pubs** (Orange)
-    - **Transit Stations** (Red)
-    - **Alleyways** (Dark Grey)
-    - **User Buildings** (Purple)
-- **Improved Web Integration**:
-  - **QtWebEngineView** implemented to embed the **game’s webpage** within the app.
-  - **Auto-coordinate extraction** from the game’s HTML for real-time positioning.
+initialize_coins_db()
 
----
+initialize_database() with full schema validation.
 
-### Version 0.3.3
 
-#### Map & UI Refinements:
-- **More accurate coordinate tracking** for streets.
-- **QFontMetrics integration** for better text alignment in the minimap.
-- **Character list feature added**:
-  - Placeholder for storing multiple characters.
-  - Basic UI buttons for adding/removing characters.
+### 🔄 Major pivot from cloud-bound to standalone desktop-first architecture.
 
----
 
-### Version 0.3.2
+### 🔐 0.8.1 – 
+### 🔐 Secure State, Schema Checking, and Expanded Dialog Logic
+**New Features:**
 
-#### Core Improvements:
-- **Introduced Closest Locations Feature**:
-  - Added buttons for **1st, 2nd, and 3rd closest** locations.
-  - Displayed **nearest banks, pubs, and transit stations**.
-- **Enhanced Zoom & Destination Features**:
-  - **Set Destination Button** (placeholder added).
-  - Improved **zoom handling** for minimap navigation.
-- **Data Management**:
-  - Implemented **pickle-based storage** for credentials and settings.
+Full schema validation and column-type checking added to initialize_database().
 
----
+cryptography.Fernet encryption support added for sensitive data (e.g., passwords).
 
-### Version 0.3.1
+Dialog-based modularity extended:
 
-#### UI & Structural Improvements:
-- **Minimap Rendering Update**:
-  - Improved rendering logic for street names.
-  - **Dropdown-based navigation system** introduced.
-- **Refactored Map Class**:
-  - Separated map logic into a dedicated **Map class**.
-  - Improved **data structure management** for streets and locations.
+CharacterDialog
+
+ThemeCustomizationDialog
+
+SetDestinationDialog
+
+Database settings, cookies, and theme colors now stored securely and validated at launch.
+
+
+### 🧱 Hardened the foundation with encryption + full schema introspection logic.
+
+💥 0.8.2 – ⚔️ Damage Calculator & Extended POI Coverage
+Major **Additions:**
+
+New DamageCalculator dialog tool:
+
+Input: Target BP
+
+Calculates hit counts for:
+
+Holy Water
+
+Garlic Spray
+
+Wooden Stake
+
+Computes charisma-discounted prices and total coin cost
+
+Load logic updated to support:
+
+shop_items pricing with charisma scaling
+
+Live coin balance integration per character
+
+
+🎯 Adds gameplay planning tools, bridging map navigation with action economics.
 
 ---
 
-### Version 0.3.0
 
-#### Major Transition:
-- **PyQt5 Initial Implementation**:
-  - Began migrating from **Tkinter to PyQt5**.
-  - Basic **QWidget-based UI framework** introduced.
-- **Enhanced Grid System**:
-  - **Dynamic minimap scaling** based on zoom levels.
-  - **Improved street navigation** with dropdown selection.
-- **Web Integration Begun**:
-  - **Planned implementation of web scraping** for real-time game data retrieval.
+### 🧱 0.9.0 – 
+### 🔐 Encrypted Local State & Database Formalization
+Key **Enhancements:**
 
----
+Switched to fully encrypted storage for sensitive data (e.g., character passwords) using cryptography.Fernet.
 
-### Version 0.2.0
+Finalized SQLite schema:
 
-#### Feature Enhancements:
-- **Expanded Minimap Functionality**:
-  - Introduced **color-coded locations**:
-    - **Blue**: Banks
-    - **Orange**: Pubs
-    - **Red**: Transit stations
-    - **Black**: Alleys
-  - Improved **labeling system** to display street intersections.
+Adds powers, placesofinterest, shop_items, and recent_destinations.
 
-- **Street System Improvements**:
-  - Refined logic for **street name generation**.
-  - Enhanced the way **E-W and N-S streets** are referenced.
+Adds foreign key constraints and default population for banks, colors, guilds, powers, POIs, etc.
 
-- **Interactivity Updates**:
-  - Clicking on the **minimap** now updates movement with improved calculations.
-  - Improved **dropdown-based location selection**.
+Resilient modular initialization:
 
-#### UI & Code Improvements:
-- **Variables Modularization**:
-  - Introduced `variables.py` to manage streets, locations, and other constants separately.
+initialize_database() builds all tables with INSERT OR IGNORE seeding.
 
-- **Optimization**:
-  - Updated **grid logic** for faster rendering.
-  - **Improved visual representation** of key locations.
+Extensive documentation headers added to all sections.
 
-#### Placeholder Features:
-- **Set Destination** (still a placeholder).
-- **Open Webpage & Discord Buttons** (no functionality yet).
+
+### 🧱 Formalized DB schema, added encryption, and enhanced modular infrastructure.
+
+
+🧠 0.9.1 – 📖 Full-Class Registry + Role Documentation
+Structural & UX **Enhancements:**
+
+Refined class/module documentation throughout:
+
+RBCCommunityMap, CharacterDialog, DamageCalculatorUI, ShoppingListTool, etc.
+
+Each class/function described by purpose and feature scope.
+
+Bundled all primary features into top-level main.py docstring (great for onboarding devs).
+
+Expanded installer safety: checks module availability at runtime and exits cleanly if missing.
+
+
+### 📘 Offers full application self-documentation, onboarding ease, and structural transparency.
 
 ---
 
-### Version 0.1.0
 
-#### Initial Release:
-- **Basic Minimap Functionality**:
-  - Displayed a **3x3 grid** representing the player’s location.
-  - Allowed **manual centering** by selecting locations from dropdowns.
-  - **Click-based recentering** on the minimap.
+### 🧱 0.10.0 – 
+### 💼 Unified Application Structure
+**Highlights:**
 
-#### Core Features:
-- **Street System**:
-  - Implemented a **grid-based street layout** with named E-W and N-S streets.
-  - Dynamic **street name generation** for E-W coordinates (e.g., "1st", "2nd", etc.).
+Refactored RBCCommunityMap into a comprehensive, class-based application core.
 
-- **Zoom Controls**:
-  - **Zoom In/Out** functionality with adjustable grid sizes.
+Integrated:
 
-- **Navigation & Destination**:
-  - Users could **select a street intersection** and **navigate to it**.
-  - Implemented a **"Set Destination"** button (placeholder).
+Encrypted character handling
 
-- **UI Elements**:
-  - **Tkinter-based interface** with dropdowns, buttons, and a canvas.
-  - Initial **top bar controls** for zoom, refreshing, and setting destinations.
+Cookie/session persistence
 
-- **Basic Interactivity**:
-  - Clicking on the **minimap grid** updated the position.
-  - **Dropdown selections** allowed navigation to chosen locations.
+Theme and CSS injection
 
-#### Placeholder Features:
-- **Set Destination** (not yet functional).
-- **Open Webpage & Discord Buttons** (not yet implemented).
+Full webview interaction via JS + HTML parsing
 
+Created tools:
+
+Damage Calculator
+
+Shopping List Tool
+
+Database Viewer
+
+Powers and Guilds UI
+
+
+🎯 Sets the gold standard structure for all major features in a centralized GUI shell​
+.
+
+
+### 🧪 0.10.1 – 
+### 🧪 Debugging and Display Refinement
+**Changes:**
+
+Introduced fine-grained JavaScript console logging hooks via QWebChannel.
+
+Improved load-time handling for coin balances and minimap center recalculations.
+
+Fixed redundant/inactive menu entries (e.g., go back/forward).
+
+
+🔧 Focused on event hooks, cleanup, and edge-case polish​
+.
+
+🔍 0.10.2 – 
+### 📊 Metadata Extraction and Info Frame Enhancements
+**Enhancements:**
+
+Added update_info_frame() showing:
+
+AP cost estimates
+
+Closest location summaries
+
+Dynamically calculates movement costs using calculate_ap_cost().
+
+Expanded extract_coins_from_html() to support deeper page parsing for accurate balance updates.
+
+
+🔁 Reinforces app’s value as a real-time tracker and planner​
+.
+
+
+### 🔐 0.10.3 – 
+### 🔐 Final Feature Polishing & Schema Finalization
+Final **Additions:**
+
+Hardened initialize_database() with:
+
+Over a dozen normalized tables (banks, cookies, shop_items, coins, POIs, guilds, etc.)
+
+INSERT OR IGNORE bootstrap logic for default records
+
+check_required_modules() now validates environment dependencies at launch.
+
+Fully documented top-level application, classes, and methods (self-contained docset).
+
+
+### 🧱 Locked in a fully seeded local database, supports upgrades without manual user intervention​.
+
+---
+
+
+### 🧱 0.11.0 – 🧭 Feature Consolidation & Keyboard Navigation
+**Additions:**
+
+Introduced WASD keybindings with database-configurable modes.
+
+All major tools — Minimap, Powers, Damage Calculator, Shopping List — consolidated into main UI.
+
+RBCCommunityMap now supports:
+
+move_character(), setup_keybindings(), zoom_in/out
+
+Major module imports refactored into clean sections for readability.
+
+Documentation headers massively improved.
+
+
+📌 Solidifies RBCMap as a full-featured modular app​
+.
+
+
+### 🧪 0.11.1 – 🪛 Patch for Visuals and Table Coverage
+**Enhancements:**
+
+Fixes inconsistencies in theme customization (widget padding, font scaling).
+
+UI consistency polish: spacing and alignment adjusted in dialogs.
+
+Expanded create_tables() to include css_profiles, custom_css, and several migration-safe defaults.
+
+
+### 🧱 Focused on visual polish and database table consistency​
+.
+
+
+🧠 0.11.2 – 
+### 🖥 Splash Screen & Loading Visual Feedback
+**New Features:**
+
+Added SplashScreen class using QSplashScreen, visually indicating loading status.
+
+Webview error handling improved — logs load issues more precisely.
+
+Ensured compatibility of web engine initialization on slower machines (fixes some black-screen issues).
+
+First version where startup dependencies are shown as "loading..." at splash.
+
+
+🎨 First steps toward full UX onboarding flow and startup feedback​
+.
+
+🧹 0.11.3 – 🧽 Final Pre-Refactor Polish
+**Changes:**
+
+Tightened file structure for modules — preparation for 0.12’s multi-folder modular split.
+
+Logging messages refined, paths shortened to use relative sessions/, logs/, etc.
+
+Final patch before major 0.12.0 directory and architecture shift.
+
+🧼 Focused on cleanup and refactor readiness​.
+
+---
+
+
+## 🧾 Highlights – ## Version 0.12.0
+
+### 🧱 Modular Redesign and Bootstrap Architecture
+
+✅ Fully transitioned into a folder-based modular structure.
+
+
+✅ create_tables() and insert_initial_data() now define all required tables with default values in the database — no more pre-seeding by hand.
+
+
+✅ Uses a robust check_and_install_modules() to ensure required Python packages are installed at startup.
+
+
+✅ Splash screen added using QSplashScreen to improve startup UX.
+
+
+### 🛠️ Core Features Solidified
+
+### 🔄 Unified all key UI components into main class RBCCommunityMap:
+
+Minimap rendering
+
+Zoom and movement logic
+
+Keyboard (WASD) navigation
+
+Theme application
+
+Character persistence
+
+💾 Character management, cookies, destination data, coins, and logging settings persist through SQLite.
+
+🎛️ Expanded Dialog System
+Final integration of modular tools:
+
+DamageCalculator, ShoppingListTool, ThemeCustomizationDialog, CSSCustomizationDialog, DatabaseViewer, PowersDialog, SetDestinationDialog, CharacterDialog
+
+Each tool functions independently with its own DB hooks, input validation, and UI polish.
+
+
+### 💡 New Technical Capabilities
+
+### 📦 Logging setup using logging.FileHandler with dynamic log level from DB.
+
+
+### 📁 Auto-directory setup: logs, sessions, images created at launch.
+
+🔍 Real-time JavaScript logging and CSS injection for in-app webview.
+
+
+🧠 Full coordinate mapping and color customization preserved in DB, extensible via color_mappings, css_profiles, etc.
+
+
+### 🧬 Schema and Data Foundations
+Over 20 tables defined in SQLite:
+
+Characters, Coins, Banks, Shops, Guilds, Taverns, POIs, Color Mappings, Custom CSS, Rows/Columns, Powers, Discord servers, etc.
+
+All tables are seeded with default data using INSERT OR IGNORE, supporting first-time installs and upgrade-safe bootstrapping.
