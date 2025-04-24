@@ -773,62 +773,36 @@ Final patch before major 0.12.0 directory and architecture shift.
 ---
 
 
-## 🧾 Highlights – ## Version 0.12.0
+## Version 0.12.0
 
-### 🧱 Modular Redesign and Bootstrap Architecture
+### 🧱 Monolithic Architecture with Enhanced Modularity
 
-✅ Fully transitioned into a folder-based modular structure.
-
-
-✅ create_tables() and insert_initial_data() now define all required tables with default values in the database — no more pre-seeding by hand.
-
-
-✅ Uses a robust check_and_install_modules() to ensure required Python packages are installed at startup.
-
-
-✅ Splash screen added using QSplashScreen to improve startup UX.
-
+- **Monolithic structure** retained in `main_0.12.0.py` with improved internal modularity for maintainability.
+- **`create_tables()` and `insert_initial_data()`** define and seed all SQLite tables, eliminating manual pre-seeding.
+- **`check_and_install_modules()`** ensures required Python packages are installed at startup.
+- **QSplashScreen** splash screen enhances startup UX with loading feedback.
 
 ### 🛠️ Core Features Solidified
 
-### 🔄 Unified all key UI components into main class RBCCommunityMap:
-
-Minimap rendering
-
-Zoom and movement logic
-
-Keyboard (WASD) navigation
-
-Theme application
-
-Character persistence
-
-💾 Character management, cookies, destination data, coins, and logging settings persist through SQLite.
-
-🎛️ Expanded Dialog System
-Final integration of modular tools:
-
-DamageCalculator, ShoppingListTool, ThemeCustomizationDialog, CSSCustomizationDialog, DatabaseViewer, PowersDialog, SetDestinationDialog, CharacterDialog
-
-Each tool functions independently with its own DB hooks, input validation, and UI polish.
-
+- **RBCCommunityMap** unifies key UI components:
+  - Minimap rendering with dynamic overlays
+  - Zoom and movement logic
+  - WASD keyboard navigation
+  - Theme application
+  - Character persistence
+- **Persistent data** for characters, cookies, destinations, coins, and logging settings via SQLite.
+- **Expanded dialog system** integrates modular tools:
+  - `DamageCalculator`, `ShoppingListTool`, `ThemeCustomizationDialog`, `CSSCustomizationDialog`, `DatabaseViewer`, `PowersDialog`, `SetDestinationDialog`, `CharacterDialog`
+  - Each tool operates independently with DB hooks, input validation, and polished UI.
 
 ### 💡 New Technical Capabilities
 
-### 📦 Logging setup using logging.FileHandler with dynamic log level from DB.
-
-
-### 📁 Auto-directory setup: logs, sessions, images created at launch.
-
-🔍 Real-time JavaScript logging and CSS injection for in-app webview.
-
-
-🧠 Full coordinate mapping and color customization preserved in DB, extensible via color_mappings, css_profiles, etc.
-
+- **Logging** uses `logging.FileHandler` with dynamic log level from DB.
+- **Auto-directory setup** creates `logs/`, `sessions/`, and `images/` at launch.
+- **Real-time JavaScript logging and CSS injection** for webview interaction.
+- **Coordinate mapping and color customization** stored in DB, extensible via `color_mappings` and `css_profiles`.
 
 ### 🧬 Schema and Data Foundations
-Over 20 tables defined in SQLite:
 
-Characters, Coins, Banks, Shops, Guilds, Taverns, POIs, Color Mappings, Custom CSS, Rows/Columns, Powers, Discord servers, etc.
-
-All tables are seeded with default data using INSERT OR IGNORE, supporting first-time installs and upgrade-safe bootstrapping.
+- Over 20 SQLite tables, including `characters`, `coins`, `banks`, `shops`, `guilds`, `taverns`, `placesofinterest`, `color_mappings`, `custom_css`, `rows`, `columns`, `powers`, `discord_servers`.
+- Tables seeded with default data using `INSERT OR IGNORE` for first-time installs and upgrade-safe bootstrapping.
