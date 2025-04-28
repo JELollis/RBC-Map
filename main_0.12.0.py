@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.12.0
+# Filename: main_0.12.1
 
 """
 ======================
@@ -23,7 +23,7 @@ limitations under the License.
 
 """
 =================================
-RBC City Map Application (v0.12.0)
+RBC City Map Application (v0.12.1)
 =================================
 This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
 (set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
@@ -53,7 +53,7 @@ Modules Used:
 - **logging**: Captures logs, errors, and system events.
 
 ================================
-Classes and Methods (v0.12.0)
+Classes and Methods (v0.12.1)
 ================================
 
 #### RBCCommunityMap (Core Application)
@@ -169,7 +169,7 @@ def get_logging_level_from_db(default=logging.INFO) -> int:
         print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
-VERSION_NUMBER = "0.12.0"
+VERSION_NUMBER = "0.12.1"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
@@ -1741,15 +1741,41 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     version = cursor.fetchone()[0]
 
     if version < 2:
-        logging.info("Applying schema migration: v1 → v2 (recreate guilds/shops with TEXT-based coordinates)")
+        logging.info("Applying schema migration: v1 → v2 (fixing custom_css, guilds, and shops)")
 
         try:
-            # Check and recreate 'guilds' if Column or Row were INTEGER
-            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='guilds'")
-            guilds_sql = cursor.fetchone()
-            if guilds_sql and ("Column INTEGER" in guilds_sql[0] or "Row INTEGER" in guilds_sql[0]):
-                logging.info("Dropping and recreating 'guilds' table with TEXT columns")
-                cursor.execute("DROP TABLE IF EXISTS guilds")
+            # --- Step 1: Fix custom_css table ---
+            cursor.execute("PRAGMA table_info(custom_css)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'profile_name' not in columns:
+                logging.info("custom_css missing profile_name column. Rebuilding custom_css table.")
+                cursor.execute("ALTER TABLE custom_css RENAME TO custom_css_old")
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS custom_css (
+                        profile_name TEXT NOT NULL,
+                        element TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        PRIMARY KEY (profile_name, element),
+                        FOREIGN KEY (profile_name) REFERENCES css_profiles(profile_name) ON DELETE CASCADE
+                    )
+                """)
+                try:
+                    cursor.execute("""
+                        INSERT INTO custom_css (element, value, profile_name)
+                        SELECT element, value, 'Default' FROM custom_css_old
+                    """)
+                    logging.info("Migrated old custom_css data successfully.")
+                except sqlite3.Error as e:
+                    logging.warning(f"Failed to migrate custom_css data: {e}")
+                cursor.execute("DROP TABLE IF EXISTS custom_css_old")
+
+            # --- Step 2: Fix guilds table ---
+            cursor.execute("PRAGMA index_list(guilds)")
+            indexes = cursor.fetchall()
+            unique_names = [index[1] for index in indexes if index[2]]  # index[2] == 1 means UNIQUE
+            if not any('Name' in idx for idx in unique_names):
+                logging.info("guilds table missing UNIQUE constraint on Name. Rebuilding guilds table.")
+                cursor.execute("ALTER TABLE guilds RENAME TO guilds_old")
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS guilds (
                         ID INTEGER PRIMARY KEY,
@@ -1759,13 +1785,24 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                         next_update TIMESTAMP DEFAULT NULL
                     )
                 """)
+                try:
+                    cursor.execute("""
+                        INSERT INTO guilds (ID, Name, Column, Row, next_update)
+                        SELECT ID, Name, Column, Row, next_update FROM guilds_old
+                    """)
+                    logging.info("Migrated old guilds data successfully.")
+                except sqlite3.Error as e:
+                    logging.warning(f"Failed to migrate guilds data: {e}")
+                cursor.execute("DROP TABLE IF EXISTS guilds_old")
 
-            # Check and recreate 'shops' if Column or Row were INTEGER
-            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='shops'")
-            shops_sql = cursor.fetchone()
-            if shops_sql and ("Column INTEGER" in shops_sql[0] or "Row INTEGER" in shops_sql[0]):
-                logging.info("Dropping and recreating 'shops' table with TEXT columns")
-                cursor.execute("DROP TABLE IF EXISTS shops")
+            # --- Step 3: Fix shops table ---
+            cursor.execute("PRAGMA index_list(shops)")
+            shops_indexes = cursor.fetchall()
+            shops_has_unique_name = any('Name' in idx for idx in shops_indexes if idx[2])
+
+            if not shops_has_unique_name:
+                logging.info("shops table missing UNIQUE constraint on Name. Rebuilding shops table.")
+                cursor.execute("ALTER TABLE shops RENAME TO shops_old")
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS shops (
                         ID INTEGER PRIMARY KEY,
@@ -1775,14 +1812,24 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                         next_update TIMESTAMP DEFAULT NULL
                     )
                 """)
+                try:
+                    cursor.execute("""
+                        INSERT INTO shops (ID, Name, Column, Row, next_update)
+                        SELECT ID, Name, Column, Row, next_update FROM shops_old
+                    """)
+                    logging.info("Migrated old shops data successfully.")
+                except sqlite3.Error as e:
+                    logging.warning(f"Failed to migrate shops data: {e}")
+                cursor.execute("DROP TABLE IF EXISTS shops_old")
 
-            # Bump version
+            # --- Finish migration ---
             conn.execute("PRAGMA user_version = 2")
             conn.commit()
-            logging.info("Migration to v2 complete")
+            logging.info("Migration to v2 complete.")
 
         except sqlite3.Error as e:
-            logging.error(f"Schema migration v2 failed: {e}")
+            logging.error(f"Migration failed: {e}")
+            conn.rollback()
             raise
 
 def initialize_database(db_path: str = DB_PATH) -> bool:
@@ -1797,11 +1844,10 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
     """
     try:
         with sqlite3.connect(db_path) as conn:
-            conn.execute("PRAGMA user_version = 2")  # Increment as schema evolves
             conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key support
-            migrate_schema(conn)
-            create_tables(conn)
-            insert_initial_data(conn)
+            create_tables(conn)                       # Fist create missing tables
+            migrate_schema(conn)                      # Then migrate schema
+            insert_initial_data(conn)                 # THEN populate defaults
             logging.info(f"Database initialized successfully at {db_path}")
             return True
     except sqlite3.Error as e:
@@ -3180,7 +3226,9 @@ class RBCCommunityMap(QMainWindow):
 
             self.character_list.clear()
             for character in self.characters:
-                self.character_list.addItem(QListWidgetItem(character['name']))
+                item = QListWidgetItem(character['name'])
+                item.setData(Qt.UserRole, character['id'])  # 🔥 Attach ID!
+                self.character_list.addItem(item)
 
             logging.debug(f"Loaded {len(self.characters)} characters from the database.")
             if not self.characters:
@@ -3308,7 +3356,9 @@ class RBCCommunityMap(QMainWindow):
                     conn.commit()
                     self.save_last_active_character(character_id)
                     self.characters.append({'name': name, 'password': password, 'id': character_id})
-                    self.character_list.addItem(QListWidgetItem(name))
+                    item = QListWidgetItem(name)
+                    item.setData(Qt.UserRole, character_id)  # 🔥 Attach the ID immediately
+                    self.character_list.addItem(item)
                     logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
                 except sqlite3.Error as e:
                     logging.error(f"Failed to create character '{name}': {e}")
@@ -3336,7 +3386,9 @@ class RBCCommunityMap(QMainWindow):
                     conn.commit()
                     self.save_last_active_character(character_id)
                     self.characters.append({'name': name, 'password': password, 'id': character_id})
-                    self.character_list.addItem(QListWidgetItem(name))
+                    item = QListWidgetItem(name)
+                    item.setData(Qt.UserRole, character_id)  # 🔥 Attach the ID immediately
+                    self.character_list.addItem(item)
                     logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
                 except sqlite3.Error as e:
                     logging.error(f"Failed to add character '{name}': {e}")
@@ -3371,11 +3423,28 @@ class RBCCommunityMap(QMainWindow):
             logging.warning("No character selected for deletion.")
             return
 
-        name = current_item.text()
-        self.characters = [char for char in self.characters if char['name'] != name]
+        char_id = current_item.data(Qt.UserRole)  # 🔥 Read ID!
+
+        if char_id is None:
+            logging.error("Selected character has no ID associated with it.")
+            return
+
+        # Delete from database first
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM characters WHERE id = ?", (char_id,))
+                conn.commit()
+                logging.debug(f"Character ID {char_id} deleted from database.")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to delete character ID {char_id} from database: {e}")
+            return
+
+        # Then update in-memory list and UI
+        self.characters = [char for char in self.characters if char['id'] != char_id]
         self.save_characters()
         self.character_list.takeItem(self.character_list.row(current_item))
-        logging.debug(f"Character {name} deleted.")
+        logging.debug(f"Character ID {char_id} deleted from UI.")
 
     def save_last_active_character(self, character_id):
         """
