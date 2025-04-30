@@ -305,9 +305,9 @@ from bs4 import BeautifulSoup
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QComboBox, \
     QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem, QFileDialog, \
     QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, QSplashScreen, \
-    QCompleter, QCheckBox, QGroupBox
+    QCompleter, QCheckBox, QGroupBox, QStyle
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, \
-    QShortcut, QKeySequence, QDesktopServices
+    QShortcut, QKeySequence, QDesktopServices, QBrush
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime, QMimeData, \
     QByteArray
 from PySide6.QtCore import Slot as pyqtSlot
@@ -490,8 +490,10 @@ def create_tables(conn: sqlite3.Connection) -> None:
         """CREATE TABLE IF NOT EXISTS characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            password TEXT
-        )""",
+            password TEXT,
+            active_cookie INTEGER DEFAULT NULL
+        )
+        """,
         """CREATE TABLE IF NOT EXISTS coins (
             character_id INTEGER,
             pocket INTEGER DEFAULT 0,
@@ -856,7 +858,11 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (14, 'button_color', '#55557f'),
             (15, 'cityblock', '#0000dd'),
             (16, 'intersect', '#008800'),
-            (17, 'street', '#444444')
+            (17, 'street', '#444444'),
+            (18, 'button_hover_color', '#666699'),
+            (19, 'button_pressed_color', '#444466'),
+            (20, 'button_border_color', '#222244'),
+            (21, 'graveyard', '#888888')
         ]),
         ("INSERT OR IGNORE INTO `columns` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'WCL', '0'),
@@ -1677,7 +1683,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (107, 'The Ailios Asylum', 'Amethyst', '36th'),
             (108, 'The Belly of the Whale', 'Amethyst', '2nd'),
             (109, 'The Calignite', 'Eagle', '16th'),
-            (110, 'The COVE', 'Knotweek', '51st'),
+            (110, 'The COVE', 'Knowteed', '51st'),
             (111, 'The Dragons Lair Club', 'Vervain', '39th'),
             (112, 'The Eternal Spiral', 'Anguish', '69th'),
             (113, 'The goatsucker''s lair', 'Yak', '13th'),
@@ -1711,7 +1717,8 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (141, 'Wolfshadow''s and Crazy''s RBC Casino', 'Lead', '72nd'),
             (142, 'Wyndcryer''s TygerNight''s and Bambi''s Lair', 'Unicorn', '77th'),
             (143, 'Wyvernhall', 'Ivy', '38th'),
-            (144, 'X', 'Emerald', 'NCL')
+            (144, 'X', 'Emerald', 'NCL'),
+            (145, 'Requiem of Hades', 'Walrus', '41st')
         ]),
         ("INSERT OR IGNORE INTO discord_servers (id, name, invite_link) VALUES (?, ?, ?)", [
             (1, "Ab Antiquo Headquarters", "https://discord.gg/AhPEzkJyA4"),
@@ -1736,6 +1743,13 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 def migrate_schema(conn: sqlite3.Connection) -> None:
+    """
+    Migrate the database schema to the latest version.
+
+    Handles sequential migrations:
+    - v1 -> v2: Fixes custom_css, guilds, and shops tables.
+    - v2 -> v3: Adds active_cookie column to characters table.
+    """
     cursor = conn.cursor()
     cursor.execute("PRAGMA user_version")
     version = cursor.fetchone()[0]
@@ -1828,7 +1842,28 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
             logging.info("Migration to v2 complete.")
 
         except sqlite3.Error as e:
-            logging.error(f"Migration failed: {e}")
+            logging.error(f"Migration v2 failed: {e}")
+            conn.rollback()
+            raise
+
+    if version < 3:
+        logging.info("Applying schema migration: v2 → v3 (add active_cookie to characters)")
+
+        try:
+            cursor.execute("PRAGMA table_info(characters)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if 'active_cookie' not in columns:
+                logging.info("characters table missing active_cookie column. Adding column.")
+                cursor.execute("ALTER TABLE characters ADD COLUMN active_cookie INTEGER DEFAULT NULL")
+            else:
+                logging.info("characters table already has active_cookie column. Skipping.")
+
+            conn.execute("PRAGMA user_version = 3")
+            conn.commit()
+            logging.info("Migration to v3 complete.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Migration v3 failed: {e}")
             conn.rollback()
             raise
 
@@ -1881,8 +1916,12 @@ def load_data() -> tuple:
             rows = {row[0]: row[1] for row in cursor.fetchall()}
 
             def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
-                col = columns.get(col_name, 0) + 1
-                row = rows.get(row_name, 0) + 1
+                if col_name not in columns or row_name not in rows:
+                    logging.warning(f"Could not resolve coordinates for {col_name} & {row_name}")
+                    return None, None
+
+                col = columns[col_name] + 1
+                row = rows[row_name] + 1
                 return col, row
 
             # Banks
@@ -1928,10 +1967,18 @@ def load_data() -> tuple:
                     guilds_coordinates[name] = to_coords(col, row)
 
             # Points of Interest
-            places_of_interest_coordinates = {
-                name: to_coords(col, row)
-                for name, col, row in cursor.execute("SELECT Name, `Column`, `Row` FROM placesofinterest")
-            }
+            places_of_interest_coordinates = {}
+            cursor.execute("SELECT Name, `Column`, `Row` FROM placesofinterest")
+            rows_data = cursor.fetchall()
+
+            logging.debug("Resolved POI coordinates:")
+            for name, col, row in rows_data:
+                coords = to_coords(col, row)
+                if coords == (None, None):
+                    logging.warning(f"Skipping POI {name} due to unresolved coordinates: {col}, {row}")
+                else:
+                    places_of_interest_coordinates[name] = coords
+                    logging.debug(f"{name}: {coords}")
 
             # Load settings
             cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
@@ -2121,7 +2168,8 @@ class RBCCommunityMap(QMainWindow):
 
         # Core state flags
         self.is_updating_minimap = False
-        self.login_needed = True
+        self.pending_login = False
+        self.pending_character_id_for_map = None
         self.webview_loaded = False
         self.splash = None
 
@@ -2412,34 +2460,27 @@ class RBCCommunityMap(QMainWindow):
             shortcut.deleteLater()  # Ensure cleanup
         logging.debug(f"Cleared {len(shortcuts)} existing keybindings")
 
-    # -----------------------
-    # Load and Apply Customized UI Theme
-    # -----------------------
+# -----------------------
+# Load and Apply Customized UI Theme
+# -----------------------
+
     def load_theme_settings(self) -> None:
         """
-        Load theme settings from the SQLite database (settings table).
-
-        Updates self.color_mappings using settings from the database,
-        preserving any other existing color mappings.
+        Load theme colors from the color_mappings table into self.color_mappings.
         """
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT setting_name, setting_value FROM settings WHERE setting_name LIKE 'theme_%'")
-                settings = dict(cursor.fetchall())
-
-                # Update existing mappings only for theme-specific keys
-                for key_with_prefix, value in settings.items():
-                    key = key_with_prefix.replace("theme_", "", 1)
-                    self.color_mappings[key] = QColor(value)
-
-                logging.debug(f"Theme settings loaded from DB and applied. Keys updated: {list(settings.keys())}")
+                cursor.execute("SELECT type, color FROM color_mappings")
+                rows = cursor.fetchall()
+                self.color_mappings.update({type_: QColor(color) for type_, color in rows})
+                logging.debug(f"Loaded {len(rows)} theme entries from color_mappings.")
         except sqlite3.Error as e:
-            logging.error(f"Failed to load theme settings: {e}")
+            logging.error(f"Failed to load theme from color_mappings: {e}")
 
     def save_theme_settings(self) -> bool:
         """
-        Save each theme setting to the SQLite settings table.
+        Save current color mappings to the color_mappings table in the database.
 
         Returns:
             bool: True if saved successfully, False otherwise.
@@ -2447,20 +2488,19 @@ class RBCCommunityMap(QMainWindow):
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                # Use executemany for bulk UPSERT
                 cursor.executemany(
                     '''
-                    INSERT INTO settings (setting_name, setting_value)
+                    INSERT INTO color_mappings (type, color)
                     VALUES (?, ?)
-                    ON CONFLICT(setting_name) DO UPDATE SET setting_value = excluded.setting_value
+                    ON CONFLICT(type) DO UPDATE SET color = excluded.color
                     ''',
-                    [(f"theme_{key}", color.name()) for key, color in self.color_mappings.items()]
+                    [(key, color.name()) for key, color in self.color_mappings.items()]
                 )
                 conn.commit()
-                logging.debug("Theme settings saved successfully")
+                logging.debug("Theme settings saved to color_mappings table.")
                 return True
         except sqlite3.Error as e:
-            logging.error(f"Failed to save theme settings: {e}")
+            logging.error(f"Failed to save theme to color_mappings: {e}")
             return False
 
     def apply_theme(self) -> None:
@@ -2496,9 +2536,9 @@ class RBCCommunityMap(QMainWindow):
             else:
                 logging.warning("Theme applied but not saved due to database error")
 
-    # -----------------------
-    # Cookie Handling
-    # -----------------------
+# -----------------------
+# Cookie Handling
+# -----------------------
 
     def setup_cookie_handling(self) -> None:
         """
@@ -2546,34 +2586,104 @@ class RBCCommunityMap(QMainWindow):
         name = cookie.name().data().decode()
         value = cookie.value().data().decode()
         domain = cookie.domain().lstrip('.')  # Normalize domain
+        path = cookie.path()
 
-        # Only process quiz.ravenblack.net
         if domain != 'quiz.ravenblack.net':
             return
 
-        # Skip high-churn cookies
-        if name in ['ip', 'stamp']:
-            return
+        if name == 'stamp':
+            return  # skip churn cookie
 
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT value FROM cookies WHERE name = ? AND domain = ?", (name, domain))
+
+                # Check if this exact cookie already exists
+                cursor.execute("""
+                    SELECT id FROM cookies 
+                    WHERE name = ? AND value = ? AND domain = ? AND path = ?
+                """, (name, value, domain, path))
+                existing = cursor.fetchone()
+
+                if existing:
+                    logging.debug(f"Duplicate cookie '{name}' for value '{value}' not saved.")
+                    return
+
+                # Insert new cookie
+                cursor.execute("""
+                    INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    name, value, domain, path,
+                    cookie.expirationDate().toString(Qt.ISODate) if not cookie.isSessionCookie() else None,
+                    int(cookie.isSecure()), int(cookie.isHttpOnly())
+                ))
+
+                new_cookie_id = cursor.lastrowid
+                conn.commit()
+                logging.debug(f"Saved new cookie '{name}' (ID {new_cookie_id}) for domain '{domain}'")
+
+                # If it's an ip cookie, consider linking to character
+                if name == 'ip' and '#' in value:
+                    username, password = value.split('#', 1)
+                    is_login = bool(password.strip())
+
+                    logging.debug(
+                        f"Captured IP cookie for user '{username}' — {'login' if is_login else 'logout'} state."
+                    )
+
+                    # Update character only if this is a login cookie
+                    if is_login:
+                        cursor.execute("""
+                            UPDATE characters SET active_cookie = ? WHERE name = ?
+                        """, (new_cookie_id, username))
+                        conn.commit()
+                        logging.debug(f"Set active_cookie for character '{username}' to cookie ID {new_cookie_id}")
+
+        except Exception as e:
+            logging.error(f"Error saving cookie '{name}': {e}")
+
+    def set_ip_cookie(self, name: str, password: str):
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+
+                value = f"{name}#{password}"
+                domain = 'quiz.ravenblack.net'
+                path = '/'
+
+                # Avoid duplicate
+                cursor.execute("""
+                    SELECT id FROM cookies WHERE name = 'ip' AND value = ? AND domain = ? AND path = ?
+                """, (value, domain, path))
                 row = cursor.fetchone()
 
-                if not row or row[0] != value:
-                    cursor.execute(
-                        "REPLACE INTO cookies (name, value, domain, path, secure, httponly) VALUES (?, ?, ?, ?, ?, ?)",
-                        (name, value, domain, cookie.path(), int(cookie.isSecure()), int(cookie.isHttpOnly()))
-                    )
-                    conn.commit()
-                    logging.debug(f"Cookie '{name}' updated for domain '{domain}'")
-        except Exception as e:
-                logging.error(f"Error updating cookie '{name}': {e}")
+                if row:
+                    cookie_id = row[0]
+                else:
+                    cursor.execute('''
+                        INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        'ip', value, domain, path,
+                        QDateTime.currentDateTime().addDays(30).toString(Qt.ISODate),
+                        0, 0
+                    ))
+                    cookie_id = cursor.lastrowid
 
-    # -----------------------
-    # UI Setup
-    # -----------------------
+                # Set this cookie as active, clear others
+                cursor.execute("UPDATE characters SET active_cookie = NULL")
+                cursor.execute("UPDATE characters SET active_cookie = ? WHERE name = ?", (cookie_id, name))
+                conn.commit()
+                logging.debug(f"Set active_cookie ID {cookie_id} for {name}")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to insert 'ip' cookie for {name}: {e}")
+
+# -----------------------
+# UI Setup
+# -----------------------
+
     def setup_ui_components(self):
         """
         Set up the main user interface for the RBC Community Map application.
@@ -2595,27 +2705,30 @@ class RBCCommunityMap(QMainWindow):
         # Disable GPU-related features
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, False)
-        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)  # Keep JS enabled
+        self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
 
         # Add Keybindings
         self.setup_keybindings()
 
-        # Create the browser controls layout at the top of the webview
+        # Browser controls layout
         self.browser_controls_layout = QHBoxLayout()
 
-        # Load images for back, forward, and refresh buttons
+        # Back button using Qt's built-in style
         back_button = QPushButton()
-        back_button.setIcon(QIcon('./images/back.png'))
+        back_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        back_button.setCursor(Qt.PointingHandCursor)
         back_button.setIconSize(QSize(30, 30))
         back_button.setFixedSize(30, 30)
         back_button.setStyleSheet("background-color: transparent; border: none;")
         back_button.clicked.connect(self.website_frame.back)
         self.browser_controls_layout.addWidget(back_button)
 
+        # Forward button using Qt's built-in style
         forward_button = QPushButton()
-        forward_button.setIcon(QIcon('images/forward.png'))
+        forward_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        forward_button.setCursor(Qt.PointingHandCursor)
         forward_button.setIconSize(QSize(30, 30))
         forward_button.setFixedSize(30, 30)
         forward_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2623,15 +2736,47 @@ class RBCCommunityMap(QMainWindow):
         self.browser_controls_layout.addWidget(forward_button)
 
         refresh_button = QPushButton()
-        refresh_button.setIcon(QIcon('images/refresh.png'))
+        refresh_button.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+        refresh_button.setCursor(Qt.PointingHandCursor)
         refresh_button.setIconSize(QSize(30, 30))
         refresh_button.setFixedSize(30, 30)
         refresh_button.setStyleSheet("background-color: transparent; border: none;")
         refresh_button.clicked.connect(lambda: self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl')))
         self.browser_controls_layout.addWidget(refresh_button)
 
+        self.browser_controls_layout.addStretch(1)
+
+        # AP and compass container
+        ap_compass_container = QWidget()
+        ap_compass_layout = QHBoxLayout(ap_compass_container)
+        ap_compass_layout.setContentsMargins(0, 0, 0, 0)
+        ap_compass_layout.setSpacing(10)
+
+        #compass_label = QLabel("Compass:")
+        #compass_label.setStyleSheet("color: white; font-weight: bold; font-size: 12pt;")
+        #ap_compass_layout.addWidget(compass_label)
+
+        self.ap_direction_label = QLabel()
+        self.ap_direction_label.setAlignment(Qt.AlignCenter)
+        self.ap_direction_label.setStyleSheet("color: white; font-weight: bold; font-size: 12pt;")
+        ap_compass_layout.addWidget(self.ap_direction_label)
+
+        self.browser_controls_layout.addWidget(ap_compass_container)
+        self.browser_controls_layout.addStretch(1)
+
+        # Ko-Fi button with a programmatically generated icon
         kofi_button = QPushButton()
-        kofi_button.setIcon(QIcon("images/Ko-Fi.png"))
+        kofi_icon = QPixmap(30, 30)
+        kofi_icon.fill(Qt.transparent)
+        painter = QPainter(kofi_icon)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QPen(Qt.black, 2))
+        painter.setBrush(QBrush(QColor(0, 188, 212)))  # Ko-Fi teal color
+        painter.drawEllipse(5, 5, 20, 20)
+        painter.setPen(QPen(Qt.white, 2))
+        painter.drawText(kofi_icon.rect(), Qt.AlignCenter, "K")
+        painter.end()
+        kofi_button.setIcon(QIcon(kofi_icon))
         kofi_button.setIconSize(QSize(30, 30))
         kofi_button.setToolTip("Support me on Ko-fi")
         # noinspection PyUnresolvedReferences
@@ -2681,9 +2826,9 @@ class RBCCommunityMap(QMainWindow):
         # Information frame to display nearest locations and AP costs
         info_frame = QFrame()
         info_frame.setFrameShape(QFrame.Shape.Box)
-        info_frame.setFixedHeight(260)  # Increased height for better spacing
+        info_frame.setFixedHeight(260)
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(5)  # Space between each label for clarity
+        info_layout.setSpacing(5)
         info_frame.setLayout(info_layout)
         left_layout.addWidget(info_frame)
 
@@ -2694,7 +2839,7 @@ class RBCCommunityMap(QMainWindow):
             font-weight: bold;
             padding: 5px;
             border: 2px solid black;
-            font-size: 12px;  /* Set smaller font size for readability */
+            font-size: 12px;
         """
 
         # Closest Bank Info
@@ -2852,7 +2997,7 @@ class RBCCommunityMap(QMainWindow):
                 character_row = cursor.fetchone()
                 if character_row:
                     character_id = character_row[0]
-                    self.selected_character['id'] = character_id  # Ensure character ID is available for coin extraction
+                    self.selected_character['id'] = character_id
                     logging.info(f"Character ID {character_id} set for {self.selected_character['name']}.")
                 else:
                     logging.error(f"Character '{self.selected_character['name']}' not found in the database.")
@@ -2864,9 +3009,9 @@ class RBCCommunityMap(QMainWindow):
                 self.show()
                 self.update_minimap()
 
-    # -----------------------
-    # Browser Controls Setup
-    # -----------------------
+# -----------------------
+# Browser Controls Setup
+# -----------------------
 
     def go_back(self):
         """Navigate the web browser back to the previous page."""
@@ -3030,9 +3175,10 @@ class RBCCommunityMap(QMainWindow):
         """Zoom out on the web page displayed in the QWebEngineView."""
         self.website_frame.setZoomFactor(self.website_frame.zoomFactor() - 0.1)
 
-    # -----------------------
-    # Error Logging
-    # -----------------------
+# -----------------------
+# Error Logging
+# -----------------------
+
     def setup_console_logging(self):
         """
         Set up console logging within the web engine view by connecting the web channel
@@ -3071,9 +3217,9 @@ class RBCCommunityMap(QMainWindow):
         print(f"Console message: {message}")
         logging.debug(f"Console message: {message}")
 
-    # -----------------------
-    # Menu Control Items
-    # -----------------------
+# -----------------------
+# Menu Control Items
+# -----------------------
 
     def get_default_screenshot_path(self, suffix: str) -> str:
         pictures_dir = os.path.join(os.path.expanduser("~"), "Pictures", "RBC Map")
@@ -3264,66 +3410,90 @@ class RBCCommunityMap(QMainWindow):
 
     def on_character_selected(self, item):
         """
-        Handle character selection from the list.
-
-        Args:
-            item (QListWidgetItem): The selected item in the list.
-
-        Logs the selected character, saves the last active character,
-        logs out the current character, and then logs in the selected one.
+        Handle character selection: set the selected character, load cookie,
+        and trigger login + destination load after webview reload.
         """
         character_name = item.text()
         selected_character = next((char for char in self.characters if char['name'] == character_name), None)
 
-        if selected_character:
-            logging.debug(f"Selected character: {character_name}")
-            self.selected_character = selected_character
+        if not selected_character:
+            logging.error(f"Character selection failed: {character_name}")
+            return
 
-            # Fetch character ID if missing
-            if 'id' not in self.selected_character:
-                connection = sqlite3.connect(DB_PATH)
-                cursor = connection.cursor()
-                try:
+        logging.debug(f"Selected character: {character_name}")
+        self.selected_character = selected_character
+
+        # Ensure character has ID
+        if 'id' not in self.selected_character:
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cursor = conn.cursor()
                     cursor.execute("SELECT id FROM characters WHERE name = ?", (character_name,))
-                    character_row = cursor.fetchone()
-                    if character_row:
-                        self.selected_character['id'] = character_row[0]
-                        logging.debug(f"Character '{character_name}' ID set to {self.selected_character['id']}.")
-                    else:
-                        logging.error(f"Character '{character_name}' not found in characters table.")
-                except sqlite3.Error as e:
-                    logging.error(f"Failed to retrieve character_id for '{character_name}': {e}")
-                finally:
-                    connection.close()
+                    row = cursor.fetchone()
+                    if row:
+                        self.selected_character['id'] = row[0]
+            except sqlite3.Error as e:
+                logging.error(f"Failed to retrieve character ID for '{character_name}': {e}")
+                return
 
-            # Save last active character
-            if 'id' in self.selected_character:
-                self.save_last_active_character(self.selected_character['id'])
-            else:
-                logging.error(f"Cannot save last active character: ID missing for '{character_name}'.")
+        # Final ID check before proceeding
+        character_id = self.selected_character.get('id')
+        if not character_id:
+            logging.error(f"Character '{character_name}' has no valid ID.")
+            return
 
-            # Logout current character and login the selected one
-            self.logout_current_character()
-            QTimer.singleShot(1000, self.login_selected_character)
-        else:
-            logging.error(f"Character '{character_name}' selection failed.")
+        # Mark destination and login to be handled on next page load
+        self.pending_character_id_for_map = character_id
+        self.pending_login = True
+        self.save_last_active_character(character_id)
 
-    def logout_current_character(self):
+        # Inject cookie and trigger page reload
+        self.switch_to_character(character_name)
+
+    def switch_to_character(self, character_name: str) -> None:
         """
-        Logout the current character by navigating to the logout URL.
+        Switch to the selected character by loading its saved IP cookie into the WebEngine.
         """
-        logging.debug("Logging out current character.")
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
-        QTimer.singleShot(1000, self.login_selected_character)
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT c.active_cookie, k.value 
+                    FROM characters c
+                    JOIN cookies k ON c.active_cookie = k.id
+                    WHERE c.name = ?
+                """, (character_name,))
+                row = cursor.fetchone()
+
+                if not row:
+                    logging.error(f"No saved login cookie found for character '{character_name}'.")
+                    return
+
+                cookie_id, cookie_value = row
+
+                ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
+                ip_cookie.setDomain('quiz.ravenblack.net')
+                ip_cookie.setPath('/')
+                ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
+
+                self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
+                logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
+
+                # Reload page after injecting cookie
+                self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to switch character '{character_name}': {e}")
 
     def login_selected_character(self):
-        """Log in the selected character using JavaScript."""
         if not self.selected_character:
             logging.warning("No character selected for login.")
             return
-        logging.debug(f"Logging in character: {self.selected_character['name']} with ID: {self.selected_character.get('id')}")
+
         name = self.selected_character['name']
         password = self.selected_character['password']
+        logging.debug(f"Injecting login for character: {name} (ID: {self.selected_character.get('id')})")
+
         login_script = f"""
             var loginForm = document.querySelector('form');
             if (loginForm) {{
@@ -3340,6 +3510,7 @@ class RBCCommunityMap(QMainWindow):
         """
         Handles the first-run character creation, saving the character in plaintext,
         initializing default coin values in the coins table, and setting this character as the last active.
+        Then injects login form to let the server issue a valid IP cookie.
         """
         logging.debug("First-run character creation.")
         dialog = CharacterDialog(self)
@@ -3354,12 +3525,23 @@ class RBCCommunityMap(QMainWindow):
                     character_id = cursor.lastrowid
                     cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
                     conn.commit()
+
                     self.save_last_active_character(character_id)
-                    self.characters.append({'name': name, 'password': password, 'id': character_id})
+
+                    # Add to in-memory list and UI
+                    character = {'name': name, 'password': password, 'id': character_id}
+                    self.characters.append(character)
                     item = QListWidgetItem(name)
-                    item.setData(Qt.UserRole, character_id)  # 🔥 Attach the ID immediately
+                    item.setData(Qt.UserRole, character_id)
                     self.character_list.addItem(item)
-                    logging.debug(f"Character '{name}' created with initial coin values and set as last active.")
+
+                    # Select and login to generate cookie
+                    self.selected_character = character
+                    self.character_list.setCurrentRow(self.character_list.count() - 1)
+                    QTimer.singleShot(1000, self.login_selected_character)
+
+                    logging.debug(f"First-run character '{name}' created and login initiated.")
+
                 except sqlite3.Error as e:
                     logging.error(f"Failed to create character '{name}': {e}")
                     QMessageBox.critical(self, "Error", f"Failed to create character: {e}")
@@ -3368,35 +3550,52 @@ class RBCCommunityMap(QMainWindow):
 
     def add_new_character(self):
         """
-        Add a new character to the list, saving the password in plaintext,
-        initializing default coin values in the coins table, and setting this character as the last active.
+        Add a new character, logout current user, log in new character.
         """
         logging.debug("Adding a new character.")
         dialog = CharacterDialog(self)
 
-        if dialog.exec():
-            name = dialog.name_edit.text()
-            password = dialog.password_edit.text()
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                try:
-                    cursor.execute('INSERT INTO characters (name, password) VALUES (?, ?)', (name, password))
-                    character_id = cursor.lastrowid
-                    cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
-                    conn.commit()
-                    self.save_last_active_character(character_id)
-                    self.characters.append({'name': name, 'password': password, 'id': character_id})
-                    item = QListWidgetItem(name)
-                    item.setData(Qt.UserRole, character_id)  # 🔥 Attach the ID immediately
-                    self.character_list.addItem(item)
-                    logging.debug(f"Character '{name}' added with initial coin values and set as last active.")
-                except sqlite3.Error as e:
-                    logging.error(f"Failed to add character '{name}': {e}")
-                    QMessageBox.critical(self, "Error", f"Failed to add character: {e}")
+        if not dialog.exec():
+            return  # User canceled or closed
+
+        name = dialog.name_edit.text().strip()
+        password = dialog.password_edit.text().strip()
+
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('INSERT INTO characters (name, password) VALUES (?, ?)', (name, password))
+                character_id = cursor.lastrowid
+                cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
+                conn.commit()
+
+                character = {'id': character_id, 'name': name, 'password': password}
+                self.characters.append(character)
+                item = QListWidgetItem(name)
+                item.setData(Qt.UserRole, character_id)
+                self.character_list.addItem(item)
+
+                self.selected_character = character
+                self.character_list.setCurrentRow(self.character_list.count() - 1)
+                self.save_last_active_character(character_id)
+
+                logging.debug(f"New character '{name}' added and selected. Logging out current user...")
+
+                # 🚪 Force logout and prepare for JS login
+                self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
+
+                def delayed_login():
+                    self.login_selected_character()
+
+                QTimer.singleShot(1500, delayed_login)
+
+            except sqlite3.Error as e:
+                logging.error(f"Failed to add character '{name}': {e}")
+                QMessageBox.critical(self, "Error", f"Failed to add character: {e}")
 
     def modify_character(self):
         """
-        Modify the selected character's details, saving the new password in plaintext.
+        Modify the selected character's details, with validation to prevent blank name/password.
         """
         current_item = self.character_list.currentItem()
         if current_item is None:
@@ -3405,16 +3604,42 @@ class RBCCommunityMap(QMainWindow):
 
         name = current_item.text()
         character = next((char for char in self.characters if char['name'] == name), None)
-        if character:
-            logging.debug(f"Modifying character: {name}")
-            dialog = CharacterDialog(self, character)
-            if dialog.exec():
-                character['name'] = dialog.name_edit.text()
-                character['password'] = dialog.password_edit.text()
-                self.selected_character = character  # Sync selected_character with modified data
-                self.save_characters()
-                current_item.setText(character['name'])
-                logging.debug(f"Character {name} modified.")
+        if not character:
+            logging.warning(f"Character '{name}' not found for modification.")
+            return
+
+        logging.debug(f"Modifying character: {name}")
+        dialog = CharacterDialog(self, character)
+
+        if not dialog.exec():
+            return  # User canceled
+
+        new_name = dialog.name_edit.text().strip()
+        new_password = dialog.password_edit.text().strip()
+
+        if not new_name or not new_password:
+            QMessageBox.warning(self, "Validation Error", "Character name and password cannot be empty.")
+            return  # 🚨 Do not proceed if fields are blank
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE characters SET name = ?, password = ? WHERE id = ?
+                """, (new_name, new_password, character['id']))
+                conn.commit()
+
+            # Update in-memory character and UI
+            character['name'] = new_name
+            character['password'] = new_password
+            self.selected_character = character
+            current_item.setText(new_name)
+
+            logging.debug(f"Character '{new_name}' modified successfully.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to modify character '{name}': {e}")
+            QMessageBox.critical(self, "Error", f"Failed to modify character: {e}")
 
     def delete_character(self):
         """Delete the selected character from the list."""
@@ -3464,7 +3689,7 @@ class RBCCommunityMap(QMainWindow):
     def load_last_active_character(self):
         """
         Load the last active character from the database by character_id, set the selected character,
-        and update the UI for auto-login.
+        inject their cookie, and auto-login them on load.
         """
         try:
             with sqlite3.connect(DB_PATH) as conn:
@@ -3473,23 +3698,37 @@ class RBCCommunityMap(QMainWindow):
                 result = cursor.fetchone()
                 if result:
                     character_id = result[0]
-                    self.selected_character = next((char for char in self.characters if char.get('id') == character_id), None)
+                    self.selected_character = next((char for char in self.characters if char.get('id') == character_id),
+                                                   None)
+
                     if self.selected_character:
-                        # Sync UI with last active character
+                        # Highlight in UI
                         for i in range(self.character_list.count()):
                             if self.character_list.item(i).text() == self.selected_character['name']:
                                 self.character_list.setCurrentRow(i)
                                 break
+
                         logging.debug(f"Last active character loaded and selected: {self.selected_character['name']}")
-                        if len(self.characters) > 1:  # Trigger login only if multiple characters exist
-                            self.login_needed = True
-                            self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+
+                        self.load_last_destination_for_character(character_id)
+
+                        # ✅ Inject correct cookie for selected character
+                        self.switch_to_character(self.selected_character['name'])
+
+                        # ✅ After injecting cookie, navigate and login
+                        def delayed_login():
+                            self.login_selected_character()
+
+                        QTimer.singleShot(1500, delayed_login)
+
                     else:
                         logging.warning(f"Last active character ID '{character_id}' not found in character list.")
                         self.set_default_character()
+
                 else:
                     logging.warning("No last active character found in the database.")
                     self.set_default_character()
+
         except sqlite3.Error as e:
             logging.error(f"Failed to load last active character from database: {e}")
             self.set_default_character()
@@ -3504,15 +3743,36 @@ class RBCCommunityMap(QMainWindow):
             self.character_list.setCurrentRow(0)
             logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
             self.save_last_active_character(self.selected_character['id'])
-            self.login_needed = True
+            
             self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
         else:
             self.selected_character = None
             logging.warning("No characters available to set as default.")
 
-    # -----------------------
-    # Web View Handling
-    # -----------------------
+    def load_last_destination_for_character(self, character_id: int) -> None:
+        """Load the last destination from the destinations table."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
+                    (character_id,)
+                )
+                result = cursor.fetchone()
+                if result:
+                    col, row = result
+                    self.destination = (col, row)
+                    logging.info(f"Loaded last destination ({col}, {row}) for character {character_id}")
+                else:
+                    self.destination = None
+                    logging.info(f"No previous destination for character {character_id}")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load last destination: {e}")
+
+# -----------------------
+# Web View Handling
+# -----------------------
 
     def refresh_webview(self):
         """Refresh the webview content."""
@@ -3556,15 +3816,24 @@ class RBCCommunityMap(QMainWindow):
         if not success:
             logging.error("Failed to load the webpage.")
             QMessageBox.critical(self, "Error", "Failed to load the webpage. Check your network or try again.")
-        else:
-            logging.info("Webpage loaded successfully.")
-            self.website_frame.page().toHtml(self.process_html)
-            css = self.load_current_css()
-            self.apply_custom_css(css)
-            if self.login_needed:
-                logging.debug("Logging in last active character.")
-                self.login_selected_character()
-                self.login_needed = False
+            return
+
+        logging.info("Webpage loaded successfully.")
+        self.website_frame.page().toHtml(self.process_html)
+        css = self.load_current_css()
+        self.apply_custom_css(css)
+
+        if self.pending_login:
+            logging.debug("Logging in selected character via JS injection...")
+            self.login_selected_character()
+            self.pending_login = False
+            return  # 🚫 wait for login to finish and reload first
+
+        if self.pending_character_id_for_map:
+            logging.debug(f"Loading destination for character {self.pending_character_id_for_map}")
+            self.load_destination(self.pending_character_id_for_map)
+            self.update_minimap()
+            self.pending_character_id_for_map = None
 
     def process_html(self, html):
         """
@@ -3855,6 +4124,7 @@ class RBCCommunityMap(QMainWindow):
 # -----------------------
 # Minimap Drawing and Update
 # -----------------------
+
     def draw_minimap(self) -> None:
         """
         Draws the minimap with various features such as special locations and lines to nearest locations,
@@ -3998,10 +4268,18 @@ class RBCCommunityMap(QMainWindow):
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
+                # Special-case Graveyard color
+                if name.lower() == "graveyard":
+                    color = self.color_mappings.get("graveyard", self.color_mappings["placesofinterest"])
+                else:
+                    color = self.color_mappings["placesofinterest"]
+
+                logging.debug(f"Drawing {name} with color {color.name()}")
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["placesofinterest"], name
+                    block_size, block_size // 3,
+                    color, name
                 )
 
             # Get current location
@@ -4055,8 +4333,8 @@ class RBCCommunityMap(QMainWindow):
                     (self.destination[1] - self.row_start) * block_size + block_size // 2
                 )
 
-            painter.end()
-            self.minimap_label.setPixmap(pixmap)
+        painter.end()
+        self.minimap_label.setPixmap(pixmap)
 
     def update_minimap(self):
         """
@@ -4134,30 +4412,41 @@ class RBCCommunityMap(QMainWindow):
     def set_destination(self):
         """Open the set destination dialog to select a new destination."""
         dialog = SetDestinationDialog(self)
-        if dialog.exec() == QDialog.accepted:
+        if dialog.exec() == QDialog.Accepted:
+            # Reload the destination from the DB to ensure it's per-character and persisted
+            if self.selected_character:
+                self.load_last_destination_for_character(self.selected_character['id'])
             self.update_minimap()
 
-    def get_current_destination(self):
-        """Retrieve the latest destination from the SQLite database."""
+    def get_current_destination(self, character_id: int):
+        """Retrieve the latest destination for the selected character."""
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT col, row FROM destinations ORDER BY timestamp DESC LIMIT 1")
+            cursor.execute("SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1", (character_id,))
             result = cursor.fetchone()
             return (result[0], result[1]) if result else None
 
-    def load_destination(self):
+    def load_destination(self, character_id: int | None = None) -> None:
         """
-        Load the destination from the SQLite database.
+        Load the destination for a given character (or selected character if not provided).
+        """
+        if character_id is None:
+            if not self.selected_character:
+                logging.warning("No character selected; cannot load destination.")
+                return
+            character_id = self.selected_character.get('id')
 
-        Loads the last set destination coordinates and updates the minimap if available.
-        """
-        destination_coords = self.get_current_destination()
+        if not character_id:
+            logging.warning("Character ID missing; cannot load destination.")
+            return
+
+        destination_coords = self.get_current_destination(character_id)
         if destination_coords:
             self.destination = destination_coords
-            logging.info(f"Loaded destination from database: {self.destination}")
+            logging.info(f"Loaded destination {self.destination} for character {character_id}")
         else:
             self.destination = None
-            logging.info("No destination found in database. Starting with no destination.")
+            logging.info(f"No destination found for character {character_id}")
 
 # -----------------------
 # Minimap Controls
@@ -4316,32 +4605,41 @@ class RBCCommunityMap(QMainWindow):
             # Update the minimap with the new destination
             self.update_minimap()
 
-    def save_to_recent_destinations(self, destination_coords, character_id):
+    def save_to_recent_destinations(self, character_id: int, col: int, row: int):
         """
         Save the current destination to the recent destinations for the specific character,
         keeping only the last 10 entries per character.
 
         Args:
-            destination_coords (tuple): Coordinates of the destination to save.
-            character_id (int): ID of the character for which to save the destination.
+            character_id (int): ID of the character.
+            col (int): Column coordinate of the destination.
+            row (int): Row coordinate of the destination.
         """
-        if destination_coords is None or character_id is None:
+        if character_id is None:
             return
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            try:
-                cursor.execute("INSERT INTO recent_destinations (character_id, col, row) VALUES (?, ?, ?)",
-                               (character_id, *destination_coords))
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO recent_destinations (character_id, col, row, timestamp)
+                    VALUES (?, ?, ?, datetime('now'))
+                """, (character_id, col, row))
+
                 cursor.execute("""
                     DELETE FROM recent_destinations 
                     WHERE character_id = ? AND id NOT IN (
-                        SELECT id FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10
+                        SELECT id FROM recent_destinations
+                        WHERE character_id = ?
+                        ORDER BY timestamp DESC LIMIT 10
                     )
                 """, (character_id, character_id))
+
                 conn.commit()
-                logging.info(f"Destination {destination_coords} saved for character ID {character_id}.")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to save recent destination: {e}")
+                logging.info(f"Destination ({col}, {row}) saved for character ID {character_id}.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save recent destination: {e}")
 
 # -----------------------
 # Infobar Management
@@ -4447,6 +4745,8 @@ class RBCCommunityMap(QMainWindow):
             self.destination_label.setText("No Destination Set")
             self.transit_destination_label.setText("No Destination Set")
 
+        self.update_ap_direction_label()
+
     def get_intersection_name(self, coords):
         """
         Get the intersection name for the given coordinates, including edge cases.
@@ -4477,6 +4777,52 @@ class RBCCommunityMap(QMainWindow):
             return f"Unknown Column & {row_name}"
         else:
             return f"{x}, {y}"  # raw coords as fallback
+
+    def update_ap_direction_label(self):
+        """
+        Update the AP and direction label shown in the top toolbar using separate diagonal and straight step counts.
+        """
+        if not self.destination:
+            self.ap_direction_label.setText("Compass: None")
+            return
+
+        current_x = self.column_start + self.zoom_level // 2
+        current_y = self.row_start + self.zoom_level // 2
+        dest_x, dest_y = self.destination
+
+        dx = dest_x - current_x
+        dy = dest_y - current_y
+
+        steps_diagonal = min(abs(dx), abs(dy))
+        steps_straight = abs(abs(dx) - abs(dy))
+
+        diagonal_arrow = ''
+        if dx < 0 and dy < 0:
+            diagonal_arrow = '↖'
+        elif dx > 0 and dy < 0:
+            diagonal_arrow = '↗'
+        elif dx < 0 and dy > 0:
+            diagonal_arrow = '↙'
+        elif dx > 0 and dy > 0:
+            diagonal_arrow = '↘'
+
+        straight_arrow = ''
+        if abs(dx) > abs(dy):
+            straight_arrow = '→' if dx > 0 else '←'
+        elif abs(dy) > abs(dx):
+            straight_arrow = '↓' if dy > 0 else '↑'
+
+        total_ap = max(abs(dx), abs(dy))
+
+        if total_ap == 0:
+            self.ap_direction_label.setText("Compass: 0⦿")
+        elif steps_diagonal == 0:
+            self.ap_direction_label.setText(f"Compass: {steps_straight}{straight_arrow}")
+        elif steps_straight == 0:
+            self.ap_direction_label.setText(f"Compass: {steps_diagonal}{diagonal_arrow}")
+        else:
+            self.ap_direction_label.setText(
+                f"Compass: {steps_diagonal}{diagonal_arrow} + {steps_straight}{straight_arrow}")
 
 # -----------------------
 # Menu Actions
@@ -4693,55 +5039,51 @@ class DatabaseViewer(QDialog):
 
 class CharacterDialog(QDialog):
     """
-    A dialog for adding or modifying a character.
-
-    This dialog provides a simple interface for entering or editing the name and password
-    of a character. It can be used to add a new character or modify an existing one.
+    A dialog for adding or modifying a character, with validation.
     """
 
     def __init__(self, parent=None, character=None):
-        """
-        Initialize the character dialog.
-
-        Args:
-            parent (QWidget): The parent widget for this dialog.
-            character (dict, optional): A dictionary containing the character's information.
-                                        If provided, the dialog will be pre-filled with this data.
-                                        Defaults to None.
-        """
         super().__init__(parent)
         self.setWindowTitle("Character")
         self.setWindowIcon(APP_ICON)
 
-        # Create input fields for the character's name and password
+        # Input fields
         self.name_edit = QLineEdit()
         self.password_edit = QLineEdit()
-        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)  # Hide the password text
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
 
-        # If a character is provided, pre-fill the fields with its data
         if character:
             self.name_edit.setText(character['name'])
             self.password_edit.setText(character['password'])
 
-        # Set up the form layout with labels and input fields
+        # Form layout
         layout = QFormLayout()
         layout.addRow("Name:", self.name_edit)
         layout.addRow("Password:", self.password_edit)
 
-        # Create OK and Cancel buttons
+        # OK and Cancel buttons
         button_box = QHBoxLayout()
         ok_button = QPushButton("OK")
         cancel_button = QPushButton("Cancel")
         button_box.addWidget(ok_button)
         button_box.addWidget(cancel_button)
-
-        # Add the buttons to the layout
         layout.addRow(button_box)
         self.setLayout(layout)
 
-        # Connect the buttons to the dialog's accept and reject methods
-        ok_button.clicked.connect(self.accept)
+        # Connect buttons
+        ok_button.clicked.connect(self.validate_and_accept)
         cancel_button.clicked.connect(self.reject)
+
+    def validate_and_accept(self):
+        """Check if inputs are valid before accepting."""
+        name = self.name_edit.text().strip()
+        password = self.password_edit.text().strip()
+
+        if not name or not password:
+            QMessageBox.warning(self, "Validation Error", "Character name and password cannot be empty.")
+            return  # 🚨 Do NOT call accept(), keep dialog open
+
+        self.accept()  # ✅ Only accept if valid
 
 # -----------------------
 # Theme Customization Dialog
@@ -4796,7 +5138,14 @@ class ThemeCustomizationDialog(QDialog):
     def setup_ui_tab(self) -> None:
         """Set up the UI tab for background, text, and button color customization."""
         layout = QGridLayout(self.ui_tab)
-        ui_elements = ['background', 'text_color', 'button_color']
+        ui_elements = [
+            'background',
+            'text_color',
+            'button_color',
+            'button_hover_color',
+            'button_pressed_color',
+            'button_border_color'
+        ]
 
         for idx, elem in enumerate(ui_elements):
             color_square = QLabel(self.ui_tab)
@@ -4856,11 +5205,32 @@ class ThemeCustomizationDialog(QDialog):
             bg_color = self.color_mappings.get('background', QColor('white')).name()
             text_color = self.color_mappings.get('text_color', QColor('black')).name()
             btn_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
+            btn_hover_color = self.color_mappings.get('button_hover_color', QColor('grey')).name()
+            btn_pressed_color = self.color_mappings.get('button_pressed_color', QColor('darkgrey')).name()
+            btn_border_color = self.color_mappings.get('button_border_color', QColor('black')).name()
 
             self.setStyleSheet(
-                f"QWidget {{ background-color: {bg_color}; }}"
-                f"QPushButton {{ background-color: {btn_color}; color: {text_color}; }}"
-                f"QLabel {{ color: {text_color}; }}"
+                f"""
+                QWidget {{
+                    background-color: {bg_color};
+                }}
+                QPushButton {{
+                    background-color: {btn_color};
+                    color: {text_color};
+                    border: 2px solid {btn_border_color};
+                    border-radius: 6px;
+                    padding: 5px;
+                }}
+                QPushButton:hover {{
+                    background-color: {btn_hover_color};
+                }}
+                QPushButton:pressed {{
+                    background-color: {btn_pressed_color};
+                }}
+                QLabel {{
+                    color: {text_color};
+                }}
+                """
             )
             logging.debug("Theme applied to dialog")
         except Exception as e:
@@ -4870,6 +5240,7 @@ class ThemeCustomizationDialog(QDialog):
 # -----------------------
 # CSS Customization Dialog
 # -----------------------
+
 class CSSCustomizationDialog(QDialog):
     def __init__(self, parent: QWidget = None, current_profile: str = "Default") -> None:
         super().__init__(parent)
@@ -5233,10 +5604,10 @@ class CSSCustomizationDialog(QDialog):
             logging.error(f"Failed to clear CSS customizations: {e}")
             QMessageBox.critical(self, "Error", "Failed to clear customizations")
 
-
 # -----------------------
 # AVITD Scraper Class
 # -----------------------
+
 class AVITDScraper:
     """
     A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
@@ -5579,8 +5950,7 @@ class SetDestinationDialog(QDialog):
         parent = cast("MainWindowType", self.parent)
 
         self.populate_dropdown(self.tavern_dropdown, list(parent.taverns_coordinates.keys()))
-        self.populate_dropdown(self.bank_dropdown,
-                               [f"{col} & {row}" for col, row, *_ in parent.banks_coordinates.values()])
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for col, row, *_ in parent.banks_coordinates.values()])
         self.populate_dropdown(self.transit_dropdown, list(parent.transits_coordinates.keys()))
         self.populate_dropdown(self.shop_dropdown, list(parent.shops_coordinates.keys()))
         self.populate_dropdown(self.guild_dropdown, list(parent.guilds_coordinates.keys()))
@@ -5613,10 +5983,20 @@ class SetDestinationDialog(QDialog):
                     "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
                     (character_id,)
                 )
+
+                # Create inverse mappings (coord → name)
+                inverse_columns = {v: k for k, v in parent.columns.items()}
+                inverse_rows = {v: k for k, v in parent.rows.items()}
+
                 for col, row in cursor.fetchall():
-                    col_name = next((k for k, v in parent.columns.items() if v == col), f"Column {col}")
-                    row_name = next((k for k, v in parent.rows.items() if v == row), f"Row {row}")
+                    # Round down to nearest even coordinate for label mapping
+                    even_col = col - (col % 2)
+                    even_row = row - (row % 2)
+
+                    col_name = inverse_columns.get(even_col, f"Column {even_col}")
+                    row_name = inverse_rows.get(even_row, f"Row {even_row}")
                     building_name = self._get_building_name(cursor, col_name, row_name)
+
                     display = f"{col_name} & {row_name}" + (f" - {building_name}" if building_name else "")
                     self.recent_destinations_dropdown.addItem(display, (col, row))
 
@@ -5768,19 +6148,13 @@ class SetDestinationDialog(QDialog):
                     VALUES (?, ?, ?, datetime('now'))
                 """, (character_id, coords[0], coords[1]))
 
-                exists = cursor.execute("""
-                    SELECT 1 FROM recent_destinations WHERE character_id = ? AND col = ? AND row = ?
-                """, (character_id, coords[0], coords[1])).fetchone()
-
-                if not exists:
-                    cursor.execute("""
-                        INSERT INTO recent_destinations (character_id, col, row, timestamp)
-                        VALUES (?, ?, ?, datetime('now'))
-                    """, (character_id, coords[0], coords[1]))
-
                 conn.commit()
 
-            parent.destination = coords
+            # ✅ Save to recent using centralized logic
+            parent.save_to_recent_destinations(character_id, coords[0], coords[1])
+
+            # ✅ Reload destination from DB to sync to current character context
+            parent.load_last_destination_for_character(character_id)
             parent.update_minimap()
             logging.info(f"Set destination for character {character_id} to {coords}")
             self.accept()
@@ -6422,6 +6796,7 @@ class PowersDialog(QDialog):
 # -----------------------
 # Log Viewer
 # -----------------------
+
 class LogViewer(QDialog):
     """A dialog window to view and optionally send application logs."""
 

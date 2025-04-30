@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.12.1
+# Filename: main_0.12.0
 
 """
 ======================
@@ -23,7 +23,7 @@ limitations under the License.
 
 """
 =================================
-RBC City Map Application (v0.12.1)
+RBC City Map Application (v0.12.0)
 =================================
 This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
 (set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
@@ -53,7 +53,7 @@ Modules Used:
 - **logging**: Captures logs, errors, and system events.
 
 ================================
-Classes and Methods (v0.12.1)
+Classes and Methods (v0.12.0)
 ================================
 
 #### RBCCommunityMap (Core Application)
@@ -169,7 +169,7 @@ def get_logging_level_from_db(default=logging.INFO) -> int:
         print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
-VERSION_NUMBER = "0.12.1"
+VERSION_NUMBER = "0.12.0"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
@@ -1736,6 +1736,13 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 def migrate_schema(conn: sqlite3.Connection) -> None:
+    """
+    Migrate the database schema to the latest version.
+
+    Handles sequential migrations:
+    - v1 -> v2: Fixes custom_css, guilds, and shops tables.
+    - v2 -> v3: Adds active_cookie column to characters table.
+    """
     cursor = conn.cursor()
     cursor.execute("PRAGMA user_version")
     version = cursor.fetchone()[0]
@@ -4734,8 +4741,6 @@ class CharacterDialog(QDialog):
         cancel_button = QPushButton("Cancel")
         button_box.addWidget(ok_button)
         button_box.addWidget(cancel_button)
-
-        # Add the buttons to the layout
         layout.addRow(button_box)
         self.setLayout(layout)
 
