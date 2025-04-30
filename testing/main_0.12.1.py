@@ -309,7 +309,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, Q
 from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, \
     QShortcut, QKeySequence, QDesktopServices, QBrush
 from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime, QMimeData, \
-    QByteArray
+    QByteArray, QEvent
 from PySide6.QtCore import Slot as pyqtSlot
 from PySide6.QtWidgets import QMainWindow, QMessageBox
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -2343,7 +2343,7 @@ class RBCCommunityMap(QMainWindow):
                 Qt.Key.Key_W: 1,  # Top-center
                 Qt.Key.Key_A: 3,  # Middle-left
                 Qt.Key.Key_S: 7,  # Bottom-center
-                Qt.Key.Key_D: 5   # Middle-right
+                Qt.Key.Key_D: 5  # Middle-right
             },
             2: {  # Arrow Keys Mode
                 Qt.Key.Key_Up: 1,
@@ -2363,7 +2363,6 @@ class RBCCommunityMap(QMainWindow):
             logging.info("Keybindings disabled (mode 0)")
             return
 
-        # Ensure website_frame exists before proceeding
         if not hasattr(self, 'website_frame'):
             logging.error("website_frame not initialized; skipping keybinding setup")
             return
@@ -2375,11 +2374,17 @@ class RBCCommunityMap(QMainWindow):
 
     def move_character(self, move_index: int) -> None:
         """
-        Move character to the specified grid position via JavaScript.
+        Move character to the specified grid position via JavaScript,
+        but only if the currently focused widget is not an input field.
 
         Args:
             move_index (int): Index in the 3x3 movement grid (0-8).
         """
+        widget = QApplication.focusWidget()
+        if isinstance(widget, (QLineEdit, QComboBox)):
+            logging.debug(f"Ignored movement key {move_index} due to focus on input: {widget}")
+            return
+
         if not hasattr(self, 'website_frame') or not self.website_frame.page():
             logging.warning("Cannot move character: website_frame or page not initialized")
             return
@@ -2886,18 +2891,47 @@ class RBCCommunityMap(QMainWindow):
         combo_go_layout = QHBoxLayout()
         combo_go_layout.setSpacing(5)
 
+        # --- Editable, searchable COLUMN ComboBox ---
         self.combo_columns = QComboBox()
+        self.combo_columns.setEditable(True)
+        self.combo_columns.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.combo_columns.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.combo_columns.addItem("Select Column")  # Placeholder
         self.combo_columns.addItems(list(columns.keys()))
+        self.combo_columns.setCurrentIndex(0)
+        self.combo_columns.model().item(0).setEnabled(False)  # Disable placeholder
 
+        column_completer = QCompleter(list(columns.keys()))
+        column_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.combo_columns.setCompleter(column_completer)
+
+        # Install event filters for clearing behavior
+        self.combo_columns.lineEdit().installEventFilter(self)
+        self.combo_columns.installEventFilter(self)
+
+        # --- Editable, searchable ROW ComboBox ---
         self.combo_rows = QComboBox()
+        self.combo_rows.setEditable(True)
+        self.combo_rows.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.combo_rows.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.combo_rows.addItem("Select Row")
         self.combo_rows.addItems(list(rows.keys()))
+        self.combo_rows.setCurrentIndex(0)
+        self.combo_rows.model().item(0).setEnabled(False)
 
+        row_completer = QCompleter(list(rows.keys()))
+        row_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.combo_rows.setCompleter(row_completer)
+
+        self.combo_rows.lineEdit().installEventFilter(self)
+        self.combo_rows.installEventFilter(self)
+
+        # Go Button
         go_button = QPushButton('Go')
         go_button.setFixedSize(25, 25)
         go_button.clicked.connect(self.go_to_location)
 
+        # Layout assembly
         combo_go_layout.addWidget(self.combo_columns)
         combo_go_layout.addWidget(self.combo_rows)
         combo_go_layout.addWidget(go_button)
@@ -4641,7 +4675,27 @@ class RBCCommunityMap(QMainWindow):
         except sqlite3.Error as e:
             logging.error(f"Failed to save recent destination: {e}")
 
-# -----------------------
+    def eventFilter(self, source, event):
+        if event.type() == QEvent.Type.FocusIn:
+            # Clear text when the line edit gains focus directly
+            if isinstance(source, QLineEdit):
+                source.clear()
+
+            # Redirect focus to lineEdit and clear if the combobox gains focus
+            elif source in (self.combo_columns, self.combo_rows):
+                if source.isEditable():
+                    source.lineEdit().clear()
+                    source.lineEdit().setFocus()
+
+        elif event.type() == QEvent.Type.MouseButtonPress:
+            # Ensure lineEdit clears and gains focus on combo box click
+            if source in (self.combo_columns, self.combo_rows) and source.isEditable():
+                source.lineEdit().clear()
+                source.lineEdit().setFocus()
+
+        return super().eventFilter(source, event)
+
+    # -----------------------
 # Infobar Management
 # -----------------------
 
@@ -5242,10 +5296,10 @@ class ThemeCustomizationDialog(QDialog):
 # -----------------------
 
 class CSSCustomizationDialog(QDialog):
-    def __init__(self, parent: QWidget = None, current_profile: str = "Default") -> None:
+    def __init__(self, parent: QWidget = None, current_profile: str = None) -> None:
         super().__init__(parent)
         self.parent = parent
-        self.current_profile = current_profile
+        self.current_profile = current_profile or self.get_current_profile()
         self.setWindowTitle("CSS Customization")
         self.setWindowIcon(APP_ICON)
         self.resize(600, 400)
@@ -5310,7 +5364,10 @@ class CSSCustomizationDialog(QDialog):
         self.add_tab("Background", ["BODY"])
         self.add_tab("Text", ["H1", "P", "A", "TD", "DIV"])
         self.add_tab("City Elements", ["TD.cityblock", "TD.intersect", "TD.street", "TD.city"])
-        self.add_tab("Special Elements", ["SPAN.intersect", "SPAN.transit", "SPAN.pub", "SPAN.bank", "SPAN.shop", "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy"])
+        self.add_tab("Special Elements", [
+            "SPAN.intersect", "SPAN.transit", "SPAN.pub", "SPAN.bank", "SPAN.shop",
+            "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy"
+        ])
         main_layout.addWidget(self.tab_widget)
 
         # Buttons
@@ -5334,17 +5391,20 @@ class CSSCustomizationDialog(QDialog):
         main_layout.addLayout(button_layout)
         self.setLayout(main_layout)
 
-    def on_profile_change(self, profile: str) -> None:
-        """Handle profile change: save current changes, load new profile, and apply CSS."""
-        if profile == self.current_profile:
-            return
+        # Ensure preview updates even if currentTextChanged isn't triggered
+        self.on_profile_change(self.current_profile)
 
-        self.update_current_profile(profile)
+    def on_profile_change(self, profile: str) -> None:
+        """Handle profile change: update DB, load styles, apply CSS."""
+        if profile != self.current_profile:
+            self.update_current_profile(profile)
+
+        self.current_profile = profile
         self.load_existing_customizations()
         css = self.generate_custom_css()
 
         if css and self.parent:
-            parent = cast("MainWindowType", self.parent)  # PyCharm understands it now
+            parent = cast("MainWindowType", self.parent)
             parent.apply_custom_css(css)
             parent.website_frame.reload()
 
@@ -5444,8 +5504,7 @@ class CSSCustomizationDialog(QDialog):
         tab.layout().addWidget(scroll)
         self.tab_widget.addTab(tab, tab_title)
         self.tabs[tab_title] = tab
-        # Store the grid for later access
-        tab.grid = grid
+        tab.grid = grid  # Preserve reference
 
     def pick_color(self, css_item: str, preview: QLabel) -> None:
         """Open a color picker and apply the selected color."""
@@ -5484,8 +5543,6 @@ class CSSCustomizationDialog(QDialog):
                     (self.current_profile, css_item, value)
                 )
                 conn.commit()
-                cursor.execute("SELECT COUNT(*) FROM custom_css WHERE profile_name = ?", (self.current_profile,))
-                logging.debug(f"Rows in custom_css for '{self.current_profile}': {cursor.fetchone()[0]}")
         except sqlite3.Error as e:
             logging.error(f"Failed to save CSS for '{css_item}': {e}")
             QMessageBox.critical(self, "Error", f"Failed to save CSS: {e}")
@@ -5501,21 +5558,20 @@ class CSSCustomizationDialog(QDialog):
                 )
                 customizations = dict(cursor.fetchall())
 
-            for tab_title, tab in self.tabs.items():
+            for tab in self.tabs.values():
                 grid = tab.grid
                 for row in range(1, grid.rowCount()):
                     label = grid.itemAtPosition(row, 0).widget()
                     preview = grid.itemAtPosition(row, 1).widget()
-                    if label.text() in customizations:
-                        preview.setStyleSheet(customizations[label.text()])
-                    else:
-                        preview.setStyleSheet("")
-            logging.debug(f"Loaded {len(customizations)} CSS customizations for profile '{self.current_profile}'")
+                    preview.setStyleSheet(customizations.get(label.text(), ""))
         except sqlite3.Error as e:
             logging.error(f"Failed to load CSS customizations: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load customizations: {e}")
 
     def save_and_apply_changes(self) -> None:
+        selected_profile = self.profile_dropdown.currentText()
+        self.update_current_profile(selected_profile)
+        self.current_profile = selected_profile
         css = self.generate_custom_css()
         if css and self.parent:
             parent = cast("MainWindowType", self.parent)
@@ -5553,16 +5609,12 @@ class CSSCustomizationDialog(QDialog):
                         [(self.current_profile, sel.strip(), prop.strip()) for sel, prop in rules]
                     )
                     conn.commit()
-
                 self.load_existing_customizations()
-
                 if self.parent:
                     parent = cast("MainWindowType", self.parent)
                     parent.apply_custom_css(css)
                     parent.website_frame.reload()
-
                 logging.info(f"Uploaded CSS file: {file_path} to profile '{self.current_profile}'")
-
             except (IOError, sqlite3.Error) as e:
                 logging.error(f"Failed to upload CSS file: {e}")
                 QMessageBox.critical(self, "Error", f"Upload failed: {e}")
@@ -5590,16 +5642,12 @@ class CSSCustomizationDialog(QDialog):
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM custom_css WHERE profile_name = ?", (self.current_profile,))
                 conn.commit()
-
             self.load_existing_customizations()
-
             if self.parent:
                 parent = cast("MainWindowType", self.parent)
                 parent.apply_custom_css("")
                 parent.website_frame.reload()
-
             logging.info(f"Cleared all CSS customizations for profile '{self.current_profile}'")
-
         except sqlite3.Error as e:
             logging.error(f"Failed to clear CSS customizations: {e}")
             QMessageBox.critical(self, "Error", "Failed to clear customizations")
