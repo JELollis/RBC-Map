@@ -2172,6 +2172,7 @@ class RBCCommunityMap(QMainWindow):
         self.pending_character_id_for_map = None
         self.webview_loaded = False
         self.splash = None
+        self.selected_route_label = None  # Can be "Direct Route", "Transit Route", or None for auto
 
         # Initialize character coordinates
         self.character_x = None
@@ -2757,10 +2758,17 @@ class RBCCommunityMap(QMainWindow):
         ap_compass_layout.setContentsMargins(0, 0, 0, 0)
         ap_compass_layout.setSpacing(10)
 
-        #compass_label = QLabel("Compass:")
-        #compass_label.setStyleSheet("color: white; font-weight: bold; font-size: 12pt;")
-        #ap_compass_layout.addWidget(compass_label)
+        # Compass Icon Button
+        self.compass_button = QPushButton()
+        self.compass_button.setIcon(QIcon(QPixmap("images/compass.png")))
+        self.compass_button.setIconSize(QSize(28, 28))  # Adjust as needed
+        self.compass_button.setFixedSize(34, 34)
+        self.compass_button.setStyleSheet("background-color: transparent; border: none;")
+        self.compass_button.setToolTip("Open Compass Overlay")
+        self.compass_button.clicked.connect(self.show_compass_overlay)
+        ap_compass_layout.addWidget(self.compass_button)
 
+        # AP Direction Label
         self.ap_direction_label = QLabel()
         self.ap_direction_label.setAlignment(Qt.AlignCenter)
         self.ap_direction_label.setStyleSheet("color: white; font-weight: bold; font-size: 12pt;")
@@ -4380,6 +4388,8 @@ class RBCCommunityMap(QMainWindow):
             self.is_updating_minimap = True
             self.draw_minimap()
             self.update_info_frame()
+            if hasattr(self, 'compass_overlay') and self.compass_overlay.isVisible():
+                self.show_compass_overlay()
             self.is_updating_minimap = False
 
     def find_nearest_location(self, x, y, locations):
@@ -4676,26 +4686,19 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Failed to save recent destination: {e}")
 
     def eventFilter(self, source, event):
-        if event.type() == QEvent.Type.FocusIn:
-            # Clear text when the line edit gains focus directly
-            if isinstance(source, QLineEdit):
-                source.clear()
-
-            # Redirect focus to lineEdit and clear if the combobox gains focus
-            elif source in (self.combo_columns, self.combo_rows):
-                if source.isEditable():
-                    source.lineEdit().clear()
-                    source.lineEdit().setFocus()
-
-        elif event.type() == QEvent.Type.MouseButtonPress:
-            # Ensure lineEdit clears and gains focus on combo box click
+        # Only clear on actual user interaction, not initial app load
+        if event.type() == QEvent.Type.MouseButtonPress:
             if source in (self.combo_columns, self.combo_rows) and source.isEditable():
                 source.lineEdit().clear()
                 source.lineEdit().setFocus()
 
+        elif event.type() == QEvent.Type.KeyPress:
+            if isinstance(source, QLineEdit) and source.text().startswith("Select"):
+                source.clear()
+
         return super().eventFilter(source, event)
 
-    # -----------------------
+# -----------------------
 # Infobar Management
 # -----------------------
 
@@ -4834,49 +4837,28 @@ class RBCCommunityMap(QMainWindow):
 
     def update_ap_direction_label(self):
         """
-        Update the AP and direction label shown in the top toolbar using separate diagonal and straight step counts.
+        Update the compass label at the top of the screen.
+        Shows either the selected route from overlay or the shortest by default.
         """
         if not self.destination:
             self.ap_direction_label.setText("Compass: None")
             return
 
-        current_x = self.column_start + self.zoom_level // 2
-        current_y = self.row_start + self.zoom_level // 2
-        dest_x, dest_y = self.destination
+        # If user clicked a route, keep using the stored text
+        if self.selected_route_label and self.selected_route_description:
+            self.ap_direction_label.setText(f"Compass: {self.selected_route_description}")
+            return
 
-        dx = dest_x - current_x
-        dy = dest_y - current_y
+        # Otherwise, fallback to default route selection
+        direct_route, transit_route = self.get_compass_routes()
+        label, route_info = (
+            ("Direct Route", direct_route)
+            if direct_route[0] <= transit_route[0]
+            else ("Transit Route", transit_route)
+        )
 
-        steps_diagonal = min(abs(dx), abs(dy))
-        steps_straight = abs(abs(dx) - abs(dy))
-
-        diagonal_arrow = ''
-        if dx < 0 and dy < 0:
-            diagonal_arrow = '↖'
-        elif dx > 0 and dy < 0:
-            diagonal_arrow = '↗'
-        elif dx < 0 and dy > 0:
-            diagonal_arrow = '↙'
-        elif dx > 0 and dy > 0:
-            diagonal_arrow = '↘'
-
-        straight_arrow = ''
-        if abs(dx) > abs(dy):
-            straight_arrow = '→' if dx > 0 else '←'
-        elif abs(dy) > abs(dx):
-            straight_arrow = '↓' if dy > 0 else '↑'
-
-        total_ap = max(abs(dx), abs(dy))
-
-        if total_ap == 0:
-            self.ap_direction_label.setText("Compass: 0⦿")
-        elif steps_diagonal == 0:
-            self.ap_direction_label.setText(f"Compass: {steps_straight}{straight_arrow}")
-        elif steps_straight == 0:
-            self.ap_direction_label.setText(f"Compass: {steps_diagonal}{diagonal_arrow}")
-        else:
-            self.ap_direction_label.setText(
-                f"Compass: {steps_diagonal}{diagonal_arrow} + {steps_straight}{straight_arrow}")
+        ap_cost, description = route_info
+        self.ap_direction_label.setText(f"Compass: {description}")
 
 # -----------------------
 # Menu Actions
@@ -4988,6 +4970,96 @@ class RBCCommunityMap(QMainWindow):
         cursor.execute(f"SELECT * FROM `{table_name}`")
         data = cursor.fetchall()
         return column_names, data
+
+    def show_compass_overlay(self):
+        if not self.destination:
+            QMessageBox.information(self, "No Destination", "Please set a destination first.")
+            return
+
+        direct_route, transit_route = self.get_compass_routes()
+
+        if hasattr(self, 'compass_overlay') and self.compass_overlay.isVisible():
+            self.compass_overlay.refresh(direct_route, transit_route)
+        else:
+            self.compass_overlay = CompassOverlay(direct_route, transit_route, self)
+            self.compass_overlay.show()
+
+    def get_compass_routes(self):
+        def get_arrow_description(start, end):
+            dx = end[0] - start[0]
+            dy = end[1] - start[1]
+
+            steps_diagonal = min(abs(dx), abs(dy))
+            steps_straight = abs(abs(dx) - abs(dy))
+
+            diagonal_arrow = ''
+            if dx < 0 and dy < 0:
+                diagonal_arrow = '↖'
+            elif dx > 0 and dy < 0:
+                diagonal_arrow = '↗'
+            elif dx < 0 and dy > 0:
+                diagonal_arrow = '↙'
+            elif dx > 0 and dy > 0:
+                diagonal_arrow = '↘'
+
+            straight_arrow = ''
+            if abs(dx) > abs(dy):
+                straight_arrow = '→' if dx > 0 else '←'
+            elif abs(dy) > abs(dx):
+                straight_arrow = '↓' if dy > 0 else '↑'
+
+            parts = []
+            if steps_diagonal:
+                parts.append(f"{steps_diagonal}{diagonal_arrow}")
+            if steps_straight:
+                parts.append(f"{steps_straight}{straight_arrow}")
+            return " + ".join(parts) if parts else "0⦿"
+
+        current_x = self.column_start + self.zoom_level // 2
+        current_y = self.row_start + self.zoom_level // 2
+        dest_x, dest_y = self.destination
+
+        # ----------------------------
+        # Direct Route
+        # ----------------------------
+        direct_ap = max(abs(dest_x - current_x), abs(dest_y - current_y))
+        direct_desc = get_arrow_description((current_x, current_y), (dest_x, dest_y))
+        direct_route = (direct_ap, direct_desc)
+
+        # ----------------------------
+        # Transit Route
+        # ----------------------------
+        nearest_transit_to_character = self.find_nearest_transit(current_x, current_y)
+        nearest_transit_to_destination = self.find_nearest_transit(dest_x, dest_y)
+
+        if nearest_transit_to_character and nearest_transit_to_destination:
+            char_transit_coords = nearest_transit_to_character[0][1]
+            dest_transit_coords = nearest_transit_to_destination[0][1]
+
+            char_to_transit_ap = self.calculate_ap_cost((current_x, current_y), char_transit_coords)
+            dest_to_transit_ap = self.calculate_ap_cost((dest_x, dest_y), dest_transit_coords)
+            total_ap_transit = char_to_transit_ap + dest_to_transit_ap
+
+            # Get arrow segments for each leg
+            to_transit_arrows = get_arrow_description((current_x, current_y), char_transit_coords)
+            from_transit_arrows = get_arrow_description(dest_transit_coords, (dest_x, dest_y))
+
+            transit_desc = f"{to_transit_arrows} + Transit + {from_transit_arrows}"
+            transit_route = (total_ap_transit, transit_desc)
+        else:
+            transit_route = (9999, "Transit route unavailable")
+
+        return direct_route, transit_route
+
+    def set_compass_display_from_overlay(self, label, route_info):
+        """
+        Called when user clicks a route in CompassOverlay.
+        Stores and displays the selected route’s full directional breakdown.
+        """
+        self.selected_route_label = label
+        ap_cost, direction_desc = route_info
+        self.selected_route_description = direction_desc
+        self.ap_direction_label.setText(f"Compass: {direction_desc}")
 
 # -----------------------
 # Database Viewer Class
@@ -6176,6 +6248,7 @@ class SetDestinationDialog(QDialog):
             return
 
         parent = cast("MainWindowType", self.parent)
+        parent.selected_route_label = None
 
         if not parent.selected_character:
             self.show_error_dialog("No Character", "Please select a character first")
@@ -6249,6 +6322,7 @@ class SetDestinationDialog(QDialog):
 
     def set_external_destination(self, col: int, row: int, guild_name: str) -> None:
         """Set a destination externally."""
+        self.parent().selected_route_label = None
         self.recent_destinations_dropdown.clear()
         self.recent_destinations_dropdown.addItem(f"{guild_name} - {col}, {row}", (col, row))
         self.recent_destinations_dropdown.setCurrentIndex(0)  # Select the added item
@@ -7004,6 +7078,96 @@ class DiscordServerDialog(QDialog):
             btn = QPushButton(name)
             btn.clicked.connect(lambda _, url=link: webbrowser.open(url))
             layout.addWidget(btn)
+
+# -----------------------
+# Compass Overlay
+# -----------------------
+
+class CompassOverlay(QDialog):
+    """
+    A floating compass window that shows both Direct and Transit routes to a destination,
+    sorted by AP cost. Color-coded: Green = Direct, Purple = Transit.
+    """
+
+    def __init__(self, direct_route_info, transit_route_info, parent=None):
+        """
+        Args:
+            direct_route_info (tuple): (int ap_cost, str description)
+            transit_route_info (tuple): (int ap_cost, str description)
+        """
+        super().__init__(parent)
+        self.setWindowTitle("Compass Routes")
+        self.setMinimumWidth(350)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+
+        self.direct_route_info = direct_route_info
+        self.transit_route_info = transit_route_info
+
+        self._init_ui()
+
+    def _init_ui(self):
+        layout = QVBoxLayout()
+
+        header = QLabel("Shortest Available Route:")
+        header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        layout.addWidget(header)
+
+        self.route_list = QListWidget()
+        self.route_list.setFrameShape(QFrame.NoFrame)
+
+        # Track route data
+        self.route_mapping = {}
+
+        routes = [
+            ("Direct Route", *self.direct_route_info, QColor("green")),
+            ("Transit Route", *self.transit_route_info, QColor("purple")),
+        ]
+        routes.sort(key=lambda r: r[1])  # sort by AP cost
+
+        for label, cost, desc, color in routes:
+            item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
+            item.setForeground(color)
+            self.route_list.addItem(item)
+            self.route_mapping[label] = (cost, desc)
+
+        self.route_list.itemClicked.connect(self.route_selected)  # ✅ Hook click signal
+        layout.addWidget(self.route_list)
+
+        btn_layout = QHBoxLayout()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.close)
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        self.setLayout(layout)
+
+    def refresh(self, direct_route_info, transit_route_info):
+        """
+        Update the overlay with new route data.
+        """
+        self.direct_route_info = direct_route_info
+        self.transit_route_info = transit_route_info
+
+        self.route_list.clear()
+
+        routes = [
+            ("Direct Route", *self.direct_route_info, QColor("green")),
+            ("Transit Route", *self.transit_route_info, QColor(170, 0, 170)),
+        ]
+        routes.sort(key=lambda r: r[1])
+
+        for label, cost, desc, color in routes:
+            item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
+            item.setForeground(color)
+            self.route_list.addItem(item)
+            self.route_mapping = {}  # Store label → (ap, desc)
+
+    def route_selected(self, item):
+        label_text = item.text().split("—")[0].strip()
+        route_info = self.route_mapping.get(label_text)
+        if route_info and self.parent():
+            self.parent().set_compass_display_from_overlay(label_text, route_info)
 
 # -----------------------
 # Main Entry Point
