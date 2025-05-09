@@ -1,4 +1,4 @@
-# Copyright 2024 RBC Community Map Team
+# Copyright 2024-2025 RBC Community Map Team
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,77 +11,62 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """
 =========================
 RBC City Map Application
 =========================
-This application provides a comprehensive graphical interface for viewing and navigating
-the city map of RavenBlack City. It includes features such as zooming in and out, setting
-and saving destinations, viewing the closest points of interest, managing user characters,
-customizing the application theme, and dynamically interacting with map data. The map data
-is stored and managed using an SQLite database, with support for refreshing data scraped
-from the 'A View in the Dark' website.
 
-Modules:
-- sys: Provides access to system-specific parameters and functions.
-- os: Used for interacting with the operating system (e.g., file and directory management).
-- pickle: Facilitates the serialization and deserialization of Python objects.
-- requests: Allows sending HTTP requests to interact with external websites.
-- re: Provides regular expression matching operations.
-- datetime: Supplies classes for manipulating dates and times.
-- bs4 (BeautifulSoup): Used for parsing HTML and XML documents.
-- PySide6: Provides a set of Python bindings for the Qt application framework.
-- sqlite3: Interface for SQLite database management.
-- webbrowser: Enables the opening of URLs in the default web browser.
-- math: Provides mathematical functions used in damage calculations.
-- logging: Used for logging debug, information, warning, and error messages.
+An advanced, graphical mapping utility for *Vampires! The Dark Alleyway*, this tool allows players to navigate
+RavenBlack City with the aid of real-time data scraping, destination routing, character storage, visual customization,
+and built-in gameplay tools such as a damage calculator and shopping planner.
 
 Classes:
-- RBCCommunityMap: The main application class that initializes and manages the user interface,
-  character management, web scraping, shopping list generation, minimap functionalities, and theme customization.
-- DatabaseViewer: A utility class that displays the contents of database tables in a tabbed view.
-- CharacterDialog: A dialog class for adding or modifying user characters.
-- ThemeCustomizationDialog: A dialog class for customizing the application theme.
-- SetDestinationDialog: A dialog class for setting a destination on the map.
-- AVITDScraper: A scraper class that fetches data from 'A View in the Dark' to update guilds
-  and shops data in the database.
-- ShoppingListTool: A tool for generating shopping lists, including calculating total costs
-  based on selected items and character conditions.
-- CoinScraper: A class responsible for scraping the current coin count from the character's
-  webpage and updating the database with the available coins.
-- DamageCalculator: A class for calculating damage dealt to characters based on their blood points (BP).
-- DamageCalculatorUI: A user interface for the DamageCalculator, allowing users to calculate
-  and analyze damage and optionally add required items to the shopping list.
+- RBCCommunityMap: Main application controller managing UI, characters, scraping, minimap, routing, and utilities.
+- SplashScreen: Startup splash display with live initialization updates.
+- CharacterDialog: Dialog to create, edit, or validate vampire characters.
+- SetDestinationDialog: Guild picker for destination routing.
+- ThemeCustomizationDialog: Configure UI and minimap color scheme.
+- CSSCustomizationDialog: WYSIWYG CSS profile editor and previewer.
+- LogViewer: Allows viewing of log files with level filtering.
+- AVITDScraper: Fetches shop and guild data from 'A View in the Dark' website.
+- PowersDialog: Interactive guild/power browser and router.
+- ShoppingListTool: Generates item lists based on player needs and prices.
+- DamageCalculator: Calculates BP loss and shopping requirements.
+- DatabaseViewer: Displays all database tables in a tabbed inspector.
+- DiscordServerDialog: Quick-launch interface for community Discords.
+- CompassOverlay: Shows direct vs. transit AP routing paths graphically.
 
-Functions:
-- initialize_database: Sets up the SQLite database for storing map data, character data, settings, and cookies.
-- save_cookie_to_db: Saves individual cookies to the SQLite database.
-- load_cookies_from_db: Loads cookies from the SQLite database into the web engine.
-- clear_cookie_db: Clears all cookies from the SQLite database.
-- fetch_table_data: Retrieves and returns the column names and data from a specified database table.
-- extract_coordinates_from_html: Extracts map coordinates from the loaded HTML content.
-- process_html: Updates map-related data such as character coordinates and coins using extracted HTML data.
-- find_nearest_location: Finds the nearest point of interest based on a given set of coordinates.
-- calculate_ap_cost: Calculates the Action Point (AP) cost between two map coordinates.
-- update_guilds: Updates the guilds data in the SQLite database using scraped data.
-- update_shops: Updates the shops data in the SQLite database using scraped data.
-- get_next_update_times: Retrieves the next update times for guilds and shops from the SQLite database.
-- inject_console_logging: Injects JavaScript into the web page to capture and log console messages.
-- apply_theme: Applies the currently selected theme to the application UI.
-- save_theme_settings: Saves the customized theme settings to the SQLite database.
-- load_theme_settings: Loads the saved theme settings from the SQLite database.
-- save_zoom_level_to_database: Saves the minimap zoom level to the SQLite database.
-- load_zoom_level_from_database: Loads the minimap zoom level from the SQLite database during application start.
-- show_about_dialog: Displays the 'About' dialog with information about the application.
-- show_credits_dialog: Displays the 'Credits' dialog with information about contributors.
+Top-Level Functions:
+- splash_message: Decorator to display loading messages on the splash screen.
+- ensure_directories_exist: Ensures log and session folders exist.
+- setup_logging: Sets up rotating file-based logging based on settings.
 
-Key Features:
-- Dynamic minimap with zoom functionality, edge-case handling, and grid-based rendering.
-- Database-backed storage for settings, themes, character data, and cookies using SQLite.
-- Integration with 'A View in the Dark' for data scraping and updating in-game information.
-- Support for customizing themes and dynamically updating the application's appearance.
-- Ability to calculate damage dealt to characters and generate shopping lists based on in-game needs.
+Embedded Methods in RBCCommunityMap (partial list):
+- initialize_database
+- load_characters
+- open_shopping_list_tool
+- open_damage_calculator_tool
+- open_css_customization_dialog
+- open_powers_dialog
+- display_shopping_list
+- set_log_level / update_log_level_menu
+- apply_theme / load_theme_settings
+- setup_console_logging / inject_console_logging / handle_console_message
+- save_webpage_screenshot / save_app_screenshot
+- zoom_in_browser / zoom_out_browser
+- open_help_file / show_about_dialog / show_credits_dialog
 
-To install all required modules, run the following command:
- pip install requests bs4 PySide6 PySide6-WebEngine
-"""
+Highlights:
+- Integrated QWebEngine-based map rendering
+- Dynamic minimap drawing with AP routing overlays
+- WASD/Arrow key movement navigation
+- SQLite-backed character, theme, and session storage
+- Modular dialog-based UI with dark mode and CSS themes
+- Full Discord integration and external web launchers
+- Forum-aware and GitHub-compatible logging system
+- Smart AP calculator and guild-distance routing
+
+To install required modules:
+```bash
+pip install requests bs4 PySide6 PySide6-WebEngine
