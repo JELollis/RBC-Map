@@ -2232,6 +2232,20 @@ def splash_message(splash):
     return decorator
 
 # -----------------------
+# OS Specific Environs
+# -----------------------
+
+if sys.platform.startswith("linux"):
+    # Linux/Proton compatibility tweaks for QtWebEngine
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-software-rasterizer"
+
+elif sys.platform == "darwin":
+    # macOS (especially VMware) fixes for Chromium GPU crashes
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
+# -----------------------
 # RBC Community Map Main Class
 # -----------------------
 
