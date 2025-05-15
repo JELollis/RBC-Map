@@ -20,6 +20,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import platform
 
 """
 =================================
@@ -3490,19 +3491,31 @@ class RBCCommunityMap(QMainWindow):
 
     def open_help_file(self):
         """
-        Open the compiled .chm help file from the help folder.
+        Open the appropriate help file depending on the OS.
+        - Windows: .chm file
+        - macOS/Linux: .html file
         """
-        base_dir = os.path.dirname(os.path.abspath(__file__))  # Gets the folder of the current script
-        help_path = os.path.join(base_dir, "docs", "help", "RBC Community Map Help.chm")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        help_dir = os.path.join(base_dir, "docs", "help")
+        system = platform.system()
 
-        if os.path.exists(help_path):
-            os.startfile(help_path)
+        if system == "Windows":
+            help_path = os.path.join(help_dir, "RBC Community Map Help.chm")
+            if os.path.exists(help_path):
+                os.startfile(help_path)
+                return
         else:
-            QMessageBox.warning(
-                self,
-                "Help File Missing",
-                f"Could not find help file:\n{help_path}"
-            )
+            html_path = os.path.join(help_dir, "RBC_Map_Help.html")
+            if os.path.exists(html_path):
+                webbrowser.open(f"file://{html_path}")
+                return
+
+        # If neither file is found
+        QMessageBox.warning(
+            self,
+            "Help File Missing",
+            f"Could not find help file:\n{help_path if system == 'Windows' else html_path}"
+        )
 
 # -----------------------
 # Character Management
