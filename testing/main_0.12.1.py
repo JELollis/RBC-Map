@@ -4247,6 +4247,12 @@ class RBCCommunityMap(QMainWindow):
                 logging.info(f"Bank coins found: {bank_coins}")
                 updates.append(("UPDATE coins SET bank = ? WHERE character_id = ?", (bank_coins, character_id)))
 
+            accounting_match = re.search(r"(\d+) coins in bank", html)
+            if bank_match:
+                bank_coins = int(bank_match.group(1))
+                logging.info(f"Bank coins found: {bank_coins}")
+                updates.append(("UPDATE coins SET bank = ? WHERE character_id = ?", (bank_coins, character_id)))
+
             pocket_match = re.search(r"You have (\d+) coins", html) or re.search(r"Money: (\d+) coins", html)
             if pocket_match:
                 pocket_coins = int(pocket_match.group(1))
@@ -6115,7 +6121,7 @@ class AVITDScraper:
                     cursor.execute(f"""
                         UPDATE {table}
                         SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                        WHERE Name NOT LIKE 'Peacekeepers Mission%'
+                        WHERE Name NOT LIKE 'Peace%'
                     """, (next_update, scrape_timestamp))
                 else:
                     cursor.execute(f"""
