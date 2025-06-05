@@ -20,6 +20,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
+import platform
 
 """
 =================================
@@ -152,7 +153,7 @@ import logging.handlers
 # Global Constants
 # -----------------------
 # Database Path
-DB_PATH = 'sessions/rbc_map_data.db'
+DB_PATH = 'sessions/rbc_map_scratch_data.db'
 
 # Logging Configuration
 LOG_DIR = 'logs'
@@ -192,139 +193,126 @@ REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
 # Imports Handling
 # -----------------------
 
-import math
-import os
 import subprocess
 import sys
 
 # List of required modules with pip package names (some differ from import names)
 required_modules = {
-    'requests': 'requests',
-    're': 're',  # Built-in, no pip install needed
-    'time': 'time',  # Built-in
-    'sqlite3': 'sqlite3',  # Built-in
-    'webbrowser': 'webbrowser',  # Built-in
-    'datetime': 'datetime',  # Built-in
-    'bs4': 'beautifulsoup4',
-    'PySide6.QtWidgets': 'PySide6',
-    'PySide6.QtGui': 'PySide6',
     'PySide6.QtCore': 'PySide6',
-    'PySide6.QtWebEngineWidgets': 'PySide6',
+    'PySide6.QtGui': 'PySide6',
+    'PySide6.QtNetwork': 'PySide6',
     'PySide6.QtWebChannel': 'PySide6',
-    'PySide6.QtNetwork': 'PySide6'
+    'PySide6.QtWebEngineWidgets': 'PySide6',
+    'PySide6.QtWidgets': 'PySide6',
+    'bs4': 'beautifulsoup4',
+    'datetime': 'datetime',  # Built-in
+    're': 're',  # Built-in
+    'requests': 'requests',
+    'sqlite3': 'sqlite3',  # Built-in
+    'time': 'time',  # Built-in
+    'webbrowser': 'webbrowser'  # Built-in
 }
 
 
 def check_and_install_modules(modules: dict[str, str]) -> bool:
-    """
-    Check if required modules are installed, prompt user to install missing ones, and attempt installation.
-
-    Args:
-        modules (dict): Dictionary mapping module names to their pip package names.
-
-    Returns:
-        bool: True if all modules are available after checking/installing, False otherwise.
-    """
     missing_modules = []
     pip_installable = []
 
-    # Check each module
     for module, pip_name in modules.items():
         try:
             __import__(module)
         except ImportError:
             missing_modules.append(module)
-            if pip_name not in ('re', 'time', 'sqlite3', 'webbrowser', 'datetime'):  # Skip built-ins
+            if pip_name not in ('re', 'time', 'sqlite3', 'webbrowser', 'datetime'):
                 pip_installable.append(pip_name)
 
     if not missing_modules:
         return True
 
-    # Inform user of missing modules
     print("The following modules are missing:")
     for mod in missing_modules:
         print(f"- {mod}")
 
     if not pip_installable:
-        print("All missing modules are built-ins that should come with Python. Please check your Python installation.")
+        print("All missing modules are built-ins that should come with Python.")
         return False
 
-    # Prompt user for installation
     try:
-        from PySide6.QtWidgets import QMessageBox  # Early import for GUI prompt
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        _ = QApplication(sys.argv)
+        response = QMessageBox.question(
+            None, "Missing Modules",
+            f"Missing modules: {', '.join(missing_modules)}\n\nInstall with pip?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if response != QMessageBox.Yes:
+            return False
     except ImportError:
-        # Fallback to console prompt if PySide6 isn't available yet
         response = input(
-            f"\nWould you like to install missing modules ({', '.join(set(pip_installable))}) with pip? (y/n): ").strip().lower()
+            f"\nInstall missing modules ({', '.join(set(pip_installable))}) with pip? (y/n): ").strip().lower()
         if response != 'y':
-            print("Please install the missing modules manually with:")
-            print(f"pip install {' '.join(set(pip_installable))}")
-            return False
-    else:
-        # Use GUI prompt if PySide6 is partially available
-        _ = QApplication(sys.argv)  # Needed for QMessageBox to function
-        # noinspection PyTypeChecker, PyUnresolvedReferences
-        response = QMessageBox.question(None, "Missing Modules",
-                                        f"Missing modules: {', '.join(missing_modules)}\n\nInstall with pip ({', '.join(set(pip_installable))})?",
-                                        QMessageBox.Yes | QMessageBox.No)
-        # noinspection PyUnresolvedReferences
-        if response == QMessageBox.No:
-            print("Please install the missing modules manually with:")
-            print(f"pip install {' '.join(set(pip_installable))}")
             return False
 
-    # Attempt to install missing modules
-    print(f"Installing missing modules: {', '.join(set(pip_installable))}...")
     try:
-        # Use sys.executable to ensure the correct Python environment
         subprocess.check_call([sys.executable, "-m", "pip", "install"] + list(set(pip_installable)))
-        print("Installation successful! Please restart the application.")
-
-        # Re-check modules after installation
         for module in missing_modules:
-            try:
-                __import__(module)
-            except ImportError:
-                print(f"Failed to import {module} even after installation. Please check your environment.")
-                return False
+            __import__(module)
         return True
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to install modules: {e}")
-        print("Please install them manually with:")
-        print(f"pip install {' '.join(set(pip_installable))}")
-        return False
     except Exception as e:
-        print(f"An unexpected error occurred during installation: {e}")
+        print(f"Failed to install or import modules: {e}")
         return False
 
 
-# Check and attempt to install required modules
 if not check_and_install_modules(required_modules):
-    sys.exit("Missing required modules. Please resolve the issues and try again.")
+    sys.exit("Missing required modules. Please install and retry.")
 
-# Proceed with the rest of the imports and program setup
-import requests
+# -----------------------
+# Actual Imports
+# -----------------------
+
+# Built-in / stdlib
+import math
+import os
 import re
-import webbrowser
-from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QPushButton, QComboBox, \
-    QLabel, QFrame, QSizePolicy, QLineEdit, QDialog, QFormLayout, QListWidget, QListWidgetItem, QFileDialog, \
-    QColorDialog, QTabWidget, QScrollArea, QTableWidget, QTableWidgetItem, QInputDialog, QTextEdit, QSplashScreen, \
-    QCompleter, QCheckBox, QGroupBox, QStyle
-from PySide6.QtGui import QPixmap, QPainter, QColor, QFontMetrics, QPen, QIcon, QAction, QIntValidator, QMouseEvent, \
-    QShortcut, QKeySequence, QDesktopServices, QBrush
-from PySide6.QtCore import QUrl, Qt, QRect, QEasingCurve, QPropertyAnimation, QSize, QTimer, QDateTime, QMimeData, \
-    QByteArray, QEvent
-from PySide6.QtCore import Slot as pyqtSlot
-from PySide6.QtWidgets import QMainWindow, QMessageBox
-from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineCore import QWebEngineSettings, QWebEngineProfile
-from PySide6.QtNetwork import QNetworkCookie
-from typing import List, Tuple, TYPE_CHECKING, cast, TypeVar, Type
-from collections.abc import KeysView
 import sqlite3
+import webbrowser
+from collections.abc import KeysView
+from datetime import datetime, timedelta, timezone
+
+# Third-party
+import requests
+from bs4 import BeautifulSoup
+
+# PySide6 Core
+from PySide6.QtCore import (
+    QByteArray, QDateTime, QEasingCurve, QEvent, QMimeData,
+    QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
+    Slot as pyqtSlot
+)
+
+# PySide6 GUI
+import PySide6.QtGui  # Keep for dynamic access
+
+# PySide6 Widgets
+from PySide6.QtWidgets import (
+    QApplication, QCheckBox, QColorDialog, QComboBox, QCompleter,
+    QDialog, QFileDialog, QFormLayout, QFrame, QGridLayout, QGroupBox,
+    QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QMainWindow, QMessageBox, QPushButton, QScrollArea, QSplashScreen,
+    QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QTextEdit,
+    QVBoxLayout, QWidget, QInputDialog, QSizePolicy
+)
+
+# PySide6 Web
+from PySide6.QtWebChannel import QWebChannel
+from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings, QWebEngineScript
+from PySide6.QtWebEngineWidgets import QWebEngineView
+
+# PySide6 Network
+from PySide6.QtNetwork import QNetworkCookie
+
+# Typing
+from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar, cast
 
 # -----------------------
 # Define Type Checking
@@ -362,7 +350,69 @@ if TYPE_CHECKING:
 # Define App Icon
 # -----------------------
 
-APP_ICON = QIcon()
+APP_ICON = PySide6.QtGui.QIcon()
+
+
+# -----------------------
+# Theme Application
+# -----------------------
+
+def apply_theme_to_widget(widget: QWidget, color_mappings: dict) -> None:
+    """Apply the selected theme colors to the given widget's stylesheet."""
+    try:
+        bg_color = color_mappings.get('background', PySide6.QtGui.QColor('white')).name()
+        text_color = color_mappings.get('text_color', PySide6.QtGui.QColor('black')).name()
+        btn_color = color_mappings.get('button_color', PySide6.QtGui.QColor('lightgrey')).name()
+        btn_hover_color = color_mappings.get('button_hover_color', PySide6.QtGui.QColor('grey')).name()
+        btn_pressed_color = color_mappings.get('button_pressed_color', PySide6.QtGui.QColor('darkgrey')).name()
+        btn_border_color = color_mappings.get('button_border_color', PySide6.QtGui.QColor('black')).name()
+
+        widget.setStyleSheet(
+            f"""
+            QWidget {{
+                background-color: {bg_color};
+                color: {text_color};
+            }}
+            QPushButton {{
+                background-color: {btn_color};
+                color: {text_color};
+                border: 2px solid {btn_border_color};
+                border-radius: 6px;
+                padding: 5px;
+            }}
+            QPushButton:hover {{
+                background-color: {btn_hover_color};
+            }}
+            QPushButton:pressed {{
+                background-color: {btn_pressed_color};
+            }}
+            QLabel {{
+                color: {text_color};
+            }}
+            QComboBox {{
+                background-color: {bg_color};
+                color: {text_color};
+                border: 2px solid {btn_border_color};
+                border-radius: 4px;
+                padding: 4px;
+            }}
+            QListWidget {{
+                background-color: {bg_color};
+                color: {text_color};
+                border: 1px solid {btn_border_color};
+            }}
+            QLineEdit {{
+                background-color: {bg_color};
+                color: {text_color};
+                border: 1px solid {btn_border_color};
+                padding: 3px;
+            }}
+            """
+        )
+        logging.debug(f"Theme applied to {widget.__class__.__name__}")
+    except Exception as e:
+        logging.error(f"Failed to apply theme to {widget.__class__.__name__}: {e}")
+        widget.setStyleSheet("")
 
 
 # -----------------------
@@ -373,14 +423,14 @@ class SplashScreen(QSplashScreen):
     def __init__(self, image_path, max_height=400):
         if not os.path.exists(image_path):
             logging.error(f"Image not found: {image_path}")
-            pixmap = QPixmap(300, 200)
+            pixmap = PySide6.QtGui.QPixmap(300, 200)
             # noinspection PyUnresolvedReferences
             pixmap.fill(Qt.black)
         else:
-            pixmap = QPixmap(image_path)
+            pixmap = PySide6.QtGui.QPixmap(image_path)
             if pixmap.isNull():
                 logging.error(f"Failed to load image: {image_path}")
-                pixmap = QPixmap(300, 200)
+                pixmap = PySide6.QtGui.QPixmap(300, 200)
                 # noinspection PyUnresolvedReferences
                 pixmap.fill(Qt.black)
             else:
@@ -439,7 +489,7 @@ def setup_logging(log_dir: str = LOG_DIR, log_level: int = DEFAULT_LOG_LEVEL, lo
     """
     log_filename = None  # Predefine so it's always available in except blocks
     try:
-        log_filename = datetime.now().strftime(f'{log_dir}/rbc_%Y-%m-%d.log')
+        log_filename = datetime.now().strftime(f'{log_dir}/rbc_%Y-%m-%d-Scratch.log')
 
         # Clear any existing handlers to avoid duplication if called multiple times
         logger = logging.getLogger()
@@ -478,10 +528,10 @@ def save_logging_level_to_db(level: int) -> bool:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO settings (setting_name, setting_value)
-                VALUES (?, ?)
-                ON CONFLICT(setting_name) DO UPDATE SET setting_value=excluded.setting_value
-            """, ('log_level', str(level)))
+                           INSERT INTO settings (setting_name, setting_value)
+                           VALUES (?, ?)
+                           ON CONFLICT(setting_name) DO UPDATE SET setting_value=excluded.setting_value
+                           """, ('log_level', str(level)))
             conn.commit()
             logging.info(f"Log level updated to {logging.getLevelName(level)} in settings")
             return True
@@ -497,144 +547,183 @@ def create_tables(conn: sqlite3.Connection) -> None:
     """Create database tables if they don’t exist."""
     cursor = conn.cursor()
     tables = [
-        """CREATE TABLE IF NOT EXISTS banks (
-            ID INTEGER PRIMARY KEY,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL,
-            Name TEXT DEFAULT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS characters (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            password TEXT,
-            active_cookie INTEGER DEFAULT NULL
-        )
+        """CREATE TABLE IF NOT EXISTS banks
+           (
+               ID     INTEGER PRIMARY KEY,
+               `Column` TEXT NOT NULL,
+               `Row`    TEXT NOT NULL,
+               Name   TEXT DEFAULT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS characters
+           (
+               id            INTEGER PRIMARY KEY AUTOINCREMENT,
+               name          TEXT NOT NULL,
+               password      TEXT,
+               active_cookie INTEGER DEFAULT NULL
+           )
         """,
-        """CREATE TABLE IF NOT EXISTS coins (
-            character_id INTEGER,
-            pocket INTEGER DEFAULT 0,
-            bank INTEGER DEFAULT 0,
-            FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+        """CREATE TABLE IF NOT EXISTS coins
+           (
+               character_id INTEGER,
+               pocket       INTEGER DEFAULT 0,
+               bank         INTEGER DEFAULT 0,
+               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+           )""",
+        """CREATE TABLE IF NOT EXISTS color_mappings
+           (
+               id    INTEGER PRIMARY KEY,
+               type  TEXT NOT NULL,
+               color TEXT NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS `columns`
+           (
+               ID         INTEGER PRIMARY KEY,
+               Name       TEXT    NOT NULL,
+               Coordinate INTEGER NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS cookies
+           (
+               id         INTEGER PRIMARY KEY,
+               name       TEXT,
+               value      TEXT,
+               domain     TEXT,
+               path       TEXT,
+               expiration TEXT,
+               secure     INTEGER,
+               httponly   INTEGER
+           )""",
+        """CREATE TABLE IF NOT EXISTS css_profiles
+           (
+               profile_name TEXT PRIMARY KEY
+           )""",
+        """CREATE TABLE IF NOT EXISTS custom_css
+           (
+               profile_name TEXT NOT NULL,
+               element      TEXT NOT NULL,
+               value        TEXT NOT NULL,
+               PRIMARY KEY (profile_name, element),
+               FOREIGN KEY (profile_name) REFERENCES css_profiles (profile_name) ON DELETE CASCADE
+           )""",
+        """CREATE TABLE IF NOT EXISTS destinations
+           (
+               id           INTEGER PRIMARY KEY AUTOINCREMENT,
+               character_id INTEGER,
+               col          INTEGER,
+               `Row`          INTEGER,
+               timestamp    TEXT,
+               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+           )""",
+        """CREATE TABLE IF NOT EXISTS guilds
+           (
+               ID           INTEGER PRIMARY KEY,
+               Name         TEXT NOT NULL UNIQUE,
+               `Column`       TEXT NOT NULL,
+               `Row`          TEXT NOT NULL,
+               next_update  TIMESTAMP DEFAULT NULL,
+               last_scraped TIMESTAMP DEFAULT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS last_active_character
+           (
+               character_id INTEGER,
+               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+           )""",
+        """CREATE TABLE IF NOT EXISTS placesofinterest
+           (
+               ID     INTEGER PRIMARY KEY,
+               Name   TEXT NOT NULL,
+               `Column` TEXT NOT NULL,
+               `Row`    TEXT NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS powers
+           (
+               power_id   INTEGER PRIMARY KEY,
+               name       TEXT NOT NULL,
+               guild      TEXT NOT NULL,
+               cost       INTEGER DEFAULT NULL,
+               quest_info TEXT,
+               skill_info TEXT
+           )""",
+        """CREATE TABLE IF NOT EXISTS recent_destinations
+           (
+               id           INTEGER PRIMARY KEY AUTOINCREMENT,
+               character_id INTEGER,
+               col          INTEGER,
+               `Row`          INTEGER,
+               timestamp    DATETIME DEFAULT CURRENT_TIMESTAMP,
+               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+           )""",
+        """CREATE TABLE IF NOT EXISTS `rows`
+           (
+               ID         INTEGER PRIMARY KEY,
+               Name       TEXT    NOT NULL,
+               Coordinate INTEGER NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS settings
+           (
+               setting_name  TEXT PRIMARY KEY,
+               setting_value BLOB
+           )""",
+        """CREATE TABLE IF NOT EXISTS shop_items
+           (
+               id               INTEGER PRIMARY KEY,
+               shop_name        TEXT    DEFAULT NULL,
+               item_name        TEXT    DEFAULT NULL,
+               base_price       INTEGER DEFAULT NULL,
+               charisma_level_1 INTEGER DEFAULT NULL,
+               charisma_level_2 INTEGER DEFAULT NULL,
+               charisma_level_3 INTEGER DEFAULT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS shops
+           (
+               ID           INTEGER PRIMARY KEY,
+               Name         TEXT NOT NULL UNIQUE,
+               `Column`       TEXT NOT NULL,
+               `Row`          TEXT NOT NULL,
+               next_update  TIMESTAMP DEFAULT NULL,
+               last_scraped TIMESTAMP DEFAULT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS taverns
+           (
+               ID     INTEGER PRIMARY KEY,
+               `Column` TEXT NOT NULL,
+               `Row`    TEXT NOT NULL,
+               Name   TEXT NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS transits
+           (
+               ID     INTEGER PRIMARY KEY,
+               `Column` TEXT NOT NULL,
+               `Row`    TEXT NOT NULL,
+               Name   TEXT NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS userbuildings
+           (
+               ID     INTEGER PRIMARY KEY,
+               Name   TEXT NOT NULL,
+               `Column` TEXT NOT NULL,
+               `Row`    TEXT NOT NULL
+           )""",
+        """CREATE TABLE IF NOT EXISTS user_scripts
+        (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                name          TEXT NOT NULL UNIQUE,
+                match_pattern TEXT NOT NULL,
+                enabled       INTEGER DEFAULT 1,
+                script        TEXT NOT NULL
         )""",
-        """CREATE TABLE IF NOT EXISTS color_mappings (
-            id INTEGER PRIMARY KEY,
-            type TEXT NOT NULL,
-            color TEXT NOT NULL
+        """CREATE TABLE IF NOT EXISTS user_script_matches
+           (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                script_id INTEGER NOT NULL,
+                match_pattern TEXT NOT NULL,
+                FOREIGN KEY(script_id) REFERENCES user_scripts(id) ON DELETE CASCADE
         )""",
-        """CREATE TABLE IF NOT EXISTS `columns` (
-            ID INTEGER PRIMARY KEY,
-            Name TEXT NOT NULL,
-            Coordinate INTEGER NOT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS cookies (
-            id INTEGER PRIMARY KEY,
-            name TEXT,
-            value TEXT,
-            domain TEXT,
-            path TEXT,
-            expiration TEXT,
-            secure INTEGER,
-            httponly INTEGER
-        )""",
-        """CREATE TABLE IF NOT EXISTS css_profiles (
-                    profile_name TEXT PRIMARY KEY
-                )""",
-        """CREATE TABLE IF NOT EXISTS custom_css (
-            profile_name TEXT NOT NULL,
-            element TEXT NOT NULL,
-            value TEXT NOT NULL,
-            PRIMARY KEY (profile_name, element),
-            FOREIGN KEY (profile_name) REFERENCES css_profiles(profile_name) ON DELETE CASCADE
-        )""",
-        """CREATE TABLE IF NOT EXISTS destinations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            character_id INTEGER,
-            col INTEGER,
-            row INTEGER,
-            timestamp TEXT,
-            FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
-        )""",
-        """CREATE TABLE IF NOT EXISTS guilds (
-            ID INTEGER PRIMARY KEY,
-            Name TEXT NOT NULL UNIQUE,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL,
-            next_update TIMESTAMP DEFAULT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS last_active_character (
-            character_id INTEGER,
-            FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-        )""",
-        """CREATE TABLE IF NOT EXISTS placesofinterest (
-            ID INTEGER PRIMARY KEY,
-            Name TEXT NOT NULL,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS powers (
-            power_id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            guild TEXT NOT NULL,
-            cost INTEGER DEFAULT NULL,
-            quest_info TEXT,
-            skill_info TEXT
-        )""",
-        """CREATE TABLE IF NOT EXISTS recent_destinations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            character_id INTEGER,
-            col INTEGER,
-            row INTEGER,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
-        )""",
-        """CREATE TABLE IF NOT EXISTS `rows` (
-            ID INTEGER PRIMARY KEY,
-            Name TEXT NOT NULL,
-            Coordinate INTEGER NOT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS settings (
-            setting_name TEXT PRIMARY KEY,
-            setting_value BLOB
-        )""",
-        """CREATE TABLE IF NOT EXISTS shop_items (
-            id INTEGER PRIMARY KEY,
-            shop_name TEXT DEFAULT NULL,
-            item_name TEXT DEFAULT NULL,
-            base_price INTEGER DEFAULT NULL,
-            charisma_level_1 INTEGER DEFAULT NULL,
-            charisma_level_2 INTEGER DEFAULT NULL,
-            charisma_level_3 INTEGER DEFAULT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS shops (
-            ID INTEGER PRIMARY KEY,
-            Name TEXT NOT NULL UNIQUE,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL,
-            next_update TIMESTAMP DEFAULT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS taverns (
-            ID INTEGER PRIMARY KEY,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL,
-            Name TEXT NOT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS transits (
-            ID INTEGER PRIMARY KEY,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL,
-            Name TEXT NOT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS userbuildings (
-            ID INTEGER PRIMARY KEY,
-            Name TEXT NOT NULL,
-            Column TEXT NOT NULL,
-            Row TEXT NOT NULL
-        )""",
-        """CREATE TABLE IF NOT EXISTS discord_servers (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE,
-            invite_link TEXT NOT NULL
-        );"""
+        """CREATE TABLE IF NOT EXISTS discord_servers
+           (
+               id          INTEGER PRIMARY KEY AUTOINCREMENT,
+               name        TEXT NOT NULL UNIQUE,
+               invite_link TEXT NOT NULL
+           );"""
     ]
     for table_sql in tables:
         try:
@@ -644,7 +733,6 @@ def create_tables(conn: sqlite3.Connection) -> None:
             logging.error(f"Failed to create table: {e}")
             raise
     conn.commit()
-
 
 def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
@@ -656,7 +744,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('log_level', str(DEFAULT_LOG_LEVEL))
         ]),
 
-        ("INSERT OR IGNORE INTO banks (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO banks (ID, `Column`, `Row`, Name) VALUES (?, ?, ?, ?)", [
             (1, 'Aardvark', '82nd', 'OmniBank'),
             (2, 'Alder', '40th', 'OmniBank'),
             (3, 'Alder', '80th', 'OmniBank'),
@@ -1052,7 +1140,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ("Default", ".mh",
              "border:none; background-color:transparent; text-decoration:underline; color:white; padding:0px; cursor:hand;")
         ]),
-        ("INSERT OR IGNORE INTO guilds (ID, Name, Column, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO guilds (ID, Name, `Column`, `Row`, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1, 'Allurists Guild 1', 'NA', 'NA', ''),
             (2, 'Allurists Guild 2', 'NA', 'NA', ''),
             (3, 'Allurists Guild 3', 'NA', 'NA', ''),
@@ -1072,7 +1160,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (17, 'Peacekeepers Mission 2', 'Unicorn', '33rd', ''),
             (18, 'Peacekeepers Mission 3', 'Emerald', '33rd', '')
         ]),
-        ("INSERT OR IGNORE INTO placesofinterest (ID, Name, Column, Row) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO placesofinterest (ID, Name, `Column`, `Row`) VALUES (?, ?, ?, ?)", [
             (1, 'Battle Arena', 'Zelkova', '52nd'),
             (2, 'Hall of Binding', 'Vervain', '40th'),
             (3, 'Hall of Severance', 'Walrus', '40th'),
@@ -1506,7 +1594,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
              (240, 'The White House', 'Compass', 11999, 11999, 11999, 11999),
              (241, 'The White House', 'Pewter Tankard', 15000, 15000, 15000, 15000)
          ]),
-        ("INSERT OR IGNORE INTO shops (ID, Name, Column, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO shops (ID, Name, `Column`, `Row`, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1, 'Ace Porn', 'NA', 'NA', ''),
             (2, 'Checkers Porn Shop', 'NA', 'NA', ''),
             (3, 'Dark Desires', 'NA', 'NA', ''),
@@ -1533,7 +1621,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (24, 'White Light', 'NA', 'NA', ''),
             (25, 'Ye Olde Scrolles', 'NA', 'NA', '')
         ]),
-        ("INSERT OR IGNORE INTO taverns (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO taverns (ID, `Column`, `Row`, Name) VALUES (?, ?, ?, ?)", [
             (1, 'Gum', '33rd', 'Abbot''s Tavern'),
             (2, 'Knotweed', '11th', 'Archer''s Tavern'),
             (3, 'Torment', '16th', 'Baker''s Tavern'),
@@ -1630,7 +1718,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (94, 'Anguish', '68th', 'Xendom Tavern'),
             (95, 'Pyrites', '70th', 'Ye Olde Gallows Ale House')
         ]),
-        ("INSERT OR IGNORE INTO transits (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO transits (ID, `Column`, `Row`, Name) VALUES (?, ?, ?, ?)", [
             (1, 'Mongoose', '25th', 'Calliope'),
             (2, 'Zelkova', '25th', 'Clio'),
             (3, 'Malachite', '25th', 'Erato'),
@@ -1641,7 +1729,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (8, 'Zelkova', '75th', 'Thalia'),
             (9, 'Malachite', '75th', 'Urania')
         ]),
-        ("INSERT OR IGNORE INTO userbuildings (ID, Name, Column, Row) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO userbuildings (ID, Name, `Column`, `Row`) VALUES (?, ?, ?, ?)", [
             (1, 'Ace''s House of Dumont', 'Cedar', '99th'),
             (2, 'Alatáriël Maenor', 'Diamond', '50th'),
             (3, 'Alpha Dragon''s and Lyric''s House of Dragon and Flame', 'Amethyst', '90th'),
@@ -1809,7 +1897,6 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             raise
     conn.commit()
 
-
 def migrate_schema(conn: sqlite3.Connection) -> None:
     """
     Migrate the database schema to the latest version.
@@ -1817,6 +1904,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     Handles sequential migrations:
     - v1 -> v2: Fixes custom_css, guilds, and shops tables.
     - v2 -> v3: Adds active_cookie column to characters table.
+    - v3 -> v4: Adds last_scraped column to guilds and shops tables.
     """
     cursor = conn.cursor()
     cursor.execute("PRAGMA user_version")
@@ -1833,19 +1921,21 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                 logging.info("custom_css missing profile_name column. Rebuilding custom_css table.")
                 cursor.execute("ALTER TABLE custom_css RENAME TO custom_css_old")
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS custom_css (
-                        profile_name TEXT NOT NULL,
-                        element TEXT NOT NULL,
-                        value TEXT NOT NULL,
-                        PRIMARY KEY (profile_name, element),
-                        FOREIGN KEY (profile_name) REFERENCES css_profiles(profile_name) ON DELETE CASCADE
-                    )
-                """)
+                               CREATE TABLE IF NOT EXISTS custom_css
+                               (
+                                   profile_name TEXT NOT NULL,
+                                   element      TEXT NOT NULL,
+                                   value        TEXT NOT NULL,
+                                   PRIMARY KEY (profile_name, element),
+                                   FOREIGN KEY (profile_name) REFERENCES css_profiles (profile_name) ON DELETE CASCADE
+                               )
+                               """)
                 try:
                     cursor.execute("""
-                        INSERT INTO custom_css (element, value, profile_name)
-                        SELECT element, value, 'Default' FROM custom_css_old
-                    """)
+                                   INSERT INTO custom_css (element, value, profile_name)
+                                   SELECT element, value, 'Default'
+                                   FROM custom_css_old
+                                   """)
                     logging.info("Migrated old custom_css data successfully.")
                 except sqlite3.Error as e:
                     logging.warning(f"Failed to migrate custom_css data: {e}")
@@ -1859,19 +1949,21 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                 logging.info("guilds table missing UNIQUE constraint on Name. Rebuilding guilds table.")
                 cursor.execute("ALTER TABLE guilds RENAME TO guilds_old")
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS guilds (
-                        ID INTEGER PRIMARY KEY,
-                        Name TEXT NOT NULL UNIQUE,
-                        Column TEXT NOT NULL,
-                        Row TEXT NOT NULL,
-                        next_update TIMESTAMP DEFAULT NULL
-                    )
-                """)
+                               CREATE TABLE IF NOT EXISTS guilds
+                               (
+                                   ID          INTEGER PRIMARY KEY,
+                                   Name        TEXT NOT NULL UNIQUE,
+                                   `Column`      TEXT NOT NULL,
+                                   `Row`         TEXT NOT NULL,
+                                   next_update TIMESTAMP DEFAULT NULL
+                               )
+                               """)
                 try:
                     cursor.execute("""
-                        INSERT INTO guilds (ID, Name, Column, Row, next_update)
-                        SELECT ID, Name, Column, Row, next_update FROM guilds_old
-                    """)
+                                   INSERT INTO guilds (ID, Name, `Column`, `Row`, next_update)
+                                   SELECT ID, Name, `Column`, `Row`, next_update
+                                   FROM guilds_old
+                                   """)
                     logging.info("Migrated old guilds data successfully.")
                 except sqlite3.Error as e:
                     logging.warning(f"Failed to migrate guilds data: {e}")
@@ -1886,19 +1978,21 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                 logging.info("shops table missing UNIQUE constraint on Name. Rebuilding shops table.")
                 cursor.execute("ALTER TABLE shops RENAME TO shops_old")
                 cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS shops (
-                        ID INTEGER PRIMARY KEY,
-                        Name TEXT NOT NULL UNIQUE,
-                        Column TEXT NOT NULL,
-                        Row TEXT NOT NULL,
-                        next_update TIMESTAMP DEFAULT NULL
-                    )
-                """)
+                               CREATE TABLE IF NOT EXISTS shops
+                               (
+                                   ID          INTEGER PRIMARY KEY,
+                                   Name        TEXT NOT NULL UNIQUE,
+                                   `Column`      TEXT NOT NULL,
+                                   `Row`         TEXT NOT NULL,
+                                   next_update TIMESTAMP DEFAULT NULL
+                               )
+                               """)
                 try:
                     cursor.execute("""
-                        INSERT INTO shops (ID, Name, Column, Row, next_update)
-                        SELECT ID, Name, Column, Row, next_update FROM shops_old
-                    """)
+                                   INSERT INTO shops (ID, Name, `Column`, `Row`, next_update)
+                                   SELECT ID, Name, `Column`, `Row`, next_update
+                                   FROM shops_old
+                                   """)
                     logging.info("Migrated old shops data successfully.")
                 except sqlite3.Error as e:
                     logging.warning(f"Failed to migrate shops data: {e}")
@@ -1935,6 +2029,36 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
             conn.rollback()
             raise
 
+    if version < 4:
+        logging.info("Applying schema migration: v3 → v4 (add last_scraped to guilds and shops)")
+
+        try:
+            # --- Add last_scraped to guilds ---
+            cursor.execute("PRAGMA table_info(guilds)")
+            guilds_columns = [col[1] for col in cursor.fetchall()]
+            if 'last_scraped' not in guilds_columns:
+                logging.info("guilds table missing last_scraped column. Adding column.")
+                cursor.execute("ALTER TABLE guilds ADD COLUMN last_scraped TEXT DEFAULT NULL")
+            else:
+                logging.info("guilds table already has last_scraped column. Skipping.")
+
+            # --- Add last_scraped to shops ---
+            cursor.execute("PRAGMA table_info(shops)")
+            shops_columns = [col[1] for col in cursor.fetchall()]
+            if 'last_scraped' not in shops_columns:
+                logging.info("shops table missing last_scraped column. Adding column.")
+                cursor.execute("ALTER TABLE shops ADD COLUMN last_scraped TEXT DEFAULT NULL")
+            else:
+                logging.info("shops table already has last_scraped column. Skipping.")
+
+            conn.execute("PRAGMA user_version = 4")
+            conn.commit()
+            logging.info("Migration to v4 complete.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Migration v4 failed: {e}")
+            conn.rollback()
+            raise
 
 def initialize_database(db_path: str = DB_PATH) -> bool:
     """
@@ -2019,13 +2143,13 @@ def load_data() -> tuple:
             color_mappings = {}
             for type_, color in cursor.execute("SELECT Type, Color FROM color_mappings"):
                 try:
-                    qcolor = QColor(color)
+                    qcolor = PySide6.QtGui.QColor(color)
                     if not qcolor.isValid():
                         logging.warning(f"Invalid color for type '{type_}': '{color}'")
                     color_mappings[type_] = qcolor
                 except Exception as e:
                     logging.error(f"Failed to load QColor for '{type_}': {e}")
-                    color_mappings[type_] = QColor("#000000")
+                    color_mappings[type_] = PySide6.QtGui.QColor("#000000")
 
             # Shops and Guilds
             shops_coordinates = {}
@@ -2079,7 +2203,7 @@ def load_data() -> tuple:
 
                     # Load last destination for this character
                     cursor.execute(
-                        "SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
+                        "SELECT col, `Row` FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
                         (character_id,)
                     )
                     row = cursor.fetchone()
@@ -2112,7 +2236,7 @@ except sqlite3.Error:
     columns = rows = taverns_coordinates = transits_coordinates = user_buildings_coordinates = \
         shops_coordinates = guilds_coordinates = places_of_interest_coordinates = {}
     banks_coordinates = {}
-    color_mappings = {'default': QColor('#000000')}  # Minimal fallback
+    color_mappings = {'default': PySide6.QtGui.QColor('#000000')}  # Minimal fallback
     keybind_config = 1
     current_css_profile = "Default"
     selected_character = None
@@ -2227,6 +2351,28 @@ def splash_message(splash):
 
 
 # -----------------------
+# OS Specific Environs
+# -----------------------
+
+if sys.platform.startswith("linux"):
+    # Linux/Proton compatibility tweaks for QtWebEngine
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-software-rasterizer"
+
+elif sys.platform == "darwin":
+    # macOS (especially VMware) fixes for Chromium GPU crashes
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
+
+# -----------------------
+# REGEX
+# -----------------------
+def url_matches(pattern, url):
+    regex = re.escape(pattern).replace(r'\*', '.*').replace(r'\?', '.')
+    return re.match(regex, url)
+
+# -----------------------
 # RBC Community Map Main Class
 # -----------------------
 
@@ -2246,11 +2392,14 @@ class RBCCommunityMap(QMainWindow):
 
         # Core state flags
         self.is_updating_minimap = False
-        self.pending_login = False
-        self.pending_character_id_for_map = None
+        self.login_needed = True
         self.webview_loaded = False
         self.splash = None
-        self.selected_route_label = None  # Can be "Direct Route", "Transit Route", or None for auto
+
+        # Compass route state
+        self.selected_route_label = None  # "Direct Route" or "Transit Route"
+        self.selected_route_description = None  # Full arrow description shown in the compass label
+        self.selected_route_path = None  # List of (x, y) coordinate tuples to draw on minimap
 
         # Initialize character coordinates
         self.character_x = None
@@ -2285,7 +2434,7 @@ class RBCCommunityMap(QMainWindow):
     def _init_window_properties(self) -> None:
         """Set up main window properties."""
         try:
-            self.setWindowIcon(QIcon('images/favicon.ico'))
+            self.setWindowIcon(PySide6.QtGui.QIcon('images/favicon.ico'))
             self.setWindowTitle('RBC Community Map')
             self.setGeometry(100, 100, 1200, 800)
             self.load_theme_settings()
@@ -2328,7 +2477,7 @@ class RBCCommunityMap(QMainWindow):
             self.columns = self.rows = self.banks_coordinates = self.taverns_coordinates = \
                 self.transits_coordinates = self.user_buildings_coordinates = \
                 self.shops_coordinates = self.guilds_coordinates = self.places_of_interest_coordinates = {}
-            self.color_mappings = {'default': QColor('#000000')}
+            self.color_mappings = {'default': PySide6.QtGui.QColor('#000000')}
             self.keybind_config = 1
             self.current_css_profile = "Default"
             self.selected_character = None
@@ -2343,6 +2492,17 @@ class RBCCommunityMap(QMainWindow):
         self.column_start = 0
         self.row_start = 0
         self.destination = None
+        self.map_icons = {
+            "bank": PySide6.QtGui.QPixmap("images/bank.png"),
+            "tavern": PySide6.QtGui.QPixmap("images/saloon.png"),
+            "transit": PySide6.QtGui.QPixmap("images/transit.png"),
+            "user_building": PySide6.QtGui.QPixmap("images/castle.png"),
+            "guild": PySide6.QtGui.QPixmap("images/guild.png"),
+            "shop": PySide6.QtGui.QPixmap("images/shop.png"),
+            "graveyard": PySide6.QtGui.QPixmap("images/graveyard.png"),
+            "hall_binding": PySide6.QtGui.QPixmap("images/binding.png"),
+            "hall_severance": PySide6.QtGui.QPixmap("images/severance.png"),
+        }
 
     @splash_message(None)
     def _init_characters(self) -> None:
@@ -2447,7 +2607,8 @@ class RBCCommunityMap(QMainWindow):
             return
 
         for key, move_index in self.movement_keys.items():
-            shortcut = QShortcut(QKeySequence(key), self.website_frame, context=Qt.ShortcutContext.ApplicationShortcut)
+            shortcut = PySide6.QtGui.QShortcut(PySide6.QtGui.QKeySequence(key), self.website_frame,
+                                               context=Qt.ShortcutContext.ApplicationShortcut)
             shortcut.activated.connect(lambda idx=move_index: self.move_character(idx))
             logging.debug(f"Bound key {key} to move index {move_index}")
 
@@ -2539,7 +2700,7 @@ class RBCCommunityMap(QMainWindow):
             logging.debug("No website_frame to clear keybindings from")
             return
 
-        shortcuts = list(self.website_frame.findChildren(QShortcut))
+        shortcuts = list(self.website_frame.findChildren(PySide6.QtGui.QShortcut))
         for shortcut in shortcuts:
             shortcut.setParent(None)
             shortcut.deleteLater()  # Ensure cleanup
@@ -2558,7 +2719,7 @@ class RBCCommunityMap(QMainWindow):
                 cursor = conn.cursor()
                 cursor.execute("SELECT type, color FROM color_mappings")
                 rows = cursor.fetchall()
-                self.color_mappings.update({type_: QColor(color) for type_, color in rows})
+                self.color_mappings.update({type_: PySide6.QtGui.QColor(color) for type_, color in rows})
                 logging.debug(f"Loaded {len(rows)} theme entries from color_mappings.")
         except sqlite3.Error as e:
             logging.error(f"Failed to load theme from color_mappings: {e}")
@@ -2591,9 +2752,9 @@ class RBCCommunityMap(QMainWindow):
     def apply_theme(self) -> None:
         """Apply current theme settings to the application's stylesheet."""
         try:
-            bg_color = self.color_mappings.get("background", QColor("#d4d4d4")).name()
-            text_color = self.color_mappings.get("text_color", QColor("#000000")).name()
-            btn_color = self.color_mappings.get("button_color", QColor("#b1b1b1")).name()
+            bg_color = self.color_mappings.get("background", PySide6.QtGui.QColor("#d4d4d4")).name()
+            text_color = self.color_mappings.get("text_color", PySide6.QtGui.QColor("#000000")).name()
+            btn_color = self.color_mappings.get("button_color", PySide6.QtGui.QColor("#b1b1b1")).name()
 
             stylesheet = (
                 f"QWidget {{ background-color: {bg_color}; color: {text_color}; }}"
@@ -2685,9 +2846,13 @@ class RBCCommunityMap(QMainWindow):
 
                 # Check if this exact cookie already exists
                 cursor.execute("""
-                    SELECT id FROM cookies 
-                    WHERE name = ? AND value = ? AND domain = ? AND path = ?
-                """, (name, value, domain, path))
+                               SELECT id
+                               FROM cookies
+                               WHERE name = ?
+                                 AND value = ?
+                                 AND domain = ?
+                                 AND path = ?
+                               """, (name, value, domain, path))
                 existing = cursor.fetchone()
 
                 if existing:
@@ -2696,13 +2861,14 @@ class RBCCommunityMap(QMainWindow):
 
                 # Insert new cookie
                 cursor.execute("""
-                    INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    name, value, domain, path,
-                    cookie.expirationDate().toString(Qt.ISODate) if not cookie.isSessionCookie() else None,
-                    int(cookie.isSecure()), int(cookie.isHttpOnly())
-                ))
+                               INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)
+                               """, (
+                                   name, value, domain, path,
+                                   cookie.expirationDate().toString(
+                                       Qt.ISODate) if not cookie.isSessionCookie() else None,
+                                   int(cookie.isSecure()), int(cookie.isHttpOnly())
+                               ))
 
                 new_cookie_id = cursor.lastrowid
                 conn.commit()
@@ -2720,8 +2886,10 @@ class RBCCommunityMap(QMainWindow):
                     # Update character only if this is a login cookie
                     if is_login:
                         cursor.execute("""
-                            UPDATE characters SET active_cookie = ? WHERE name = ?
-                        """, (new_cookie_id, username))
+                                       UPDATE characters
+                                       SET active_cookie = ?
+                                       WHERE name = ?
+                                       """, (new_cookie_id, username))
                         conn.commit()
                         logging.debug(f"Set active_cookie for character '{username}' to cookie ID {new_cookie_id}")
 
@@ -2739,21 +2907,26 @@ class RBCCommunityMap(QMainWindow):
 
                 # Avoid duplicate
                 cursor.execute("""
-                    SELECT id FROM cookies WHERE name = 'ip' AND value = ? AND domain = ? AND path = ?
-                """, (value, domain, path))
+                               SELECT id
+                               FROM cookies
+                               WHERE name = 'ip'
+                                 AND value = ?
+                                 AND domain = ?
+                                 AND path = ?
+                               """, (value, domain, path))
                 row = cursor.fetchone()
 
                 if row:
                     cookie_id = row[0]
                 else:
                     cursor.execute('''
-                        INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        'ip', value, domain, path,
-                        QDateTime.currentDateTime().addDays(30).toString(Qt.ISODate),
-                        0, 0
-                    ))
+                                   INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                                   ''', (
+                                       'ip', value, domain, path,
+                                       QDateTime.currentDateTime().addDays(30).toString(Qt.ISODate),
+                                       0, 0
+                                   ))
                     cookie_id = cursor.lastrowid
 
                 # Set this cookie as active, clear others
@@ -2839,7 +3012,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Compass Icon Button
         self.compass_button = QPushButton()
-        self.compass_button.setIcon(QIcon(QPixmap("images/compass.png")))
+        self.compass_button.setIcon(PySide6.QtGui.QIcon(PySide6.QtGui.QPixmap("images/compass.png")))
         self.compass_button.setIconSize(QSize(28, 28))  # Adjust as needed
         self.compass_button.setFixedSize(34, 34)
         self.compass_button.setStyleSheet("background-color: transparent; border: none;")
@@ -2858,23 +3031,23 @@ class RBCCommunityMap(QMainWindow):
 
         # Ko-Fi button with a programmatically generated icon
         kofi_button = QPushButton()
-        kofi_icon = QPixmap(30, 30)
+        kofi_icon = PySide6.QtGui.QPixmap(30, 30)
         kofi_icon.fill(Qt.transparent)
-        painter = QPainter(kofi_icon)
-        painter.setRenderHint(QPainter.Antialiasing)
-        painter.setPen(QPen(Qt.black, 2))
-        painter.setBrush(QBrush(QColor(0, 188, 212)))  # Ko-Fi teal color
+        painter = PySide6.QtGui.QPainter(kofi_icon)
+        painter.setRenderHint(PySide6.QtGui.QPainter.Antialiasing)
+        painter.setPen(PySide6.QtGui.QPen(Qt.black, 2))
+        painter.setBrush(PySide6.QtGui.QBrush(PySide6.QtGui.QColor(0, 188, 212)))  # Ko-Fi teal color
         painter.drawEllipse(5, 5, 20, 20)
-        painter.setPen(QPen(Qt.white, 2))
+        painter.setPen(PySide6.QtGui.QPen(Qt.white, 2))
         painter.drawText(kofi_icon.rect(), Qt.AlignCenter, "K")
         painter.end()
-        kofi_button.setIcon(QIcon(kofi_icon))
+        kofi_button.setIcon(PySide6.QtGui.QIcon(kofi_icon))
         kofi_button.setIconSize(QSize(30, 30))
         kofi_button.setToolTip("Support me on Ko-fi")
         # noinspection PyUnresolvedReferences
         kofi_button.setCursor(Qt.PointingHandCursor)
         kofi_button.setFlat(True)
-        kofi_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://ko-fi.com/jelollis")))
+        kofi_button.clicked.connect(lambda: PySide6.QtGui.QDesktopServices.openUrl(QUrl("https://ko-fi.com/jelollis")))
 
         # Set spacing between buttons to make them closer together
         # Add spacing and the Ko-fi button to the end of the toolbar
@@ -3154,47 +3327,47 @@ class RBCCommunityMap(QMainWindow):
 
         # File menu
         file_menu = menu_bar.addMenu('File')
-        save_webpage_action = QAction('Save Webpage Screenshot', self)
+        save_webpage_action = PySide6.QtGui.QAction('Save Webpage Screenshot', self)
         save_webpage_action.triggered.connect(self.save_webpage_screenshot)
         file_menu.addAction(save_webpage_action)
 
-        save_app_action = QAction('Save App Screenshot', self)
+        save_app_action = PySide6.QtGui.QAction('Save App Screenshot', self)
         save_app_action.triggered.connect(self.save_app_screenshot)
         file_menu.addAction(save_app_action)
 
-        exit_action = QAction('Exit', self)
+        exit_action = PySide6.QtGui.QAction('Exit', self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
         # Settings menu
         settings_menu = menu_bar.addMenu('Settings')
 
-        theme_action = QAction('Change Theme', self)
+        theme_action = PySide6.QtGui.QAction('Change Theme', self)
         theme_action.triggered.connect(self.change_theme)
         settings_menu.addAction(theme_action)
 
-        css_customization_action = QAction('CSS Customization', self)
+        css_customization_action = PySide6.QtGui.QAction('CSS Customization', self)
         css_customization_action.triggered.connect(self.open_css_customization_dialog)
         settings_menu.addAction(css_customization_action)
 
-        zoom_in_action = QAction('Zoom In', self)
+        zoom_in_action = PySide6.QtGui.QAction('Zoom In', self)
         zoom_in_action.triggered.connect(self.zoom_in_browser)
         settings_menu.addAction(zoom_in_action)
 
-        zoom_out_action = QAction('Zoom Out', self)
+        zoom_out_action = PySide6.QtGui.QAction('Zoom Out', self)
         zoom_out_action.triggered.connect(self.zoom_out_browser)
         settings_menu.addAction(zoom_out_action)
 
         # Keybindings Submenu
         keybindings_menu = settings_menu.addMenu("Keybindings")
 
-        self.keybind_wasd_action = QAction("WASD", self, checkable=True)
+        self.keybind_wasd_action = PySide6.QtGui.QAction("WASD", self, checkable=True)
         self.keybind_wasd_action.triggered.connect(lambda: self.toggle_keybind_config(1))
 
-        self.keybind_arrow_action = QAction("Arrow Keys", self, checkable=True)
+        self.keybind_arrow_action = PySide6.QtGui.QAction("Arrow Keys", self, checkable=True)
         self.keybind_arrow_action.triggered.connect(lambda: self.toggle_keybind_config(2))
 
-        self.keybind_off_action = QAction("Off", self, checkable=True)
+        self.keybind_off_action = PySide6.QtGui.QAction("Off", self, checkable=True)
         self.keybind_off_action.triggered.connect(lambda: self.toggle_keybind_config(0))
 
         keybindings_menu.addAction(self.keybind_wasd_action)
@@ -3219,72 +3392,74 @@ class RBCCommunityMap(QMainWindow):
         ]
 
         for name, level in log_levels:
-            action = QAction(name, self, checkable=True)
+            action = PySide6.QtGui.QAction(name, self, checkable=True)
             action.triggered.connect(lambda checked, lvl=level: self.set_log_level(lvl))
             log_level_menu.addAction(action)
             self.log_level_actions[level] = action
 
         self.update_log_level_menu()
 
+        settings_menu.addAction("Userscript Manager", self.open_userscript_manager)
+
         # Tools menu
         tools_menu = menu_bar.addMenu('Tools')
 
-        database_viewer_action = QAction('Database Viewer', self)
+        database_viewer_action = PySide6.QtGui.QAction('Database Viewer', self)
         database_viewer_action.triggered.connect(self.open_database_viewer)
         tools_menu.addAction(database_viewer_action)
 
-        shopping_list_action = QAction('Shopping List Generator', self)
+        shopping_list_action = PySide6.QtGui.QAction('Shopping List Generator', self)
         shopping_list_action.triggered.connect(self.open_shopping_list_tool)
         tools_menu.addAction(shopping_list_action)
 
-        damage_calculator_action = QAction('Damage Calculator', self)
+        damage_calculator_action = PySide6.QtGui.QAction('Damage Calculator', self)
         damage_calculator_action.triggered.connect(self.open_damage_calculator_tool)
         tools_menu.addAction(damage_calculator_action)
 
-        power_reference_action = QAction('Power Reference Tool', self)
+        power_reference_action = PySide6.QtGui.QAction('Power Reference Tool', self)
         power_reference_action.triggered.connect(self.open_powers_dialog)
         tools_menu.addAction(power_reference_action)
 
-        logs_action = QAction('View Logs', self)
+        logs_action = PySide6.QtGui.QAction('View Logs', self)
         logs_action.triggered.connect(self.open_log_viewer)
         tools_menu.addAction(logs_action)
 
         # Resources
         resources_menu = menu_bar.addMenu('Resources')
 
-        avitd_action = QAction('AVITD', self)
+        avitd_action = PySide6.QtGui.QAction('AVITD', self)
         avitd_action.triggered.connect(lambda: webbrowser.open('https://aviewinthedark.net/'))
         resources_menu.addAction(avitd_action)
 
-        rb_wiki_action = QAction('RB Wiki', self)
+        rb_wiki_action = PySide6.QtGui.QAction('RB Wiki', self)
         rb_wiki_action.triggered.connect(lambda: webbrowser.open('https://ravenblack.city/'))
         resources_menu.addAction(rb_wiki_action)
 
         # Help menu
         help_menu = menu_bar.addMenu('Help')
 
-        faq_action = QAction('FAQ', self)
+        faq_action = PySide6.QtGui.QAction('FAQ', self)
         faq_action.triggered.connect(lambda: webbrowser.open('https://quiz.ravenblack.net/faq.pl'))
         help_menu.addAction(faq_action)
 
-        how_to_play_action = QAction('How to Play', self)
+        how_to_play_action = PySide6.QtGui.QAction('How to Play', self)
         how_to_play_action.triggered.connect(lambda: webbrowser.open('https://quiz.ravenblack.net/bloodhowto.html'))
         help_menu.addAction(how_to_play_action)
 
-        about_action = QAction('About', self)
+        about_action = PySide6.QtGui.QAction('About', self)
         about_action.triggered.connect(self.show_about_dialog)
         help_menu.addAction(about_action)
 
-        credits_action = QAction('Credits', self)
+        credits_action = PySide6.QtGui.QAction('Credits', self)
         credits_action.triggered.connect(self.show_credits_dialog)
         help_menu.addAction(credits_action)
 
-        report_issue_action = QAction('Report an Issue', self)
+        report_issue_action = PySide6.QtGui.QAction('Report an Issue', self)
         report_issue_action.triggered.connect(lambda: webbrowser.open('https://github.com/JELollis/RBC-Map/issues/new'))
         help_menu.addAction(report_issue_action)
 
-        view_help_action = QAction('View Help', self)
-        view_help_action.setShortcut(QKeySequence('F1'))
+        view_help_action = PySide6.QtGui.QAction('View Help', self)
+        view_help_action.setShortcut(PySide6.QtGui.QKeySequence('F1'))
         view_help_action.triggered.connect(self.open_help_file)
         help_menu.addAction(view_help_action)
 
@@ -3443,37 +3618,46 @@ class RBCCommunityMap(QMainWindow):
         Set the log level and persist it in the database.
         """
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO settings (setting_name, setting_value)
-                    VALUES ('log_level', ?)
-                    ON CONFLICT(setting_name) DO UPDATE SET setting_value = excluded.setting_value
-                """, (level,))
-                conn.commit()
+            save_logging_level_to_db(level)
 
-            logging.getLogger().setLevel(level)
+            logger = logging.getLogger()
+            logger.setLevel(level)
+            for handler in logger.handlers:
+                handler.setLevel(level)  # <- This ensures file logging follows new level
+
             self.update_log_level_menu()
             logging.info(f"Log level set to {logging.getLevelName(level)}")
 
-        except sqlite3.Error as e:
-            logging.error(f"Failed to save log level to database: {e}")
+        except Exception as e:
+            logging.error(f"Failed to set log level: {e}")
 
     def open_help_file(self):
         """
-        Open the compiled .chm help file from the help folder.
+        Open the appropriate help file depending on the OS.
+        - Windows: .chm file
+        - macOS/Linux: .html file
         """
-        base_dir = os.path.dirname(os.path.abspath(__file__))  # Gets the folder of the current script
-        help_path = os.path.join(base_dir, "docs", "help", "RBCMap Help.chm")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        help_dir = os.path.join(base_dir, "docs", "help")
+        system = platform.system()
 
-        if os.path.exists(help_path):
-            os.startfile(help_path)
+        if system == "Windows":
+            help_path = os.path.join(help_dir, "RBC Community Map Help.chm")
+            if os.path.exists(help_path):
+                os.startfile(help_path)
+                return
         else:
-            QMessageBox.warning(
-                self,
-                "Help File Missing",
-                f"Could not find help file:\n{help_path}"
-            )
+            html_path = os.path.join(help_dir, "RBC_Map_Help.html")
+            if os.path.exists(html_path):
+                webbrowser.open(f"file://{html_path}")
+                return
+
+        # If neither file is found
+        QMessageBox.warning(
+            self,
+            "Help File Missing",
+            f"Could not find help file:\n{help_path if system == 'Windows' else html_path}"
+        )
 
     # -----------------------
     # Character Management
@@ -3567,6 +3751,8 @@ class RBCCommunityMap(QMainWindow):
         self.pending_character_id_for_map = character_id
         self.pending_login = True
         self.save_last_active_character(character_id)
+        self.load_last_destination_for_character(character_id)
+        self.update_minimap()
 
         # Inject cookie and trigger page reload
         self.switch_to_character(character_name)
@@ -3579,11 +3765,11 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT c.active_cookie, k.value 
-                    FROM characters c
-                    JOIN cookies k ON c.active_cookie = k.id
-                    WHERE c.name = ?
-                """, (character_name,))
+                               SELECT c.active_cookie, k.value
+                               FROM characters c
+                                        JOIN cookies k ON c.active_cookie = k.id
+                               WHERE c.name = ?
+                               """, (character_name,))
                 row = cursor.fetchone()
 
                 if not row:
@@ -3746,8 +3932,11 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    UPDATE characters SET name = ?, password = ? WHERE id = ?
-                """, (new_name, new_password, character['id']))
+                               UPDATE characters
+                               SET name     = ?,
+                                   password = ?
+                               WHERE id = ?
+                               """, (new_name, new_password, character['id']))
                 conn.commit()
 
             # Update in-memory character and UI
@@ -3832,6 +4021,7 @@ class RBCCommunityMap(QMainWindow):
                         logging.debug(f"Last active character loaded and selected: {self.selected_character['name']}")
 
                         self.load_last_destination_for_character(character_id)
+                        self.update_minimap()
 
                         # ✅ Inject correct cookie for selected character
                         self.switch_to_character(self.selected_character['name'])
@@ -3876,7 +4066,7 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
+                    "SELECT col, `Row` FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
                     (character_id,)
                 )
                 result = cursor.fetchone()
@@ -3936,7 +4126,7 @@ class RBCCommunityMap(QMainWindow):
     def on_webview_load_finished(self, success):
         if not success:
             logging.error("Failed to load the webpage.")
-            QMessageBox.critical(self, "Error", "Failed to load the webpage. Check your network or try again.")
+            QMessageBox.critical(self, "Error", "Failed to load the webpage. You may be moving too fast.")
             return
 
         logging.info("Webpage loaded successfully.")
@@ -3944,11 +4134,11 @@ class RBCCommunityMap(QMainWindow):
         css = self.load_current_css()
         self.apply_custom_css(css)
 
-        if self.pending_login:
+        if self.login_needed:
             logging.debug("Logging in selected character via JS injection...")
             self.login_selected_character()
             self.pending_login = False
-            return  # 🚫 wait for login to finish and reload first
+            return
 
         if self.pending_character_id_for_map:
             logging.debug(f"Loading destination for character {self.pending_character_id_for_map}")
@@ -3973,14 +4163,45 @@ class RBCCommunityMap(QMainWindow):
                 self.character_x, self.character_y = x_coord, y_coord
                 logging.debug(f"Set character coordinates to x={self.character_x}, y={self.character_y}")
 
-                # Call recenter_minimap to update the minimap based on character's position
+                # Update compass display and route overlay state
+                self.refresh_compass_state()
+
+                # Update the minimap center based on new coordinates
                 self.recenter_minimap()
 
-            # Call the method to extract bank coins and pocket changes from the HTML
+            # Update coin info
             self.extract_coins_from_html(html)
             logging.debug("HTML processed successfully for coordinates and coin count.")
+
         except Exception as e:
             logging.error(f"Unexpected error in process_html: {e}")
+
+    def refresh_compass_state(self):
+        if not self.destination:
+            self.ap_direction_label.setText("Compass: None")
+            return
+
+        direct_route, transit_route = self.get_compass_routes()
+
+        # Determine selected route (manual or shortest)
+        if self.selected_route_label == "Direct Route":
+            selected = direct_route
+        elif self.selected_route_label == "Transit Route":
+            selected = transit_route
+        else:
+            selected = direct_route if direct_route[0] <= transit_route[0] else transit_route
+            self.selected_route_label = "Direct Route" if selected == direct_route else "Transit Route"
+
+        self.selected_route_path = selected[2]
+        self.selected_route_description = selected[1]
+        self.ap_direction_label.setText(f"Compass: {selected[1]}")
+
+        # Ensure overlay updates
+        if hasattr(self, "compass_overlay") and self.compass_overlay.isVisible():
+            self.compass_overlay.refresh(direct_route, transit_route)
+
+        # ✅ Force minimap redraw with selected route
+        self.update_minimap()
 
     def extract_coordinates_from_html(self, html):
 
@@ -4184,6 +4405,12 @@ class RBCCommunityMap(QMainWindow):
                 logging.info(f"Bank coins found: {bank_coins}")
                 updates.append(("UPDATE coins SET bank = ? WHERE character_id = ?", (bank_coins, character_id)))
 
+            accounting_match = re.search(r"(\d+) coins in bank", html)
+            if bank_match:
+                bank_coins = int(bank_match.group(1))
+                logging.info(f"Bank coins found: {bank_coins}")
+                updates.append(("UPDATE coins SET bank = ? WHERE character_id = ?", (bank_coins, character_id)))
+
             pocket_match = re.search(r"You have (\d+) coins", html) or re.search(r"Money: (\d+) coins", html)
             if pocket_match:
                 pocket_coins = int(pocket_match.group(1))
@@ -4255,9 +4482,9 @@ class RBCCommunityMap(QMainWindow):
         Draws the minimap with various features such as special locations and lines to nearest locations,
         with cell lines and dynamically scaled text size.
         """
-        pixmap = QPixmap(self.minimap_size, self.minimap_size)
-        painter = QPainter(pixmap)
-        painter.fillRect(0, 0, self.minimap_size, self.minimap_size, QColor('lightgrey'))
+        pixmap = PySide6.QtGui.QPixmap(self.minimap_size, self.minimap_size)
+        painter = PySide6.QtGui.QPainter(pixmap)
+        painter.fillRect(0, 0, self.minimap_size, self.minimap_size, PySide6.QtGui.QColor('lightgrey'))
 
         block_size = self.minimap_size // self.zoom_level
         font_size = max(8, block_size // 4)  # Dynamically adjust font size, with a minimum of 5
@@ -4267,32 +4494,87 @@ class RBCCommunityMap(QMainWindow):
         font.setPointSize(font_size)
         painter.setFont(font)
 
-        font_metrics = QFontMetrics(font)
+        font_metrics = PySide6.QtGui.QFontMetrics(font)
 
         logging.debug(
             f"Drawing minimap with column_start={self.column_start}, row_start={self.row_start}, "f"zoom_level={self.zoom_level}, block_size={block_size}")
 
-        def draw_label_box(x, y, width, height, bg_color, text):
+        if self.selected_route_path and len(self.selected_route_path) >= 2:
+            color = PySide6.QtGui.QColor(
+                "green") if self.selected_route_label == "Direct Route" else PySide6.QtGui.QColor(170, 0, 170)
+            pen = PySide6.QtGui.QPen(color, 2)
+            painter.setPen(pen)
+
+            for i in range(len(self.selected_route_path) - 1):
+                x1, y1 = self.selected_route_path[i]
+                x2, y2 = self.selected_route_path[i + 1]
+
+                # Convert map coordinates to screen positions
+                col1 = x1 - self.column_start
+                row1 = y1 - self.row_start
+                col2 = x2 - self.column_start
+                row2 = y2 - self.row_start
+
+                tile_size = self.zoom_level  # size in pixels
+                cx1 = col1 * tile_size + tile_size // 2
+                cy1 = row1 * tile_size + tile_size // 2
+                cx2 = col2 * tile_size + tile_size // 2
+                cy2 = row2 * tile_size + tile_size // 2
+
+                painter.drawLine(cx1, cy1, cx2, cy2)
+
+        def draw_label_box(x, y, width, base_height, bg_color, text):
             """
             Draws a text label box with a background color, white border, and properly formatted text.
+            Allows wrapped text to grow to 2 lines in zoom 5 and 7.
             """
-            # Draw background
-            painter.fillRect(QRect(x, y, width, height), bg_color)
-
-            # Draw white border
-            painter.setPen(QColor('white'))
-            painter.drawRect(QRect(x, y, width, height))
-
-            # Set font
+            # Set font based on zoom level
             font = painter.font()
-            font.setPointSize(max(4, min(8, block_size // 4)))  # Keep text readable
+            if self.zoom_level == 3:
+                font.setPointSize(max(4, min(8, width // 4)))
+            elif self.zoom_level == 5:
+                font.setPointSize(max(4, min(7, width // 5)))
+            elif self.zoom_level == 7:
+                font.setPointSize(max(4, min(6, width // 6)))
             painter.setFont(font)
 
-            # Draw text (aligned top-center, allowing wrapping)
-            text_rect = QRect(x, y, width, height)
-            painter.setPen(QColor('white'))
-            painter.drawText(text_rect,
-                             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap, text)
+            # Calculate actual wrapped height using boundingRect
+            font_metrics = PySide6.QtGui.QFontMetrics(font)
+            if self.zoom_level >= 5:
+                # Use a dummy bounding rect to get actual wrapped height
+                wrapped_rect = font_metrics.boundingRect(
+                    QRect(0, 0, width, 1000),
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap,
+                    text
+                )
+                max_height = base_height
+                label_height = min(wrapped_rect.height() + 4, max_height)
+            else:
+                label_height = base_height
+
+            # Draw background
+            painter.fillRect(QRect(x, y, width, label_height), bg_color)
+
+            # Draw white border
+            painter.setPen(PySide6.QtGui.QColor('white'))
+            painter.drawRect(QRect(x, y, width, label_height))
+
+            # Draw text
+            text_rect = QRect(x, y, width, label_height)
+            painter.setPen(PySide6.QtGui.QColor('white'))
+
+            if self.zoom_level >= 5:
+                painter.drawText(
+                    text_rect,
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap,
+                    text
+                )
+            else:
+                painter.drawText(
+                    text_rect,
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                    text
+                )
 
         # Draw the grid
         for i in range(self.zoom_level):
@@ -4305,7 +4587,7 @@ class RBCCommunityMap(QMainWindow):
                     f"Drawing grid cell at column_index={column_index}, row_index={row_index}, "f"x0={x0}, y0={y0}")
 
                 # Draw the cell background
-                painter.setPen(QColor('white'))
+                painter.setPen(PySide6.QtGui.QColor('white'))
                 painter.drawRect(x0, y0, block_size - border_size, block_size - border_size)
 
                 # Special location handling
@@ -4316,15 +4598,15 @@ class RBCCommunityMap(QMainWindow):
                 if column_index < 1 or column_index > 200 or row_index < 1 or row_index > 200:
                     # Map edges (border)
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
-                                     block_size - 2 * border_size, QColor(self.color_mappings["edge"]))
+                                     block_size - 2 * border_size, PySide6.QtGui.QColor(self.color_mappings["edge"]))
                 elif column_index % 2 == 0 or row_index % 2 == 0:
                     # If either coordinate is even → Streets (Gray)
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
-                                     block_size - 2 * border_size, QColor(self.color_mappings["street"]))
+                                     block_size - 2 * border_size, PySide6.QtGui.QColor(self.color_mappings["street"]))
                 else:
                     # Both coordinates odd → City Blocks (Black)
                     painter.fillRect(x0 + border_size, y0 + border_size, block_size - 2 * border_size,
-                                     block_size - 2 * border_size, QColor(self.color_mappings["alley"]))
+                                     block_size - 2 * border_size, PySide6.QtGui.QColor(self.color_mappings["alley"]))
 
                 if column_name and row_name:
                     label_text = f"{column_name} & {row_name}"
@@ -4334,7 +4616,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Draw special locations (banks with correct offsets)
         for bank_key in self.banks_coordinates.keys():
-            if " & " in bank_key:  # Ensure it's in the correct format
+            if " & " in bank_key:
                 col_name, row_name = bank_key.split(" & ")
                 col = self.columns.get(col_name, 0)
                 row = self.rows.get(row_name, 0)
@@ -4343,10 +4625,21 @@ class RBCCommunityMap(QMainWindow):
                     adjusted_column_index = col + 1
                     adjusted_row_index = row + 1
 
+                    # Dynamically determine label height based on zoom
+                    if self.zoom_level >= 5:
+                        font = painter.font()
+                        font.setPointSize(max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6,
+                                                                                                                  block_size // 6)))
+                        font_metrics = PySide6.QtGui.QFontMetrics(font)
+                        line_height = font_metrics.lineSpacing()
+                        label_height = min(line_height * 2 + 4, block_size)
+                    else:
+                        label_height = block_size // 3
+
                     draw_label_box(
                         (adjusted_column_index - self.column_start) * block_size,
                         (adjusted_row_index - self.row_start) * block_size,
-                        block_size, block_size // 3, self.color_mappings["bank"], "BANK"
+                        block_size, label_height, self.color_mappings["bank"], "BANK"
                     )
                 else:
                     logging.warning(f"Skipping bank at {col_name} & {row_name} due to missing coordinates")
@@ -4356,58 +4649,112 @@ class RBCCommunityMap(QMainWindow):
         # Draw other locations without the offset
         for name, (column_index, row_index) in self.taverns_coordinates.items():
             if column_index is not None and row_index is not None:
+                if self.zoom_level >= 5:
+                    font = painter.font()
+                    font.setPointSize(
+                        max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6, block_size // 6)))
+                    font_metrics = PySide6.QtGui.QFontMetrics(font)
+                    line_height = font_metrics.lineSpacing()
+                    label_height = min(line_height * 2 + 4, block_size)
+                else:
+                    label_height = block_size // 3
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["tavern"], name
+                    block_size, label_height, self.color_mappings["tavern"], name
                 )
 
         for name, (column_index, row_index) in self.transits_coordinates.items():
             if column_index is not None and row_index is not None:
+                if self.zoom_level >= 5:
+                    font = painter.font()
+                    font.setPointSize(
+                        max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6, block_size // 6)))
+                    font_metrics = PySide6.QtGui.QFontMetrics(font)
+                    line_height = font_metrics.lineSpacing()
+                    label_height = min(line_height * 2 + 4, block_size)
+                else:
+                    label_height = block_size // 3
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["transit"], name
+                    block_size, label_height, self.color_mappings["transit"], name
                 )
 
         for name, (column_index, row_index) in self.user_buildings_coordinates.items():
             if column_index is not None and row_index is not None:
+                if self.zoom_level >= 5:
+                    font = painter.font()
+                    font.setPointSize(
+                        max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6, block_size // 6)))
+                    font_metrics = PySide6.QtGui.QFontMetrics(font)
+                    line_height = font_metrics.lineSpacing()
+                    label_height = min(line_height * 2 + 4, block_size)
+                else:
+                    label_height = block_size // 3
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["user_building"], name
+                    block_size, label_height, self.color_mappings["user_building"], name
                 )
 
         for name, (column_index, row_index) in self.shops_coordinates.items():
             if column_index is not None and row_index is not None:
+                if self.zoom_level >= 5:
+                    font = painter.font()
+                    font.setPointSize(
+                        max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6, block_size // 6)))
+                    font_metrics = PySide6.QtGui.QFontMetrics(font)
+                    line_height = font_metrics.lineSpacing()
+                    label_height = min(line_height * 2 + 4, block_size)
+                else:
+                    label_height = block_size // 3
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["shop"], name
+                    block_size, label_height, self.color_mappings["shop"], name
                 )
 
         for name, (column_index, row_index) in self.guilds_coordinates.items():
             if column_index is not None and row_index is not None:
+                if self.zoom_level >= 5:
+                    font = painter.font()
+                    font.setPointSize(
+                        max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6, block_size // 6)))
+                    font_metrics = PySide6.QtGui.QFontMetrics(font)
+                    line_height = font_metrics.lineSpacing()
+                    label_height = min(line_height * 2 + 4, block_size)
+                else:
+                    label_height = block_size // 3
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3, self.color_mappings["guild"], name
+                    block_size, label_height, self.color_mappings["guild"], name
                 )
 
         for name, (column_index, row_index) in self.places_of_interest_coordinates.items():
             if column_index is not None and row_index is not None:
-                # Special-case Graveyard color
                 if name.lower() == "graveyard":
                     color = self.color_mappings.get("graveyard", self.color_mappings["placesofinterest"])
                 else:
                     color = self.color_mappings["placesofinterest"]
 
                 logging.debug(f"Drawing {name} with color {color.name()}")
+
+                if self.zoom_level >= 5:
+                    font = painter.font()
+                    font.setPointSize(
+                        max(4, min(7, block_size // 5)) if self.zoom_level == 5 else max(4, min(6, block_size // 6)))
+                    font_metrics = PySide6.QtGui.QFontMetrics(font)
+                    line_height = font_metrics.lineSpacing()
+                    label_height = min(line_height * 2 + 4, block_size)
+                else:
+                    label_height = block_size // 3
+
                 draw_label_box(
                     (column_index - self.column_start) * block_size,
                     (row_index - self.row_start) * block_size,
-                    block_size, block_size // 3,
-                    color, name
+                    block_size, label_height, color, name
                 )
 
             # Get current location
@@ -4421,7 +4768,7 @@ class RBCCommunityMap(QMainWindow):
             # Draw nearest tavern line
             if nearest_tavern:
                 nearest_tavern_coords = nearest_tavern[0][1]
-                painter.setPen(QPen(QColor('orange'), 3))
+                painter.setPen(PySide6.QtGui.QPen(PySide6.QtGui.QColor('orange'), 3))
                 painter.drawLine(
                     (current_x - self.column_start) * block_size + block_size // 2,
                     (current_y - self.row_start) * block_size + block_size // 2,
@@ -4432,7 +4779,7 @@ class RBCCommunityMap(QMainWindow):
             # Draw nearest bank line
             if nearest_bank:
                 nearest_bank_coords = nearest_bank  # Already a (col, row) tuple
-                painter.setPen(QPen(QColor('blue'), 3))
+                painter.setPen(PySide6.QtGui.QPen(PySide6.QtGui.QColor('blue'), 3))
                 painter.drawLine(
                     (current_x - self.column_start) * block_size + block_size // 2,
                     (current_y - self.row_start) * block_size + block_size // 2,
@@ -4443,7 +4790,7 @@ class RBCCommunityMap(QMainWindow):
             # Draw nearest transit line
             if nearest_transit:
                 nearest_transit_coords = nearest_transit[0][1]
-                painter.setPen(QPen(QColor('red'), 3))
+                painter.setPen(PySide6.QtGui.QPen(PySide6.QtGui.QColor('red'), 3))
                 painter.drawLine(
                     (current_x - self.column_start) * block_size + block_size // 2,
                     (current_y - self.row_start) * block_size + block_size // 2,
@@ -4451,15 +4798,88 @@ class RBCCommunityMap(QMainWindow):
                     (nearest_transit_coords[1] - self.row_start) * block_size + block_size // 2
                 )
 
-            # Draw destination line
-            if self.destination:
-                painter.setPen(QPen(QColor('green'), 3))
+            # Draw selected compass route (green for direct)
+            if (
+                    self.destination is not None and
+                    self.selected_route_label == "Direct Route" and
+                    self.selected_route_path and
+                    len(self.selected_route_path) >= 2
+            ):
+                logging.debug(
+                    f"Drawing direct route from {self.selected_route_path[0]} to {self.selected_route_path[-1]}")
+                painter.setPen(PySide6.QtGui.QPen(PySide6.QtGui.QColor("green"), 3))
+                x1, y1 = self.selected_route_path[0]
+                x2, y2 = self.selected_route_path[-1]
                 painter.drawLine(
                     (current_x - self.column_start) * block_size + block_size // 2,
                     (current_y - self.row_start) * block_size + block_size // 2,
                     (self.destination[0] - self.column_start) * block_size + block_size // 2,
                     (self.destination[1] - self.row_start) * block_size + block_size // 2
                 )
+
+            # Draw selected compass route (purple for transit)
+            if (
+                    self.destination is not None and
+                    self.selected_route_label == "Transit Route" and
+                    self.selected_route_path and
+                    len(self.selected_route_path) >= 2
+            ):
+                logging.debug(f"Transit route path: {self.selected_route_path}")
+                painter.setPen(PySide6.QtGui.QPen(PySide6.QtGui.QColor(170, 0, 170), 3))
+
+                # Current player position
+                current_x, current_y = self.column_start + self.zoom_level // 2, self.row_start + self.zoom_level // 2
+                dest_x, dest_y = self.destination
+                logging.debug(f"Player position: ({current_x}, {current_y})")
+                logging.debug(f"Destination: ({dest_x}, {dest_y})")
+
+                # Find nearest transits
+                nearest_transit_to_player = self.find_nearest_transit(current_x, current_y)
+                nearest_transit_to_dest = self.find_nearest_transit(dest_x, dest_y)
+                logging.debug(f"Nearest transit to player: {nearest_transit_to_player}")
+                logging.debug(f"Nearest transit to destination: {nearest_transit_to_dest}")
+
+                # Check if same transit station
+                same_transit = False
+                if nearest_transit_to_player and nearest_transit_to_dest:
+                    same_transit = nearest_transit_to_player[0][1] == nearest_transit_to_dest[0][1]
+
+                if same_transit:
+                    logging.debug("Player and destination share same transit. Drawing direct purple route.")
+                    px1 = (current_x - self.column_start) * block_size + block_size // 2
+                    py1 = (current_y - self.row_start) * block_size + block_size // 2
+                    px2 = (dest_x - self.column_start) * block_size + block_size // 2
+                    py2 = (dest_y - self.row_start) * block_size + block_size // 2
+                    painter.drawLine(px1, py1, px2, py2)
+
+                else:
+                    # Segment 1: Player to nearest transit
+                    if nearest_transit_to_player:
+                        transit_x, transit_y = nearest_transit_to_player[0][1]
+                        px1 = (current_x - self.column_start) * block_size + block_size // 2
+                        py1 = (current_y - self.row_start) * block_size + block_size // 2
+                        px2 = (transit_x - self.column_start) * block_size + block_size // 2
+                        py2 = (transit_y - self.row_start) * block_size + block_size // 2
+                        logging.debug(f"Segment 1 coords: ({px1}, {py1}) to ({px2}, {py2})")
+                        if not (px1 < 0 and px2 < 0) and not (px1 > self.minimap_size and px2 > self.minimap_size) and \
+                                not (py1 < 0 and py2 < 0) and not (py1 > self.minimap_size and py2 > self.minimap_size):
+                            painter.drawLine(px1, py1, px2, py2)
+                        else:
+                            logging.debug("Segment 1 skipped: both endpoints off-screen")
+
+                    # Segment 2: Transit near destination to destination
+                    if nearest_transit_to_dest and self.destination:
+                        transit_x, transit_y = nearest_transit_to_dest[0][1]
+                        px1 = (transit_x - self.column_start) * block_size + block_size // 2
+                        py1 = (transit_y - self.row_start) * block_size + block_size // 2
+                        px2 = (dest_x - self.column_start) * block_size + block_size // 2
+                        py2 = (dest_y - self.row_start) * block_size + block_size // 2
+                        logging.debug(f"Segment 2 coords: ({px1}, {py1}) to ({px2}, {py2})")
+                        if not (px1 < 0 and px2 < 0) and not (px1 > self.minimap_size and px2 > self.minimap_size) and \
+                                not (py1 < 0 and py2 < 0) and not (py1 > self.minimap_size and py2 > self.minimap_size):
+                            painter.drawLine(px1, py1, px2, py2)
+                        else:
+                            logging.debug("Segment 2 skipped: both endpoints off-screen")
 
         painter.end()
         self.minimap_label.setPixmap(pixmap)
@@ -4472,10 +4892,19 @@ class RBCCommunityMap(QMainWindow):
         """
         if not self.is_updating_minimap:
             self.is_updating_minimap = True
+
+            # 🔁 Ensure we always have an updated route label/path/description
+            if self.destination and (not self.selected_route_label or not self.selected_route_path):
+                self.refresh_compass_state()
+
             self.draw_minimap()
             self.update_info_frame()
+
+            # Only refresh the overlay if it exists AND we're not mid-selection
             if hasattr(self, 'compass_overlay') and self.compass_overlay.isVisible():
-                self.show_compass_overlay()
+                if not self.selected_route_path:  # ⬅ only re-show if no manual route is selected
+                    self.show_compass_overlay()
+
             self.is_updating_minimap = False
 
     def find_nearest_location(self, x, y, locations):
@@ -4609,10 +5038,10 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO settings (setting_name, setting_value)
-                    VALUES ('minimap_zoom', ?)
-                    ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
-                """, (self.zoom_level, self.zoom_level))
+                               INSERT INTO settings (setting_name, setting_value)
+                               VALUES ('minimap_zoom', ?)
+                               ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
+                               """, (self.zoom_level, self.zoom_level))
                 conn.commit()
                 logging.debug(f"Zoom level saved to database: {self.zoom_level}")
         except sqlite3.Error as e:
@@ -4649,9 +5078,9 @@ class RBCCommunityMap(QMainWindow):
         if self.zoom_level == 3:
             zoom_offset = -1
         elif self.zoom_level == 5:
-            zoom_offset = -2
+            zoom_offset = 0
         elif self.zoom_level == 7:
-            zoom_offset = -3
+            zoom_offset = 1
         else:
             zoom_offset = -(self.zoom_level // 2)  # Safe fallback
         logging.debug(f"Zoom Level: {self.zoom_level}")
@@ -4659,8 +5088,8 @@ class RBCCommunityMap(QMainWindow):
         logging.debug(f"Debug: char_y={self.character_y}, row_start={self.row_start}, zoom_offset={zoom_offset}")
         logging.debug(f"Clamping min: {min(self.character_y + zoom_offset, 200 - self.zoom_level)}")
 
-        self.column_start = self.character_x + 1
-        self.row_start = self.character_y + 1
+        self.column_start = self.character_x - zoom_offset
+        self.row_start = self.character_y - zoom_offset
 
         logging.debug(
             f"Recentered minimap: x={self.character_x}, y={self.character_y}, col_start={self.column_start}, row_start={self.row_start}")
@@ -4689,7 +5118,7 @@ class RBCCommunityMap(QMainWindow):
         # Update the minimap after setting the new location
         self.update_minimap()
 
-    def mousePressEvent(self, event: QMouseEvent):
+    def mousePressEvent(self, event: PySide6.QtGui.QMouseEvent):
         """Handle mouse clicks on the minimap to recenter it."""
         if event.button() == Qt.MouseButton.LeftButton:
             # Map global click position to minimap's local coordinates
@@ -4755,18 +5184,20 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO recent_destinations (character_id, col, row, timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                """, (character_id, col, row))
+                               INSERT INTO recent_destinations (character_id, col, `Row`, timestamp)
+                               VALUES (?, ?, ?, datetime('now'))
+                               """, (character_id, col, row))
 
                 cursor.execute("""
-                    DELETE FROM recent_destinations 
-                    WHERE character_id = ? AND id NOT IN (
-                        SELECT id FROM recent_destinations
-                        WHERE character_id = ?
-                        ORDER BY timestamp DESC LIMIT 10
-                    )
-                """, (character_id, character_id))
+                               DELETE
+                               FROM recent_destinations
+                               WHERE character_id = ?
+                                 AND id NOT IN (SELECT id
+                                                FROM recent_destinations
+                                                WHERE character_id = ?
+                                                ORDER BY timestamp DESC
+                                                LIMIT 10)
+                               """, (character_id, character_id))
 
                 conn.commit()
                 logging.info(f"Destination ({col}, {row}) saved for character ID {character_id}.")
@@ -4931,23 +5362,23 @@ class RBCCommunityMap(QMainWindow):
         """
         if not self.destination:
             self.ap_direction_label.setText("Compass: None")
+            self.selected_route_path = None
             return
 
-        # If user clicked a route, keep using the stored text
-        if self.selected_route_label and self.selected_route_description:
-            self.ap_direction_label.setText(f"Compass: {self.selected_route_description}")
-            return
-
-        # Otherwise, fallback to default route selection
         direct_route, transit_route = self.get_compass_routes()
-        label, route_info = (
-            ("Direct Route", direct_route)
-            if direct_route[0] <= transit_route[0]
-            else ("Transit Route", transit_route)
-        )
 
-        ap_cost, description = route_info
-        self.ap_direction_label.setText(f"Compass: {description}")
+        # Select route: previously chosen, or fallback to shortest
+        if self.selected_route_label == "Direct Route":
+            selected = direct_route
+        elif self.selected_route_label == "Transit Route":
+            selected = transit_route
+        else:
+            selected = direct_route if direct_route[0] <= transit_route[0] else transit_route
+            self.selected_route_label = "Direct Route" if selected == direct_route else "Transit Route"
+
+        self.selected_route_description = selected[1]
+        self.selected_route_path = selected[2]
+        self.ap_direction_label.setText(f"Compass: {selected[1]}")
 
     # -----------------------
     # Menu Actions
@@ -5108,6 +5539,7 @@ class RBCCommunityMap(QMainWindow):
 
         current_x = self.column_start + self.zoom_level // 2
         current_y = self.row_start + self.zoom_level // 2
+
         dest_x, dest_y = self.destination
 
         # ----------------------------
@@ -5115,7 +5547,8 @@ class RBCCommunityMap(QMainWindow):
         # ----------------------------
         direct_ap = max(abs(dest_x - current_x), abs(dest_y - current_y))
         direct_desc = get_arrow_description((current_x, current_y), (dest_x, dest_y))
-        direct_route = (direct_ap, direct_desc)
+        direct_path = [(current_x, current_y), (dest_x, dest_y)]
+        direct_route = (direct_ap, direct_desc, direct_path)
 
         # ----------------------------
         # Transit Route
@@ -5131,27 +5564,37 @@ class RBCCommunityMap(QMainWindow):
             dest_to_transit_ap = self.calculate_ap_cost((dest_x, dest_y), dest_transit_coords)
             total_ap_transit = char_to_transit_ap + dest_to_transit_ap
 
-            # Get arrow segments for each leg
-            to_transit_arrows = get_arrow_description((current_x, current_y), char_transit_coords)
-            from_transit_arrows = get_arrow_description(dest_transit_coords, (dest_x, dest_y))
+            dir1 = get_arrow_description((current_x, current_y), char_transit_coords)
+            dir2 = get_arrow_description(dest_transit_coords, (dest_x, dest_y))
 
-            transit_desc = f"{to_transit_arrows} + Transit + {from_transit_arrows}"
-            transit_route = (total_ap_transit, transit_desc)
+            transit_desc = f"{dir1} + Transit + {dir2}"
+            transit_path = [(current_x, current_y), char_transit_coords, dest_transit_coords, (dest_x, dest_y)]
+            transit_route = (total_ap_transit, transit_desc, transit_path)
         else:
-            transit_route = (9999, "Transit route unavailable")
+            transit_route = (9999, "Transit route unavailable", [])
 
         return direct_route, transit_route
 
     def set_compass_display_from_overlay(self, label, route_info):
         """
         Called when user clicks a route in CompassOverlay.
-        Stores and displays the selected route’s full directional breakdown.
+        Stores and displays the selected route’s full directional breakdown and path.
         """
         self.selected_route_label = label
-        ap_cost, direction_desc = route_info
+        ap_cost, direction_desc, path_coords = route_info
         self.selected_route_description = direction_desc
+        self.selected_route_path = path_coords
         self.ap_direction_label.setText(f"Compass: {direction_desc}")
 
+        # Close the overlay if you want to force refresh focus
+        if hasattr(self, 'compass_overlay'):
+            self.compass_overlay.close()
+
+        self.update_minimap()
+
+    def open_userscript_manager(self):
+        dialog = UserscriptManagerDialog(self.web_profile, self)
+        dialog.exec()
 
 # -----------------------
 # Database Viewer Class
@@ -5162,26 +5605,22 @@ class DatabaseViewer(QDialog):
     Graphical interface for viewing SQLite database tables in a tabbed layout.
     """
 
-    def __init__(self, db_connection, parent=None) -> None:
-        """
-        Initialize the DatabaseViewer with a database connection.
-
-        Args:
-            db_connection: Active SQLite database connection.
-            parent: Parent widget (default is None).
-        """
-        super().__init__(parent)  # Ensure it gets QDialog properties
+    def __init__(self, db_connection, parent=None, color_mappings: dict | None = None) -> None:
+        super().__init__(parent)
         self.setWindowTitle('SQLite Database Viewer')
         self.setWindowIcon(APP_ICON)
         self.setGeometry(100, 100, 800, 600)
 
-        # Main layout
+        self.db_connection = db_connection
+        self.cursor = db_connection.cursor()
+        self.color_mappings = color_mappings or {}
+
         layout = QVBoxLayout(self)
         self.tab_widget = QTabWidget()
         layout.addWidget(self.tab_widget)
 
-        self.db_connection = db_connection
-        self.cursor = db_connection.cursor()
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
         try:
             self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -5195,15 +5634,6 @@ class DatabaseViewer(QDialog):
             QMessageBox.critical(self, "Error", "Failed to load database tables.")
 
     def get_table_data(self, table_name: str) -> tuple[list[str], list[tuple]]:
-        """
-        Fetch column names and data for a specified table.
-
-        Args:
-            table_name: Name of the table to query.
-
-        Returns:
-            tuple: (list of column names, list of row data).
-        """
         try:
             self.cursor.execute(f"PRAGMA table_info(`{table_name}`)")
             column_names = [col[1] for col in self.cursor.fetchall()]
@@ -5215,14 +5645,6 @@ class DatabaseViewer(QDialog):
             return [], []
 
     def add_table_tab(self, table_name: str, column_names: list[str], data: list[tuple]) -> None:
-        """
-        Add a tab displaying table data.
-
-        Args:
-            table_name: Name of the table.
-            column_names: List of column names.
-            data: List of row data tuples.
-        """
         table_widget = QTableWidget()
         table_widget.setRowCount(len(data))
         table_widget.setColumnCount(len(column_names))
@@ -5232,17 +5654,11 @@ class DatabaseViewer(QDialog):
             for col_idx, value in enumerate(row_data):
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
 
-        table_widget.resizeColumnsToContents()  # Improve readability
+        table_widget.resizeColumnsToContents()
         self.tab_widget.addTab(table_widget, table_name)
         logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
 
     def closeEvent(self, event) -> None:
-        """
-        Close database connection when the window is closed.
-
-        Args:
-            event: QCloseEvent object.
-        """
         try:
             self.cursor.close()
             self.db_connection.close()
@@ -5261,10 +5677,11 @@ class CharacterDialog(QDialog):
     A dialog for adding or modifying a character, with validation.
     """
 
-    def __init__(self, parent=None, character=None):
+    def __init__(self, parent=None, character=None, color_mappings: dict | None = None):
         super().__init__(parent)
         self.setWindowTitle("Character")
         self.setWindowIcon(APP_ICON)
+        self.color_mappings = color_mappings or {}
 
         # Input fields
         self.name_edit = QLineEdit()
@@ -5288,6 +5705,10 @@ class CharacterDialog(QDialog):
         button_box.addWidget(cancel_button)
         layout.addRow(button_box)
         self.setLayout(layout)
+
+        # Apply theme if available
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
         # Connect buttons
         ok_button.clicked.connect(self.validate_and_accept)
@@ -5315,13 +5736,6 @@ class ThemeCustomizationDialog(QDialog):
     """
 
     def __init__(self, parent=None, color_mappings: dict | None = None) -> None:
-        """
-        Initialize the theme customization dialog.
-
-        Args:
-            parent: Parent widget (optional).
-            color_mappings: Current color mappings dict (optional).
-        """
         super().__init__(parent)
         self.setWindowTitle('Theme Customization')
         self.setWindowIcon(APP_ICON)
@@ -5346,17 +5760,17 @@ class ThemeCustomizationDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         save_button = QPushButton('Save', self)
-        save_button.clicked.connect(self.accept)
         cancel_button = QPushButton('Cancel', self)
+        save_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(save_button)
         button_layout.addWidget(cancel_button)
         layout.addLayout(button_layout)
 
+        apply_theme_to_widget(self, self.color_mappings)
         logging.debug("Theme customization dialog initialized")
 
     def setup_ui_tab(self) -> None:
-        """Set up the UI tab for background, text, and button color customization."""
         layout = QGridLayout(self.ui_tab)
         ui_elements = [
             'background',
@@ -5370,8 +5784,8 @@ class ThemeCustomizationDialog(QDialog):
         for idx, elem in enumerate(ui_elements):
             color_square = QLabel(self.ui_tab)
             color_square.setFixedSize(20, 20)
-            color = self.color_mappings.get(elem, QColor('white'))
-            pixmap = QPixmap(20, 20)
+            color = self.color_mappings.get(elem, PySide6.QtGui.QColor('white'))
+            pixmap = PySide6.QtGui.QPixmap(20, 20)
             pixmap.fill(color)
             color_square.setPixmap(pixmap)
 
@@ -5383,16 +5797,14 @@ class ThemeCustomizationDialog(QDialog):
             layout.addWidget(color_button, idx, 2)
 
     def setup_minimap_tab(self) -> None:
-        """Set up the Minimap tab for customizing minimap element colors."""
         layout = QGridLayout(self.minimap_tab)
         minimap_elements = ['bank', 'tavern', 'transit', 'user_building', 'shop', 'guild', 'placesofinterest']
 
         for idx, elem in enumerate(minimap_elements):
             color_square = QLabel(self.minimap_tab)
             color_square.setFixedSize(20, 20)
-            color = self.color_mappings.get(elem, QColor('white'))
-
-            pixmap = QPixmap(20, 20)
+            color = self.color_mappings.get(elem, PySide6.QtGui.QColor('white'))
+            pixmap = PySide6.QtGui.QPixmap(20, 20)
             pixmap.fill(color)
             color_square.setPixmap(pixmap)
 
@@ -5404,58 +5816,13 @@ class ThemeCustomizationDialog(QDialog):
             layout.addWidget(color_button, idx, 2)
 
     def change_color(self, element_name: str, color_square: QLabel) -> None:
-        """
-        Open a color picker to update an element’s color.
-
-        Args:
-            element_name: Key in color_mappings to update.
-            color_square: QLabel displaying the current color.
-        """
-        color = QColorDialog.getColor(self.color_mappings.get(element_name, QColor('white')), self)
+        color = QColorDialog.getColor(self.color_mappings.get(element_name, PySide6.QtGui.QColor('white')), self)
         if color.isValid():
             self.color_mappings[element_name] = color
-            pixmap = QPixmap(20, 20)
+            pixmap = PySide6.QtGui.QPixmap(20, 20)
             pixmap.fill(color)
             color_square.setPixmap(pixmap)
             logging.debug(f"Changed color for '{element_name}' to {color.name()}")
-
-    def apply_theme(self) -> None:
-        """Apply the selected theme colors to the dialog’s stylesheet."""
-        try:
-            bg_color = self.color_mappings.get('background', QColor('white')).name()
-            text_color = self.color_mappings.get('text_color', QColor('black')).name()
-            btn_color = self.color_mappings.get('button_color', QColor('lightgrey')).name()
-            btn_hover_color = self.color_mappings.get('button_hover_color', QColor('grey')).name()
-            btn_pressed_color = self.color_mappings.get('button_pressed_color', QColor('darkgrey')).name()
-            btn_border_color = self.color_mappings.get('button_border_color', QColor('black')).name()
-
-            self.setStyleSheet(
-                f"""
-                QWidget {{
-                    background-color: {bg_color};
-                }}
-                QPushButton {{
-                    background-color: {btn_color};
-                    color: {text_color};
-                    border: 2px solid {btn_border_color};
-                    border-radius: 6px;
-                    padding: 5px;
-                }}
-                QPushButton:hover {{
-                    background-color: {btn_hover_color};
-                }}
-                QPushButton:pressed {{
-                    background-color: {btn_pressed_color};
-                }}
-                QLabel {{
-                    color: {text_color};
-                }}
-                """
-            )
-            logging.debug("Theme applied to dialog")
-        except Exception as e:
-            logging.error(f"Failed to apply theme to dialog: {e}")
-            self.setStyleSheet("")  # Reset on failure
 
 
 # -----------------------
@@ -5463,16 +5830,22 @@ class ThemeCustomizationDialog(QDialog):
 # -----------------------
 
 class CSSCustomizationDialog(QDialog):
-    def __init__(self, parent: QWidget = None, current_profile: str = None) -> None:
+    def __init__(self, parent: QWidget = None, current_profile: str = None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
         self.parent = parent
+        self.color_mappings = color_mappings or {}
         self.current_profile = current_profile or self.get_current_profile()
+
         self.setWindowTitle("CSS Customization")
         self.setWindowIcon(APP_ICON)
         self.resize(600, 400)
         self.tabs = {}
         self.setup_ui()
         self.load_existing_customizations()
+
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
         logging.debug(f"CSSCustomizationDialog initialized with profile '{self.current_profile}'")
 
     def get_current_profile(self) -> str:
@@ -5672,7 +6045,7 @@ class CSSCustomizationDialog(QDialog):
         tab.layout().addWidget(scroll)
         self.tab_widget.addTab(tab, tab_title)
         self.tabs[tab_title] = tab
-        tab.grid = grid  # Preserve reference
+        tab.grid = grid
 
     def pick_color(self, css_item: str, preview: QLabel) -> None:
         """Open a color picker and apply the selected color."""
@@ -5822,7 +6195,7 @@ class CSSCustomizationDialog(QDialog):
 
 
 # -----------------------
-# AVITD Scraper Class
+# AVITD Scraper Class (Updated)
 # -----------------------
 
 class AVITDScraper:
@@ -5831,23 +6204,15 @@ class AVITDScraper:
     """
 
     def __init__(self):
-        """
-        Initialize the scraper with the required headers and database connection.
-        """
         self.url = "https://aviewinthedark.net/"
-        self.connection = sqlite3.connect(DB_PATH)  # SQLite connection
+        self.connection = sqlite3.connect(DB_PATH)
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
-
-        # Set up logging
         logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
         logging.info("AVITDScraper initialized.")
 
     def scrape_guilds_and_shops(self):
-        """
-        Scrape the guilds and shops data from the website and update the SQLite database.
-        """
         logging.info("Starting to scrape guilds and shops.")
         response = requests.get(self.url, headers=self.headers)
         logging.debug(f"Received response: {response.status_code}")
@@ -5859,25 +6224,13 @@ class AVITDScraper:
         guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
         shops_next_update = self.extract_next_update_time(soup, 'Shops')
 
-        # Display results in the console (for debugging purposes)
         self.display_results(guilds, shops, guilds_next_update, shops_next_update)
 
-        # Update the SQLite database with scraped data
         self.update_database(guilds, "guilds", guilds_next_update)
         self.update_database(shops, "shops", shops_next_update)
         logging.info("Finished scraping and updating the database.")
 
     def scrape_section(self, soup, section_image_alt):
-        """
-        Scrape a specific section (guilds or shops) from the website.
-
-        Args:
-            soup (BeautifulSoup): Parsed HTML content.
-            section_image_alt (str): The alt text of the section image to locate the section.
-
-        Returns:
-            list: A list of tuples containing the name, column, and row of each entry.
-        """
         logging.debug(f"Scraping section: {section_image_alt}")
         data = []
         section_image = soup.find('img', alt=section_image_alt)
@@ -5908,54 +6261,27 @@ class AVITDScraper:
         return data
 
     def extract_next_update_time(self, soup, section_name):
-        """
-        Extract the next update time for a specific section (guilds or shops).
-
-        Args:
-            soup (BeautifulSoup): Parsed HTML content.
-            section_name (str): The name of the section (e.g., 'Guilds', 'Shops').
-
-        Returns:
-            str: The next update time in 'YYYY-MM-DD HH:MM:SS' format or 'NA' if not found.
-        """
         logging.debug(f"Extracting next update time for section: {section_name}")
-
-        # Find all divs with the 'next_change' class
         section_divs = soup.find_all('div', class_='next_change')
 
-        # Iterate through the divs to find the matching section
         for div in section_divs:
             if section_name in div.text:
-                # Search for the time pattern
                 match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
                 if match:
-                    # Parse time components
                     days = int(match.group(1))
                     hours = int(match.group(2))
                     minutes = int(match.group(3))
                     seconds = int(match.group(4))
 
-                    # Calculate the next update time
-                    next_update = datetime.now() + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
+                    next_update = datetime.now(timezone.utc) + timedelta(days=days, hours=hours, minutes=minutes,
+                                                                         seconds=seconds)
                     logging.debug(f"Next update time for {section_name}: {next_update}")
+                    return next_update.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
-                    # Return the formatted date-time string
-                    return next_update.strftime('%Y-%m-%d %H:%M:%S')
-
-        # Return 'NA' if no match is found
         logging.warning(f"No next update time found for {section_name}.")
         return 'NA'
 
     def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
-        """
-        Display the results of the scraping in the console for debugging purposes.
-
-        Args:
-            guilds (list): List of scraped guild data.
-            shops (list): List of scraped shop data.
-            guilds_next_update (str): The next update time for guilds.
-            shops_next_update (str): The next update time for shops.
-        """
         logging.info(f"Guilds Next Update: {guilds_next_update}")
         logging.info(f"Shops Next Update: {shops_next_update}")
 
@@ -5968,33 +6294,24 @@ class AVITDScraper:
             logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
 
     def update_database(self, data, table, next_update):
-        """
-        Thread-safe update for the SQLite database.
+        scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
-        Args:
-            data (list): List of tuples containing (name, col, row) entries.
-            table (str): 'guilds' or 'shops'.
-            next_update (str): Timestamp for next update.
-        """
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
-                # Step 1: Set all entries to 'NA', conditionally
-                logging.debug(f"Setting all {table} entries' Row and Column to 'NA'...")
                 if table == "guilds":
                     cursor.execute(f"""
                         UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?
-                        WHERE Name NOT LIKE 'Peacekeepers Mission%'
-                    """, (next_update,))
+                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
+                        WHERE Name NOT LIKE 'Peace%'
+                    """, (next_update, scrape_timestamp))
                 else:
                     cursor.execute(f"""
                         UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?
-                    """, (next_update,))
+                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
+                    """, (next_update, scrape_timestamp))
 
-                # Step 2: Insert or update scraped entries
                 for name, column, row in data:
                     if table == "shops" and "Peacekeepers Mission" in name:
                         logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
@@ -6002,30 +6319,30 @@ class AVITDScraper:
 
                     try:
                         cursor.execute(f"""
-                            INSERT INTO {table} (Name, `Column`, `Row`, `next_update`)
-                            VALUES (?, ?, ?, ?)
+                            INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                            VALUES (?, ?, ?, ?, ?)
                             ON CONFLICT(Name) DO UPDATE SET
                                 `Column`=excluded.`Column`,
                                 `Row`=excluded.`Row`,
-                                `next_update`=excluded.`next_update`
-                        """, (name, column, row, next_update))
+                                `next_update`=excluded.`next_update`,
+                                `last_scraped`=excluded.`last_scraped`
+                        """, (name, column, row, next_update, scrape_timestamp))
                     except sqlite3.Error as e:
                         logging.error(f"Failed to update {table} entry '{name}': {e}")
 
-                # Step 3: Always persist Peacekeeper's Missions in guilds
                 if table == "guilds":
-                    logging.debug("Ensuring Peacekeeper's Mission locations persist in guilds.")
                     cursor.executemany(f"""
-                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`)
-                        VALUES (?, ?, ?, ?)
+                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT(Name) DO UPDATE SET
                             `Column`=excluded.`Column`,
                             `Row`=excluded.`Row`,
-                            `next_update`=excluded.`next_update`
+                            `next_update`=excluded.`next_update`,
+                            `last_scraped`=excluded.`last_scraped`
                     """, [
-                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update),
-                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update),
-                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update),
+                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_timestamp),
+                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_timestamp),
+                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_timestamp),
                     ])
 
                 conn.commit()
@@ -6035,9 +6352,6 @@ class AVITDScraper:
             logging.error(f"Database operation for {table} failed: {e}")
 
     def close_connection(self):
-        """
-        Close the SQLite database connection.
-        """
         if self.connection:
             self.connection.close()
             logging.info("Database connection closed.")
@@ -6050,7 +6364,7 @@ class AVITDScraper:
 class SetDestinationDialog(QDialog):
     """Dialog for setting a destination on the map."""
 
-    def __init__(self, parent: QWidget = None) -> None:
+    def __init__(self, parent: QWidget = None, color_mappings: dict | None = None) -> None:
         """
         Initialize the Set Destination dialog.
 
@@ -6062,6 +6376,8 @@ class SetDestinationDialog(QDialog):
         self.setWindowIcon(APP_ICON)
         self.resize(650, 300)
         self.parent = parent
+        self.color_mappings = color_mappings or {}
+
         logging.debug("SetDestinationDialog initialized")
 
         main_layout = QVBoxLayout(self)
@@ -6085,8 +6401,8 @@ class SetDestinationDialog(QDialog):
             self.recent_destinations_dropdown,
             self.tavern_dropdown, self.bank_dropdown, self.transit_dropdown,
             self.shop_dropdown, self.guild_dropdown, self.poi_dropdown,
-            self.user_building_dropdown,
-            self.columns_dropdown, self.rows_dropdown, self.directional_dropdown,
+            self.user_building_dropdown, self.columns_dropdown, self.rows_dropdown,
+            self.directional_dropdown,
         ]
 
         for dropdown in all_dropdowns:
@@ -6114,7 +6430,7 @@ class SetDestinationDialog(QDialog):
 
         self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
 
-        # Layout: Predefined dropdowns
+        # Layout: Dropdowns
         dropdown_layout = QFormLayout()
         dropdown_layout.addRow("Recent:", self.recent_destinations_dropdown)
         dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
@@ -6125,7 +6441,7 @@ class SetDestinationDialog(QDialog):
         dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
         dropdown_layout.addRow("User Building:", self.user_building_dropdown)
 
-        # Layout: Custom XY + direction
+        # Layout: XY + Direction
         custom_layout = QHBoxLayout()
         custom_layout.addWidget(QLabel("ABC Street:"))
         custom_layout.addWidget(self.columns_dropdown, 1)
@@ -6141,23 +6457,41 @@ class SetDestinationDialog(QDialog):
         # Layout: Buttons
         button_layout = QGridLayout()
         set_btn = QPushButton("Set")
-        set_btn.clicked.connect(lambda: self.set_destination())
         clear_btn = QPushButton("Clear")
-        clear_btn.clicked.connect(self.clear_destination)
         update_btn = QPushButton("Update Data")
-        update_btn.clicked.connect(self.update_combo_boxes)
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(set_btn, 0, 0)
         button_layout.addWidget(clear_btn, 0, 1)
         button_layout.addWidget(update_btn, 1, 0)
         button_layout.addWidget(cancel_btn, 1, 1)
 
+        set_btn.clicked.connect(lambda: self.set_destination())
+        clear_btn.clicked.connect(self.clear_destination)
+        update_btn.clicked.connect(self.update_combo_boxes)
+        cancel_btn.clicked.connect(self.reject)
+
+        # Countdown labels
+        self.guildCountdownLabel = QLabel("Guilds move at ...")
+        self.shopCountdownLabel = QLabel("Shops move at ...")
+
         # Final layout
         main_layout.addLayout(dropdown_layout)
         main_layout.addLayout(custom_layout)
         main_layout.addLayout(button_layout)
+        main_layout.addWidget(self.guildCountdownLabel)
+        main_layout.addWidget(self.shopCountdownLabel)
         self.setLayout(main_layout)
+
+        # Apply theme
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
+        # Countdown logic
+        self.load_next_move_times()
+        self.countdown_timer = QTimer(self)
+        self.countdown_timer.timeout.connect(self.update_countdown_labels)
+        self.countdown_timer.start(1000)
+        self.update_combo_boxes()
 
     def _populate_initial_dropdowns(self) -> None:
         """Populate predefined destination dropdowns with initial data."""
@@ -6364,7 +6698,7 @@ class SetDestinationDialog(QDialog):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp)
+                    INSERT OR REPLACE INTO destinations (character_id, col, `Row`, timestamp)
                     VALUES (?, ?, ?, datetime('now'))
                 """, (character_id, coords[0], coords[1]))
 
@@ -6404,17 +6738,36 @@ class SetDestinationDialog(QDialog):
             if (sel := dropdown.currentText()) != "Select a destination":
                 return data[sel]
 
+        # Bank dropdown (custom formatted)
         if (bank := self.bank_dropdown.currentText()) != "Select a destination":
-            col_name, row_name = bank.split(" & ")
-            col = parent.columns.get(col_name.strip())
-            row = parent.rows.get(row_name.strip())
-            if col is not None and row is not None:
-                return col + 1, row + 1
+            try:
+                col_name, row_name = bank.split(" & ")
+                col = parent.columns.get(col_name.strip())
+                row = parent.rows.get(row_name.strip())
+                if col is not None and row is not None:
+                    return col + 1, row + 1
+            except ValueError:
+                logging.warning(f"Invalid bank format: {bank}")
+                return None
 
+        # Custom XY + direction
         col = parent.columns.get(self.columns_dropdown.currentText())
         row = parent.rows.get(self.rows_dropdown.currentText())
+        direction = self.directional_dropdown.currentText()
+
         if col is not None and row is not None:
-            return col, row
+            original_coords = (col, row)
+            if direction == "On":
+                return original_coords
+            elif direction == "East":
+                return (col + 1, row)
+            elif direction == "South":
+                return (col, row + 1)
+            elif direction == "South East":
+                return (col + 1, row + 1)
+            else:
+                logging.warning(f"Unrecognized direction: {direction}")
+                return original_coords
 
         logging.debug("No valid destination selected")
         return None
@@ -6443,6 +6796,50 @@ class SetDestinationDialog(QDialog):
         dialog.exec()
         logging.debug(f"Error dialog shown: {title} - {message}")
 
+    def load_next_move_times(self):
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+
+                cursor.execute(
+                    "SELECT next_update, last_scraped FROM guilds WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL ORDER BY next_update ASC LIMIT 1")
+                result = cursor.fetchone()
+                self.next_guild_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
+                self.guild_scraped_at = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
+
+                cursor.execute(
+                    "SELECT next_update, last_scraped FROM shops WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL ORDER BY next_update ASC LIMIT 1")
+                result = cursor.fetchone()
+                self.next_shop_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
+                self.shop_scraped_at = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
+        except Exception as e:
+            logging.error(f"Failed to load next move times: {e}")
+            self.next_guild_update = self.guild_scraped_at = None
+            self.next_shop_update = self.shop_scraped_at = None
+
+    def update_countdown_labels(self):
+        now = datetime.now(timezone.utc)
+
+        def format_countdown(next_time, label: QLabel, label_name: str):
+            if next_time:
+                remaining = max(timedelta(0), next_time - now)  # simple, correct
+                days = remaining.days
+                hours, remainder = divmod(remaining.seconds, 3600)
+                minutes, seconds = divmod(remainder, 60)
+
+                label.setText(
+                    f"{label_name} move at {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')} or in {days}d {hours}h {minutes}m {seconds}s"
+                )
+            else:
+                label.setText(f"{label_name} move time unknown.")
+
+        format_countdown(self.next_guild_update, self.guildCountdownLabel, "Guilds")
+        format_countdown(self.next_shop_update, self.shopCountdownLabel, "Shops")
+
 
 # -----------------------
 # Shopping List Tools
@@ -6451,21 +6848,15 @@ class SetDestinationDialog(QDialog):
 class ShoppingListTool(QDialog):
     """Tool for managing a character’s shopping list with SQLite-backed shop data."""
 
-    def __init__(self, character_name: str, db_path: str, parent=None) -> None:
-        """
-        Initialize the Shopping List Tool.
-
-        Args:
-            character_name: Name of the character using the tool.
-            db_path: Path to the SQLite database.
-            parent: Parent widget (default is None).
-        """
-        super().__init__(parent)  # Ensure it gets QDialog properties
+    def __init__(self, character_name: str, db_path: str, parent=None, color_mappings: dict | None = None) -> None:
+        super().__init__(parent)
         self.setWindowTitle("Shopping List Tool")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 700, 500)
         self.character_name = character_name
         self.DB_PATH = db_path
+        self.color_mappings = color_mappings or {}
         self.list_total = 0
+        self.next_shop_update = None
 
         try:
             self.sqlite_connection = sqlite3.connect(self.DB_PATH)
@@ -6478,44 +6869,76 @@ class ShoppingListTool(QDialog):
         self.setup_ui()
         if self.sqlite_connection:
             self.populate_shop_dropdown()
+
+        self.load_shop_move_time()
+        self.shop_timer = QTimer(self)
+        self.shop_timer.timeout.connect(self.update_shop_countdown)
+        self.shop_timer.start(1000)
+
         logging.debug(f"ShoppingListTool initialized for {character_name}")
 
     def setup_ui(self) -> None:
-        """Set up the UI elements and layout."""
-        layout = QVBoxLayout(self)  # Use QVBoxLayout for QDialog
+        main_layout = QVBoxLayout(self)
 
+        # Top row
+        filter_row = QHBoxLayout()
         self.shop_combobox = QComboBox()
         self.charisma_combobox = QComboBox()
         self.charisma_combobox.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
+        filter_row.addWidget(QLabel("Select Shop:"))
+        filter_row.addWidget(self.shop_combobox)
+        filter_row.addSpacing(20)
+        filter_row.addWidget(QLabel("Charisma Level:"))
+        filter_row.addWidget(self.charisma_combobox)
+        main_layout.addLayout(filter_row)
+
+        # Middle row
+        list_row = QHBoxLayout()
+
+        # Available Items
+        available_layout = QVBoxLayout()
+        available_layout.addWidget(QLabel("Available Items:"))
         self.available_items_list = QListWidget()
+        available_layout.addWidget(self.available_items_list)
+        self.add_item_button = QPushButton("Add →")
+        available_layout.addWidget(self.add_item_button)
+        list_row.addLayout(available_layout)
+
+        # Shopping List
+        shopping_layout = QVBoxLayout()
+        shopping_layout.addWidget(QLabel("Shopping List:"))
         self.shopping_list = QListWidget()
-        self.add_item_button = QPushButton("Add Item")
-        self.remove_item_button = QPushButton("Remove Item")
-        self.total_label = QLabel(
-            f"List total: 0 Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}")
+        shopping_layout.addWidget(self.shopping_list)
+        self.remove_item_button = QPushButton("← Remove")
+        shopping_layout.addWidget(self.remove_item_button)
+        list_row.addLayout(shopping_layout)
 
-        layout.addWidget(QLabel("Select Shop:"))
-        layout.addWidget(self.shop_combobox)
-        layout.addWidget(QLabel("Select Charisma Level:"))
-        layout.addWidget(self.charisma_combobox)
-        layout.addWidget(QLabel("Available Items:"))
-        layout.addWidget(self.available_items_list)
-        layout.addWidget(self.add_item_button)
-        layout.addWidget(QLabel("Shopping List:"))
-        layout.addWidget(self.shopping_list)
-        layout.addWidget(self.remove_item_button)
-        layout.addWidget(self.total_label)
+        main_layout.addLayout(list_row)
 
-        self.setLayout(layout)  # Set the layout for QDialog
+        # Bottom
+        self.total_label = QLabel()
+        self.total_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.shop_countdown_label = QLabel()
+        self.shop_countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.addSpacing(10)
+        main_layout.addWidget(self.total_label)
+        main_layout.addWidget(self.shop_countdown_label)
 
-        # Signal connections
+        self.setLayout(main_layout)
+
+        # Connect signals
         self.add_item_button.clicked.connect(self.add_item)
         self.remove_item_button.clicked.connect(self.remove_item)
         self.shop_combobox.currentIndexChanged.connect(self.load_items)
         self.charisma_combobox.currentIndexChanged.connect(self._update_all)
 
+        # Apply theme
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
+        self.update_total()
+
     def populate_shop_dropdown(self) -> None:
-        """Populate the shop dropdown with data from SQLite."""
         if not self.sqlite_cursor:
             return
         try:
@@ -6527,7 +6950,6 @@ class ShoppingListTool(QDialog):
             logging.error(f"Failed to populate shop dropdown: {e}")
 
     def load_items(self) -> None:
-        """Load available items based on selected shop and charisma level."""
         if not self.sqlite_cursor or not self.shop_combobox.currentText():
             self.available_items_list.clear()
             return
@@ -6553,7 +6975,6 @@ class ShoppingListTool(QDialog):
             logging.error(f"Failed to load items: {e}")
 
     def add_item(self) -> None:
-        """Add an item from available items to the shopping list."""
         if not (item := self.available_items_list.currentItem()):
             return
 
@@ -6575,7 +6996,6 @@ class ShoppingListTool(QDialog):
         logging.debug(f"Added {name} x{quantity} to shopping list")
 
     def remove_item(self) -> None:
-        """Remove or reduce quantity of an item from the shopping list."""
         if not (item := self.shopping_list.currentItem()):
             return
 
@@ -6595,12 +7015,10 @@ class ShoppingListTool(QDialog):
         logging.debug(f"Removed {qty_to_remove}x {name} from shopping list")
 
     def _update_all(self) -> None:
-        """Update both available items and shopping list prices."""
         self.load_items()
         self.update_shopping_list_prices()
 
     def update_shopping_list_prices(self) -> None:
-        """Update prices in the shopping list based on charisma level."""
         if not self.sqlite_cursor or not self.shop_combobox.currentText():
             return
 
@@ -6624,22 +7042,19 @@ class ShoppingListTool(QDialog):
                     qty = int(self.shopping_list.item(i).text().split(" - ")[2].split("x")[0])
                     self.shopping_list.item(i).setText(f"{name} - {price} Coins - {qty}x")
             self.update_total()
-            logging.debug(f"Updated prices for {len(items)} shopping list items")
         except sqlite3.Error as e:
             logging.error(f"Failed to update shopping list prices: {e}")
 
     def update_total(self) -> None:
-        """Update and display the total cost of the shopping list."""
         self.list_total = sum(
             int(item.text().split(" - ")[1].split(" Coins")[0]) * int(item.text().split(" - ")[2].split("x")[0])
             for item in [self.shopping_list.item(i) for i in range(self.shopping_list.count())]
         )
         self.total_label.setText(
-            f"List total: {self.list_total} Coins | Coins in Pocket: {self.coins_in_pocket()} | Bank: {self.coins_in_bank()}"
+            f"<b>List total:</b> {self.list_total} Coins | <b>Coins in Pocket:</b> {self.coins_in_pocket()} | <b>Bank:</b> {self.coins_in_bank()}"
         )
 
     def coins_in_pocket(self) -> int:
-        """Retrieve coins in pocket for the character."""
         if not self.sqlite_cursor:
             return 0
         try:
@@ -6653,7 +7068,6 @@ class ShoppingListTool(QDialog):
             return 0
 
     def coins_in_bank(self) -> int:
-        """Retrieve coins in bank for the character."""
         if not self.sqlite_cursor:
             return 0
         try:
@@ -6666,8 +7080,37 @@ class ShoppingListTool(QDialog):
             logging.error(f"Failed to fetch bank coins: {e}")
             return 0
 
+    def load_shop_move_time(self):
+        try:
+            with sqlite3.connect(self.DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT next_update FROM shops WHERE next_update IS NOT NULL ORDER BY next_update ASC LIMIT 1"
+                )
+                result = cursor.fetchone()
+                if result:
+                    self.next_shop_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
+                        tzinfo=timezone.utc)
+        except Exception as e:
+            logging.error(f"Failed to load shop move time: {e}")
+            self.next_shop_update = None
+
+    def update_shop_countdown(self):
+        now = datetime.now(timezone.utc)
+        if self.next_shop_update:
+            remaining = max(timedelta(0), self.next_shop_update - now)
+            days = remaining.days
+            hours, rem = divmod(remaining.seconds, 3600)
+            minutes, seconds = divmod(rem, 60)
+            text = (
+                f"Shops move at {self.next_shop_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
+                f"or in {days}d {hours}h {minutes}m {seconds}s"
+            )
+        else:
+            text = "Shops move time unknown."
+        self.shop_countdown_label.setText(text)
+
     def closeEvent(self, event) -> None:
-        """Close the SQLite connection when the window closes."""
         if self.sqlite_connection:
             try:
                 self.sqlite_connection.close()
@@ -6684,32 +7127,35 @@ class ShoppingListTool(QDialog):
 class DamageCalculator(QDialog):
     """Dialog for calculating weapons needed to reduce a target BP."""
 
-    def __init__(self, db_connection: sqlite3.Connection, parent=None) -> None:
+    def __init__(self, db_connection: sqlite3.Connection, parent=None, color_mappings: dict | None = None) -> None:
         """
         Initialize the Damage Calculator.
 
         Args:
             db_connection: SQLite database connection (unused currently).
             parent: Parent widget (default is None).
+            color_mappings: Theme colors dictionary (optional).
         """
-        super().__init__(parent)  # Ensure it gets QDialog properties
+        super().__init__(parent)
         self.db_connection = db_connection
         self.charisma_level = 0
+        self.color_mappings = color_mappings or {}
+
         self.setWindowTitle("Damage Calculator")
         self.setWindowIcon(APP_ICON)
         self.setMinimumWidth(400)
 
-        main_layout = QVBoxLayout(self)  # Use QVBoxLayout for QDialog
+        main_layout = QVBoxLayout(self)
 
-        # Target BP
+        # Target BP input
         bp_layout = QHBoxLayout()
         bp_layout.addWidget(QLabel("Target BP:"))
         self.bp_input = QLineEdit()
-        self.bp_input.setValidator(QIntValidator(0, 100000000))
+        self.bp_input.setValidator(PySide6.QtGui.QIntValidator(0, 100000000))
         bp_layout.addWidget(self.bp_input)
         main_layout.addLayout(bp_layout)
 
-        # Charisma level
+        # Charisma dropdown
         charisma_layout = QHBoxLayout()
         charisma_layout.addWidget(QLabel("Charisma Level:"))
         self.charisma_dropdown = QComboBox()
@@ -6718,7 +7164,7 @@ class DamageCalculator(QDialog):
         charisma_layout.addWidget(self.charisma_dropdown)
         main_layout.addLayout(charisma_layout)
 
-        # Results
+        # Output and controls
         self.result_display = QTextEdit()
         self.result_display.setReadOnly(True)
         self.result_display.setPlaceholderText("Weapons needed will be displayed here.")
@@ -6732,9 +7178,13 @@ class DamageCalculator(QDialog):
         calc_button.clicked.connect(self.calculate_damage)
         main_layout.addWidget(calc_button)
 
-        self.setLayout(main_layout)  # Set the layout for QDialog
+        self.setLayout(main_layout)
 
-        # Static prices [No Charisma, Charisma 1, Charisma 2, Charisma 3]
+        # Apply theme if available
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
+        # Static prices
         self.discount_magic_prices = {
             "Vial of Holy Water": [1400, 1357, 1302, 1260],
             "Garlic Spray": [700, 678, 651, 630],
@@ -6812,17 +7262,9 @@ class DamageCalculator(QDialog):
 class PowersDialog(QDialog):
     """Dialog displaying power information with destination-setting functionality."""
 
-    def __init__(self, parent: QWidget, character_x: int, character_y: int, db_path: str) -> None:
-        """
-        Initialize the PowersDialog.
-
-        Args:
-            parent: Reference to RBCCommunityMap.
-            character_x: Character's X coordinate.
-            character_y: Character's Y coordinate.
-            db_path: Path to SQLite database.
-        """
-        super().__init__(parent)  # Ensure QDialog properties are inherited
+    def __init__(self, parent: QWidget, character_x: int, character_y: int, db_path: str,
+                 color_mappings: dict | None = None) -> None:
+        super().__init__(parent)
         self.setWindowTitle("Powers Information")
         self.setWindowIcon(APP_ICON)
         self.setMinimumSize(600, 400)
@@ -6830,6 +7272,7 @@ class PowersDialog(QDialog):
         self.character_x = character_x
         self.character_y = character_y
         self.DB_PATH = db_path
+        self.color_mappings = color_mappings or {}
 
         try:
             self.db_connection = sqlite3.connect(db_path)
@@ -6847,24 +7290,40 @@ class PowersDialog(QDialog):
 
         # Details Panel
         self.details_panel = QVBoxLayout()
+
+        # --- Centered Guild Move Timer ---
+        self.guild_countdown_label = QLabel("Guilds move time unknown.")
+        self.guild_countdown_label.setStyleSheet("font-size: 9pt; color: gray; margin-bottom: 4px;")
+        self.guild_countdown_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
+        self.details_panel.addWidget(self.guild_countdown_label)
+
+        # --- Power Info Fields ---
         self.power_name_label: QLabel = self._create_labeled_field("Power")
         self.guild_label: QLabel = self._create_labeled_field("Guild")
         self.cost_label: QLabel = self._create_labeled_field("Cost")
         self.quest_info_text: QTextEdit = self._create_labeled_field("Quest Info", QTextEdit)
         self.skill_info_text: QTextEdit = self._create_labeled_field("Skill Info", QTextEdit)
 
+        # --- Destination Button ---
         self.set_destination_button = QPushButton("Set Destination")
         self.set_destination_button.setEnabled(False)
         self.set_destination_button.clicked.connect(self.set_destination)
         self.details_panel.addWidget(self.set_destination_button)
 
         main_layout.addLayout(self.details_panel)
+        self.setLayout(main_layout)
 
-        # Load powers if DB is available
+        # Apply theme
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
+        # Load powers and initialize timer
         if self.db_connection:
             self.load_powers()
-
-        self.setLayout(main_layout)  # Set QDialog layout
+        self.load_guild_move_time()
+        self.guild_timer = QTimer(self)
+        self.guild_timer.timeout.connect(self.update_guild_countdown)
+        self.guild_timer.start(1000)
         logging.debug(f"PowersDialog initialized at ({character_x}, {character_y})")
 
     T = TypeVar("T", QLabel, QTextEdit)
@@ -6917,15 +7376,14 @@ class PowersDialog(QDialog):
                     self._enable_nearest_peacekeeper_mission()
                 elif guild:
                     cursor.execute("""
-                        SELECT c.Coordinate, r.Coordinate
-                        FROM guilds g
-                        JOIN columns c ON g.Column = c.Name
-                        JOIN rows r ON g.Row = r.Name
-                        WHERE g.Name = ?
-                    """, (guild,))
+                                   SELECT c.Coordinate, r.Coordinate
+                                   FROM guilds g
+                                            JOIN columns c ON g.Column = c.Name
+                                            JOIN rows r ON g.Row = r.Name
+                                   WHERE g.Name = ?
+                                   """, (guild,))
                     if loc := cursor.fetchone():
                         self._configure_destination_button(guild, loc[0], loc[1])
-
                     else:
                         self.set_destination_button.setEnabled(False)
                 else:
@@ -6971,7 +7429,6 @@ class PowersDialog(QDialog):
             self.set_destination_button.setProperty("guild", guild)
             self.set_destination_button.setProperty("Column", col_val)
             self.set_destination_button.setProperty("Row", row_val)
-
         logging.debug(f"Destination button {'enabled' if enabled else 'disabled'} for {guild} at ({col}, {row})")
 
     def set_destination(self) -> None:
@@ -6996,7 +7453,7 @@ class PowersDialog(QDialog):
             with sqlite3.connect(self.DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp) "
+                    "INSERT OR REPLACE INTO destinations (character_id, col, `Row`, timestamp) "
                     "VALUES (?, ?, ?, datetime('now'))",
                     (character_id, col, row)
                 )
@@ -7006,8 +7463,6 @@ class PowersDialog(QDialog):
             logging.info(f"Destination set for {character_id} to {guild} at ({col}, {row})")
             # noinspection PyUnresolvedReferences
             QMessageBox.information(self, "Success", f"Destination set to {guild} at ({col}, {row})", QMessageBox.Ok)
-
-
         except sqlite3.Error as e:
             logging.error(f"Failed to set destination: {e}")
             QMessageBox.critical(self, "Database Error", "Failed to set destination")
@@ -7022,6 +7477,38 @@ class PowersDialog(QDialog):
                 logging.error(f"Failed to close database: {e}")
         event.accept()
 
+    def load_guild_move_time(self):
+        try:
+            with sqlite3.connect(self.DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT next_update FROM guilds WHERE next_update IS NOT NULL ORDER BY next_update ASC LIMIT 1"
+                )
+                result = cursor.fetchone()
+                if result:
+                    self.next_guild_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
+                        tzinfo=timezone.utc)
+                else:
+                    self.next_guild_update = None
+        except Exception as e:
+            logging.error(f"Failed to load guild move time: {e}")
+            self.next_guild_update = None
+
+    def update_guild_countdown(self):
+        now = datetime.now(timezone.utc)
+        if self.next_guild_update:
+            remaining = max(timedelta(0), self.next_guild_update - now)
+            days = remaining.days
+            hours, rem = divmod(remaining.seconds, 3600)
+            minutes, seconds = divmod(rem, 60)
+            text = (
+                f"Guilds move at {self.next_guild_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
+                f"or in {days}d {hours}h {minutes}m {seconds}s"
+            )
+        else:
+            text = "Guilds move time unknown."
+        self.guild_countdown_label.setText(text)
+
 
 # -----------------------
 # Log Viewer
@@ -7030,12 +7517,13 @@ class PowersDialog(QDialog):
 class LogViewer(QDialog):
     """A dialog window to view and optionally send application logs."""
 
-    def __init__(self, parent: QWidget, log_directory: str):
+    def __init__(self, parent: QWidget, log_directory: str, color_mappings: dict | None = None):
         super().__init__(parent)
         self.setWindowTitle("Log Viewer")
         self.setWindowIcon(APP_ICON)
         self.resize(900, 600)
 
+        self.color_mappings = color_mappings or {}
         self.log_directory = LOG_DIR
         self.current_log_lines = []
 
@@ -7078,7 +7566,6 @@ class LogViewer(QDialog):
         filter_box.setLayout(filter_layout)
 
         # Buttons
-        # Buttons
         delete_button = QPushButton("Delete Log")
         delete_button.clicked.connect(self.delete_log)
 
@@ -7099,6 +7586,10 @@ class LogViewer(QDialog):
         # Final Layout
         main_layout.addLayout(left_layout, 2)
         main_layout.addLayout(right_layout, 5)
+
+        # Apply theme if provided
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
     def load_log(self, item: QListWidgetItem):
         file_path = os.path.join(self.log_directory, item.text())
@@ -7171,22 +7662,32 @@ class LogViewer(QDialog):
 # -----------------------
 
 class DiscordServerDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, color_mappings: dict | None = None):
         super().__init__(parent)
         self.setWindowTitle("Community Discord Servers")
         self.setMinimumSize(400, 300)
+        self.color_mappings = color_mappings or {}
+
         layout = QVBoxLayout(self)
         self.setLayout(layout)
 
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT name, invite_link FROM discord_servers")
-            servers = cursor.fetchall()
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name, invite_link FROM discord_servers")
+                servers = cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load Discord servers: {e}")
+            QMessageBox.critical(self, "Database Error", "Unable to load server list.")
+            servers = []
 
         for name, link in servers:
             btn = QPushButton(name)
             btn.clicked.connect(lambda _, url=link: webbrowser.open(url))
             layout.addWidget(btn)
+
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
 
 # -----------------------
@@ -7207,7 +7708,7 @@ class CompassOverlay(QDialog):
         """
         super().__init__(parent)
         self.setWindowTitle("Compass Routes")
-        self.setMinimumWidth(350)
+        self.setFixedSize(200, 150)
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
         self.direct_route_info = direct_route_info
@@ -7229,16 +7730,20 @@ class CompassOverlay(QDialog):
         self.route_mapping = {}
 
         routes = [
-            ("Direct Route", *self.direct_route_info, QColor("green")),
-            ("Transit Route", *self.transit_route_info, QColor("purple")),
+            ("Direct Route", self.direct_route_info[0], self.direct_route_info[1], PySide6.QtGui.QColor("green"),
+             PySide6.QtGui.QColor("white")),
+            ("Transit Route", self.transit_route_info[0], self.transit_route_info[1], PySide6.QtGui.QColor(128, 0, 128),
+             PySide6.QtGui.QColor("white")),  # dark purple
         ]
         routes.sort(key=lambda r: r[1])  # sort by AP cost
 
-        for label, cost, desc, color in routes:
+        for label, cost, desc, bg_color, text_color in routes:
             item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
-            item.setForeground(color)
+            item.setBackground(bg_color)
+            item.setForeground(text_color)
             self.route_list.addItem(item)
-            self.route_mapping[label] = (cost, desc)
+            path = self.direct_route_info[2] if label == "Direct Route" else self.transit_route_info[2]
+            self.route_mapping[label] = (cost, desc, path)
 
         self.route_list.itemClicked.connect(self.route_selected)  # ✅ Hook click signal
         layout.addWidget(self.route_list)
@@ -7260,18 +7765,26 @@ class CompassOverlay(QDialog):
         self.transit_route_info = transit_route_info
 
         self.route_list.clear()
+        self.route_mapping = {}  # ✅ Reset once outside the loop
 
+        # Unpack only ap + desc, exclude path (3rd element), just like in _init_ui
         routes = [
-            ("Direct Route", *self.direct_route_info, QColor("green")),
-            ("Transit Route", *self.transit_route_info, QColor(170, 0, 170)),
+            ("Direct Route", self.direct_route_info[0], self.direct_route_info[1], PySide6.QtGui.QColor("green"),
+             PySide6.QtGui.QColor("white")),
+            ("Transit Route", self.transit_route_info[0], self.transit_route_info[1], PySide6.QtGui.QColor(128, 0, 128),
+             PySide6.QtGui.QColor("white")),
         ]
-        routes.sort(key=lambda r: r[1])
+        routes.sort(key=lambda r: r[1])  # Sort by AP
 
-        for label, cost, desc, color in routes:
+        for label, cost, desc, bg_color, text_color in routes:
             item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
-            item.setForeground(color)
+            item.setBackground(bg_color)
+            item.setForeground(text_color)
             self.route_list.addItem(item)
-            self.route_mapping = {}  # Store label → (ap, desc)
+
+            # ✅ Preserve path too for selection support
+            path = self.direct_route_info[2] if label == "Direct Route" else self.transit_route_info[2]
+            self.route_mapping[label] = (cost, desc, path)
 
     def route_selected(self, item):
         label_text = item.text().split("—")[0].strip()
@@ -7279,6 +7792,168 @@ class CompassOverlay(QDialog):
         if route_info and self.parent():
             self.parent().set_compass_display_from_overlay(label_text, route_info)
 
+# -----------------------
+# Tampermonkey Script Dialog
+# -----------------------
+
+class UserscriptManagerDialog(QDialog):
+    def __init__(self, web_profile, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Userscript Manager")
+        self.profile = web_profile
+        self.scripts = []
+        self.init_ui()
+        self.load_scripts()
+
+    def init_ui(self):
+        self.list_widget = QListWidget()
+        self.name_edit = QLineEdit()
+        self.match_edit = QLineEdit()
+        self.script_edit = QTextEdit()
+
+        self.save_button = QPushButton("Save Script")
+        self.delete_button = QPushButton("Delete Script")
+        self.new_button = QPushButton("New Script")
+        self.reload_button = QPushButton("Reload Scripts")
+
+        self.list_widget.itemSelectionChanged.connect(self.load_selected_script)
+        self.save_button.clicked.connect(self.save_script)
+        self.delete_button.clicked.connect(self.delete_script)
+        self.new_button.clicked.connect(self.clear_fields)
+        self.reload_button.clicked.connect(self.load_scripts)
+
+        left_layout = QVBoxLayout()
+        left_layout.addWidget(QLabel("Saved Scripts"))
+        left_layout.addWidget(self.list_widget)
+        left_layout.addWidget(self.new_button)
+        left_layout.addWidget(self.reload_button)
+
+        right_layout = QVBoxLayout()
+        right_layout.addWidget(QLabel("Script Name"))
+        right_layout.addWidget(self.name_edit)
+        right_layout.addWidget(QLabel("@match Pattern (optional — auto-detected)"))
+        right_layout.addWidget(self.match_edit)
+        right_layout.addWidget(QLabel("Script Code"))
+        right_layout.addWidget(self.script_edit)
+        right_layout.addWidget(self.save_button)
+        right_layout.addWidget(self.delete_button)
+
+        layout = QHBoxLayout()
+        layout.addLayout(left_layout, 1)
+        layout.addLayout(right_layout, 2)
+
+        self.setLayout(layout)
+        self.resize(900, 600)
+
+    def load_scripts(self):
+        self.list_widget.clear()
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute("""
+                SELECT us.name, COALESCE(ms.match_pattern, '')
+                FROM user_scripts us
+                LEFT JOIN user_script_matches ms ON ms.script_id = us.id
+                GROUP BY us.id
+            """)
+            for name, match in cursor.fetchall():
+                display = f"{name} ({match})" if match else name
+                self.list_widget.addItem(display)
+        self.load_enabled_scripts()
+
+    def load_enabled_scripts(self):
+        self.profile.scripts().clear()
+        self.scripts = []
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute("SELECT id, name, script FROM user_scripts WHERE enabled = 1")
+            for script_id, name, code in cursor.fetchall():
+                match_cursor = conn.execute("SELECT match_pattern FROM user_script_matches WHERE script_id = ?", (script_id,))
+                patterns = [row[0] for row in match_cursor.fetchall()]
+                qscript = QWebEngineScript()
+                qscript.setName(name)
+                qscript.setInjectionPoint(QWebEngineScript.DocumentReady)
+                qscript.setWorldId(QWebEngineScript.MainWorld)
+                qscript.setRunsOnSubFrames(False)
+                qscript.setSourceCode(code)
+                self.scripts.append((patterns, qscript))
+
+    def inject_scripts_for_url(self, url: str):
+        self.profile.scripts().clear()
+        for patterns, script in self.scripts:
+            if any(url_matches(p, url) for p in patterns):
+                self.profile.scripts().insert(script)
+
+    def load_selected_script(self):
+        items = self.list_widget.selectedItems()
+        if not items:
+            return
+        name = items[0].text().split(" (")[0]  # Strip match from display name
+        with sqlite3.connect(DB_PATH) as conn:
+            row = conn.execute("SELECT id, name, script FROM user_scripts WHERE name = ?", (name,)).fetchone()
+            if row:
+                script_id = row[0]
+                self.name_edit.setText(row[1])
+                self.script_edit.setText(row[2])
+                matches = conn.execute("SELECT match_pattern FROM user_script_matches WHERE script_id = ?", (script_id,))
+                patterns = [m[0] for m in matches.fetchall()]
+                self.match_edit.setText("; ".join(patterns))  # Just for UI preview
+
+    def save_script(self):
+        name = self.name_edit.text().strip()
+        script = self.script_edit.toPlainText()
+        match_field = self.match_edit.text().strip()
+
+        # Extract all @match lines if not manually specified
+        match_lines = []
+        if match_field:
+            match_lines = [m.strip() for m in match_field.split(";")]
+        else:
+            match_lines = [
+                line.replace("// @match", "").strip()
+                for line in script.splitlines()
+                if line.strip().startswith("// @match")
+            ]
+
+        if not name or not match_lines:
+            QMessageBox.warning(self, "Error", "Script name and at least one @match pattern are required.")
+            return
+
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO user_scripts (name, script, enabled)
+                VALUES (?, ?, 1)
+                ON CONFLICT(name) DO UPDATE SET script=excluded.script
+            """, (name, script))
+            cursor.execute("SELECT id FROM user_scripts WHERE name=?", (name,))
+            script_id = cursor.fetchone()[0]
+
+            # Store enabled script in settings
+            cursor.execute("""
+                INSERT INTO settings (key, value)
+                VALUES ('enabled_script', ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+            """, (str(script_id),))
+
+            cursor.execute("DELETE FROM user_script_matches WHERE script_id = ?", (script_id,))
+            for match in match_lines:
+                cursor.execute("INSERT INTO user_script_matches (script_id, match_pattern) VALUES (?, ?)", (script_id, match))
+
+        self.load_scripts()
+
+    def delete_script(self):
+        items = self.list_widget.selectedItems()
+        if not items:
+            return
+        name = items[0].text().split(" (")[0]
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute("DELETE FROM user_scripts WHERE name = ?", (name,))
+        self.clear_fields()
+        self.load_scripts()
+
+    def clear_fields(self):
+        self.name_edit.clear()
+        self.match_edit.clear()
+        self.script_edit.clear()
+        self.list_widget.clearSelection()
 
 # -----------------------
 # Main Entry Point
@@ -7288,7 +7963,7 @@ def main() -> None:
     """Run the RBC City Map Application."""
     global APP_ICON
     app = QApplication(sys.argv)
-    APP_ICON = QIcon('./images/favicon.ico')
+    APP_ICON = PySide6.QtGui.QIcon('./images/favicon.ico')
     app.setWindowIcon(APP_ICON)
 
     splash = SplashScreen("images/loading.png")
@@ -7317,7 +7992,6 @@ def main() -> None:
     splash.finish(main_window)
 
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()

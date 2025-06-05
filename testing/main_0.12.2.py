@@ -46,7 +46,7 @@ Modules Used:
 - **requests**: Handles HTTP requests for web scraping operations.
 - **re**: Regular expression operations for parsing HTML and text.
 - **datetime**: Used in timestamps, logs, and database operations.
-- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in AVITDScraper).
+- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in Scraper).
 - **PySide6**: Provides a **Qt-based GUI framework**, handling UI elements, WebEngine, and event management.
 - **sqlite3**: Database engine for persistent storage of map data, character info, and settings.
 - **webbrowser**: Enables external browser interactions (e.g., opening the RBC website or Discord).
@@ -104,8 +104,8 @@ Allows users to modify webview styles using custom CSS.
 - **add_tab**: Adds a category tab for CSS elements.
 - **save_and_apply_changes**: Saves and injects custom CSS into the webview.
 
-#### AVITDScraper (Web Scraping Engine)
-Fetches guild and shop location data from "A View in the Dark."
+#### Scraper (Web Scraping Engine)
+Fetches guild and shop location data from multiple locations.
 
 - **__init__**: Sets up scraper parameters.
 - **scrape_guilds_and_shops**: Collects shop and guild locations.
@@ -314,7 +314,7 @@ from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar, cast
 # -----------------------
 
 if TYPE_CHECKING:
-    class AVITDScraper:
+    class Scraper:
         def scrape_guilds_and_shops(self) -> None: ...
         def close_connection(self) -> None: ...
 
@@ -324,7 +324,7 @@ if TYPE_CHECKING:
         selected_character: dict | None
         destination: tuple[int, int] | None
         website_frame: QWebEngineView
-        AVITD_scraper: AVITDScraper
+        scraper: Scraper
         def apply_custom_css(self, css: str) -> None: ...
         def update_minimap(self) -> None: ...
 
@@ -533,7 +533,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
     tables = [
         """CREATE TABLE IF NOT EXISTS banks (
             ID INTEGER PRIMARY KEY,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL,
             Name TEXT DEFAULT NULL
         )""",
@@ -591,7 +591,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
         """CREATE TABLE IF NOT EXISTS guilds (
             ID INTEGER PRIMARY KEY,
             Name TEXT NOT NULL UNIQUE,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL,
             next_update TIMESTAMP DEFAULT NULL,
             last_scraped TIMESTAMP DEFAULT NULL
@@ -603,7 +603,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
         """CREATE TABLE IF NOT EXISTS placesofinterest (
             ID INTEGER PRIMARY KEY,
             Name TEXT NOT NULL,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL
         )""",
         """CREATE TABLE IF NOT EXISTS powers (
@@ -643,27 +643,27 @@ def create_tables(conn: sqlite3.Connection) -> None:
         """CREATE TABLE IF NOT EXISTS shops (
             ID INTEGER PRIMARY KEY,
             Name TEXT NOT NULL UNIQUE,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL,
             next_update TIMESTAMP DEFAULT NULL,
             last_scraped TIMESTAMP DEFAULT NULL
         )""",
         """CREATE TABLE IF NOT EXISTS taverns (
             ID INTEGER PRIMARY KEY,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL,
             Name TEXT NOT NULL
         )""",
         """CREATE TABLE IF NOT EXISTS transits (
             ID INTEGER PRIMARY KEY,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL,
             Name TEXT NOT NULL
         )""",
         """CREATE TABLE IF NOT EXISTS userbuildings (
             ID INTEGER PRIMARY KEY,
             Name TEXT NOT NULL,
-            Column TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
             Row TEXT NOT NULL
         )""",
         """CREATE TABLE IF NOT EXISTS discord_servers (
@@ -691,7 +691,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('log_level', str(DEFAULT_LOG_LEVEL))
         ]),
 
-        ("INSERT OR IGNORE INTO banks (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO banks (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Aardvark','82nd','OmniBank'),
             (2,'Alder','40th','OmniBank'),
              (3,'Alder','80th','OmniBank'),
@@ -1079,7 +1079,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ("Default", ".rich", "color:#ffff44;"),
             ("Default", ".mh","border:none; background-color:transparent; text-decoration:underline; color:white; padding:0px; cursor:hand;")
         ]),
-        ("INSERT OR IGNORE INTO guilds (ID, Name, Column, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO guilds (ID, Name, `Column`, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1,'Allurists Guild 1','NA','NA',''),
             (2,'Allurists Guild 2','NA','NA',''),
             (3,'Allurists Guild 3','NA','NA',''),
@@ -1099,7 +1099,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (17,'Peacekeepers Mission 2','Unicorn','33rd',''),
             (18,'Peacekeepers Mission 3','Emerald','33rd','')
         ]),
-        ("INSERT OR IGNORE INTO placesofinterest (ID, Name, Column, Row) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO placesofinterest (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
             (1,'Battle Arena','Zelkova','52nd'),
             (2,'Hall of Binding','Vervain','40th'),
             (3,'Hall of Severance','Walrus','40th'),
@@ -1491,7 +1491,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (240,'The White House','Compass',11999,11999,11999,11999),
             (241,'The White House','Pewter Tankard',15000,15000,15000,15000)
         ]),
-        ("INSERT OR IGNORE INTO shops (ID, Name, Column, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO shops (ID, Name, `Column`, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1,'Ace Porn','NA','NA',''),
             (2,'Checkers Porn Shop','NA','NA',''),
             (3,'Dark Desires','NA','NA',''),
@@ -1518,7 +1518,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (24,'White Light','NA','NA',''),
             (25,'Ye Olde Scrolles','NA','NA','')
         ]),
-        ("INSERT OR IGNORE INTO taverns (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO taverns (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Gum','33rd','Abbot''s Tavern'),
             (2,'Knotweed','11th','Archer''s Tavern'),
             (3,'Torment','16th','Baker''s Tavern'),
@@ -1615,7 +1615,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (94,'Anguish','68th','Xendom Tavern'),
             (95,'Pyrites','70th','Ye Olde Gallows Ale House')
         ]),
-        ("INSERT OR IGNORE INTO transits (ID, Column, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO transits (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Mongoose','25th','Calliope'),
             (2,'Zelkova','25th','Clio'),
             (3,'Malachite','25th','Erato'),
@@ -1626,7 +1626,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (8,'Zelkova','75th','Thalia'),
             (9,'Malachite','75th','Urania')
         ]),
-        ("INSERT OR IGNORE INTO userbuildings (ID, Name, Column, Row) VALUES (?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO userbuildings (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
             (1, 'Ace''s House of Dumont', 'Cedar', '99th'),
             (2, 'Alatáriël Maenor', 'Diamond', '50th'),
             (3, 'Alpha Dragon''s and Lyric''s House of Dragon and Flame', 'Amethyst', '90th'),
@@ -1827,6 +1827,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                     )
                 """)
                 try:
+                    # noinspection SqlResolve
                     cursor.execute("""
                         INSERT INTO custom_css (element, value, profile_name)
                         SELECT element, value, 'Default' FROM custom_css_old
@@ -1853,9 +1854,10 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                     )
                 """)
                 try:
+                    # noinspection SqlResolve
                     cursor.execute("""
-                        INSERT INTO guilds (ID, Name, Column, Row, next_update)
-                        SELECT ID, Name, Column, Row, next_update FROM guilds_old
+                        INSERT INTO guilds (ID, Name, `Column`, Row, next_update)
+                        SELECT ID, Name, `Column`, `Row`, next_update FROM guilds_old
                     """)
                     logging.info("Migrated old guilds data successfully.")
                 except sqlite3.Error as e:
@@ -1880,9 +1882,10 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                     )
                 """)
                 try:
+                    # noinspection SqlResolve
                     cursor.execute("""
-                        INSERT INTO shops (ID, Name, Column, Row, next_update)
-                        SELECT ID, Name, Column, Row, next_update FROM shops_old
+                        INSERT INTO shops (ID, Name, `Column`, Row, next_update)
+                        SELECT ID, Name, `Column`, `Row`, next_update FROM shops_old
                     """)
                     logging.info("Migrated old shops data successfully.")
                 except sqlite3.Error as e:
@@ -2297,11 +2300,11 @@ class RBCCommunityMap(QMainWindow):
 
     @splash_message(None)
     def _init_scraper(self) -> None:
-        """Initialize the AVITD scraper and start scraping in a separate thread."""
-        self.AVITD_scraper = AVITDScraper()
-        # Use QThread for non-blocking scraping (assuming AVITDScraper supports it)
+        """Initialize the  scraper and start scraping in a separate thread."""
+        self.scraper = Scraper()
+        # Use QThread for non-blocking scraping (assuming Scraper supports it)
         from PySide6.QtCore import QThreadPool
-        QThreadPool.globalInstance().start(lambda: self.AVITD_scraper.scrape_guilds_and_shops())
+        QThreadPool.globalInstance().start(lambda: self.scraper.scrape_guilds_and_shops())
         logging.debug("Started scraper in background thread")
 
     @splash_message(None)
@@ -6026,140 +6029,191 @@ class CSSCustomizationDialog(QDialog):
             QMessageBox.critical(self, "Error", "Failed to clear customizations")
 
 # -----------------------
-# AVITD Scraper Class (Updated)
+# Scraper Class
 # -----------------------
 
-class AVITDScraper:
-    """
-    A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
-    """
-
+class Scraper:
     def __init__(self):
-        self.url = "https://aviewinthedark.net/"
+        self.avitd_url = "https://aviewinthedark.net/"
+        self.terrible_url = "https://vampires.terrible.engineering/api/locations"
+        self.discord_bot_url = "https://lollis-home.ddns.net/api/locations.json"
         self.connection = sqlite3.connect(DB_PATH)
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-        logging.info("AVITDScraper initialized.")
+        logging.info("Scraper initialized.")
 
-    def scrape_guilds_and_shops(self):
-        logging.info("Starting to scrape guilds and shops.")
-        response = requests.get(self.url, headers=self.headers)
-        logging.debug(f"Received response: {response.status_code}")
+    def scrape(self):
+        avitd_data, guilds_next, shops_next = self.scrape_avitd()
+        terrible_data = self.scrape_terrible()
+        discord_data = self.scrape_discord_bot()
 
-        soup = BeautifulSoup(response.text, 'html.parser')
+        # Chain merge Discord → Terrible → AVITD for both guilds and shops
+        combined_guilds = self.merge_data(terrible_data["guilds"], discord_data["guilds"], source_a="Terrible", source_b="Discord")
+        final_guilds = self.merge_data(avitd_data["guilds"], combined_guilds, source_a="AVITD", source_b="Terrible/Discord")
+
+        combined_shops = self.merge_data(terrible_data["shops"], discord_data["shops"], source_a="Terrible", source_b="Discord")
+        final_shops = self.merge_data(avitd_data["shops"], combined_shops, source_a="AVITD", source_b="Terrible/Discord")
+
+        self.update_database(final_guilds, "guilds", guilds_next)
+        self.update_database(final_shops, "shops", shops_next)
+
+    def scrape_avitd(self):
+        try:
+            response = requests.get(self.avitd_url, headers=self.headers)
+            soup = BeautifulSoup(response.text, 'html.parser')
+        except Exception as e:
+            logging.error(f"AVITD fetch failed: {e}")
+            return {'guilds': {}, 'shops': {}}, 'NA', 'NA'
 
         guilds = self.scrape_section(soup, "the guilds")
         shops = self.scrape_section(soup, "the shops")
-        guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
-        shops_next_update = self.extract_next_update_time(soup, 'Shops')
+        guilds_next = self.extract_next_update_time(soup, 'Guilds')
+        shops_next = self.extract_next_update_time(soup, 'Shops')
 
-        self.display_results(guilds, shops, guilds_next_update, shops_next_update)
+        logging.info(f"AVITD provided {len(guilds)} guilds and {len(shops)} shops.")
+        return {
+            'guilds': {self.normalize_name(name): (col, row) for name, col, row in guilds},
+            'shops': {self.normalize_name(name): (col, row) for name, col, row in shops}
+        }, guilds_next, shops_next
 
-        self.update_database(guilds, "guilds", guilds_next_update)
-        self.update_database(shops, "shops", shops_next_update)
-        logging.info("Finished scraping and updating the database.")
-
-    def scrape_section(self, soup, section_image_alt):
-        logging.debug(f"Scraping section: {section_image_alt}")
-        data = []
-        section_image = soup.find('img', alt=section_image_alt)
-        if not section_image:
-            logging.warning(f"No data found for {section_image_alt}.")
-            return data
-
-        table = section_image.find_next('table')
+    def scrape_section(self, soup, alt_text):
+        section = soup.find('img', alt=alt_text)
+        if not section:
+            return []
+        table = section.find_next('table')
         rows = table.find_all('tr', class_=['odd', 'even'])
-
+        result = []
         for row in rows:
-            columns = row.find_all('td')
-            if len(columns) < 2:
-                logging.debug(f"Skipping row due to insufficient columns: {row}")
+            cols = row.find_all('td')
+            if len(cols) < 2:
                 continue
-
-            name = columns[0].text.strip()
-            location = columns[1].text.strip().replace("SE of ", "").strip()
-
+            name = cols[0].text.strip()
             try:
-                column, row = location.split(" and ")
-                data.append((name, column, row))
-                logging.debug(f"Extracted data - Name: {name}, Column: {column}, Row: {row}")
+                col, row = cols[1].text.replace("SE of ", "").strip().split(" and ")
+                result.append((name, col, row))
             except ValueError:
-                logging.warning(f"Location format unexpected for {name}: {location}")
+                continue
+        return result
 
-        logging.info(f"Scraped {len(data)} entries from {section_image_alt}.")
-        return data
-
-    def extract_next_update_time(self, soup, section_name):
-        logging.debug(f"Extracting next update time for section: {section_name}")
-        section_divs = soup.find_all('div', class_='next_change')
-
-        for div in section_divs:
-            if section_name in div.text:
+    def extract_next_update_time(self, soup, label):
+        divs = soup.find_all('div', class_='next_change')
+        for div in divs:
+            if label in div.text:
                 match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
                 if match:
-                    days = int(match.group(1))
-                    hours = int(match.group(2))
-                    minutes = int(match.group(3))
-                    seconds = int(match.group(4))
-
-                    next_update = datetime.now(timezone.utc) + timedelta(days=days, hours=hours, minutes=minutes, seconds=seconds)
-                    logging.debug(f"Next update time for {section_name}: {next_update}")
-                    return next_update.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-        logging.warning(f"No next update time found for {section_name}.")
+                    delta = timedelta(days=int(match[1]), hours=int(match[2]), minutes=int(match[3]), seconds=int(match[4]))
+                    return (datetime.now(timezone.utc) + delta).strftime('%Y-%m-%d %H:%M:%S')
         return 'NA'
 
-    def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
-        logging.info(f"Guilds Next Update: {guilds_next_update}")
-        logging.info(f"Shops Next Update: {shops_next_update}")
+    def scrape_terrible(self):
+        try:
+            response = requests.get(self.terrible_url, timeout=10)
+            data = response.json()
+        except Exception as e:
+            logging.error(f"Terrible API fetch failed: {e}")
+            return {'guilds': {}, 'shops': {}}
 
-        logging.info("Guilds Data:")
-        for guild in guilds:
-            logging.info(f"Name: {guild[0]}, Column: {guild[1]}, Row: {guild[2]}")
+        guilds = {}
+        shops = {}
 
-        logging.info("Shops Data:")
-        for shop in shops:
-            logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
+        for loc in data:
+            name = self.normalize_name(loc["building_name"])
+            col = str(loc["coordinate_x"])
+            row = str(loc["coordinate_y"])
+            typ = loc["building_type"]
+            if typ == "guild":
+                guilds[name] = (col, row)
+            elif typ == "shop":
+                shops[name] = (col, row)
 
-    def update_database(self, data, table, next_update):
-        scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        logging.info(f"Terrible API provided {len(guilds)} guilds and {len(shops)} shops.")
+        return {'guilds': guilds, 'shops': shops}
 
+    def scrape_discord_bot(self):
+        try:
+            response = requests.get(self.discord_bot_url, timeout=10)
+            data = response.json()
+        except Exception as e:
+            logging.error(f"Discord bot API fetch failed: {e}")
+            return {'guilds': {}, 'shops': {}}
+
+        guilds = {}
+        shops = {}
+
+        for name, coord in data.get("guilds", {}).items():
+            norm_name = self.normalize_name(name)
+            guilds[norm_name] = (coord["column"], coord["row"])
+        for name, coord in data.get("shops", {}).items():
+            norm_name = self.normalize_name(name)
+            shops[norm_name] = (coord["column"], coord["row"])
+
+        logging.info(f"Discord bot provided {len(guilds)} guilds and {len(shops)} shops.")
+        return {'guilds': guilds, 'shops': shops}
+
+    def normalize_name(self, name):
+        """Standardizes building names by fixing known typos and stripping formatting."""
+        name = name.strip()
+
+        # Fix known typo in AVITD source
+        if name.startswith("Peacekkeepers Mission"):
+            name = name.replace("Peacekkeepers", "Peacekeepers", 1)
+
+        # Remove Markdown-like decorations
+        name = name.lstrip("*_~").rstrip("*_~")
+
+        return name
+
+    def merge_data(self, a_dict, b_dict, source_a="A", source_b="B"):
+        merged = {}
+        all_keys = set(a_dict.keys()) | set(b_dict.keys())
+        for key in all_keys:
+            if key in a_dict:
+                merged[key] = a_dict[key]
+                logging.debug(f"Using {source_a} data for {key}: {a_dict[key]}")
+            else:
+                merged[key] = b_dict[key]
+                logging.debug(f"Using {source_b} data for {key}: {b_dict[key]}")
+        return merged
+
+    def update_database(self, merged_dict, table, next_update):
+        scrape_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
+                # Reset existing entries
                 if table == "guilds":
                     cursor.execute(f"""
                         UPDATE {table}
                         SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                        WHERE Name NOT LIKE 'Peace%'
-                    """, (next_update, scrape_timestamp))
+                        WHERE Name NOT LIKE 'Peacekeepers Mission%'
+                    """, (next_update, scrape_time))
                 else:
                     cursor.execute(f"""
                         UPDATE {table}
                         SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                    """, (next_update, scrape_timestamp))
+                    """, (next_update, scrape_time))
 
-                for name, column, row in data:
+                # Insert or update entries in sorted order
+                for name in sorted(merged_dict):
                     if table == "shops" and "Peacekeepers Mission" in name:
                         logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
                         continue
 
-                    try:
-                        cursor.execute(f"""
-                            INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(Name) DO UPDATE SET
-                                `Column`=excluded.`Column`,
-                                `Row`=excluded.`Row`,
-                                `next_update`=excluded.`next_update`,
-                                `last_scraped`=excluded.`last_scraped`
-                        """, (name, column, row, next_update, scrape_timestamp))
-                    except sqlite3.Error as e:
-                        logging.error(f"Failed to update {table} entry '{name}': {e}")
+                    col, row = merged_dict[name]
+                    norm_name = self.normalize_name(name)
+                    cursor.execute(f"""
+                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(Name) DO UPDATE SET
+                            `Column`=excluded.`Column`,
+                            `Row`=excluded.`Row`,
+                            `next_update`=excluded.`next_update`,
+                            `last_scraped`=excluded.`last_scraped`
+                    """, (norm_name, col, row, next_update, scrape_time))
 
+                # Manually insert Peacekeepers if in guilds
                 if table == "guilds":
                     cursor.executemany(f"""
                         INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
@@ -6170,16 +6224,16 @@ class AVITDScraper:
                             `next_update`=excluded.`next_update`,
                             `last_scraped`=excluded.`last_scraped`
                     """, [
-                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_timestamp),
-                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_timestamp),
-                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_timestamp),
+                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_time),
+                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_time),
+                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_time),
                     ])
 
                 conn.commit()
-                logging.info(f"Database updated for {table}.")
+                logging.info(f"{table.capitalize()} table updated with {len(merged_dict)} entries.")
 
         except sqlite3.Error as e:
-            logging.error(f"Database operation for {table} failed: {e}")
+            logging.error(f"Failed to update database: {e}")
 
     def close_connection(self):
         if self.connection:
@@ -6396,11 +6450,11 @@ class SetDestinationDialog(QDialog):
         return None
 
     def populate_dropdown(self, dropdown: QComboBox, items: list | KeysView) -> None:
-        """Populate a dropdown with items."""
+        """Populate a dropdown with sorted items."""
         dropdown.clear()
         dropdown.addItem("Select a destination")
-        dropdown.addItems([str(item) for item in items])
-        logging.debug(f"Populated dropdown with {len(items)} items")
+        dropdown.addItems(sorted([str(item) for item in items]))
+        logging.debug(f"Populated dropdown with {len(items)} items (sorted)")
 
     def update_combo_boxes(self):
         logging.info("Updating combo boxes.")
@@ -6414,7 +6468,8 @@ class SetDestinationDialog(QDialog):
             parent = cast("MainWindowType", self.parent)
 
             # Run scraper to update shops and guilds
-            parent.AVITD_scraper.scrape_guilds_and_shops()
+            parent.scraper.scrape()
+            self.load_next_move_times()
 
             # Update only shops and guilds coordinates from database
             with sqlite3.connect(DB_PATH) as conn:
