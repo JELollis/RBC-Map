@@ -5262,9 +5262,10 @@ class RBCCommunityMap(QMainWindow):
             "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n\n\n"
             "Special Thanks:\n\n"
             "Cain \"Leprechaun\" McBride for the LIAM² program \nthat inspired this program\n\n"
-            "Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retrieved\n\n"
+            "Cliff Burton for A View in the Dark and \n The Ravenblack Wiki.\n\n"
             "Everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
             "Anders for RBNav and the help along the way\n\n\n\n"
+            "Vespertine for being inspirational and providing additional map data sources\n\n"
             "Most importantly, thank YOU for using this app. \nWe all hope it serves you well!"
         )
 
@@ -6043,22 +6044,112 @@ class Scraper:
         }
         logging.info("Scraper initialized.")
 
+        self.nickname_map = {
+            "Ace Pawn": "Ace Porn",
+            "Checkers Pawn Shop": "Checkers Porn Shop",
+            "Reversi Pawn": "Reversi Porn",
+            "Spinners Pawn": "Spinners Porn",
+            "Dark Desires": "Dark Desires",
+            "Discount Magic": "Discount Magic",
+            "Discount Potions": "Discount Potions",
+            "Discount Scrolls": "Discount Scrolls",
+            "Interesting Times": "Interesting Times",
+            "Sparks": "Sparks",
+            "The Magic Box": "The Magic Box",
+            "White Light": "White Light",
+            "Herman's Scrolls": "Herman's Scrolls",
+            "Paper and Scrolls": "Paper and Scrolls",
+            "Scrollmania": "Scrollmania",
+            "Scrolls 'n' Stuff": "Scrolls 'n' Stuff",
+            "Scrolls R Us": "Scrolls R Us",
+            "Scrollworks": "Scrollworks",
+            "Ye Olde Scrolles": "Ye Olde Scrolles",
+            "McPotions": "McPotions",
+            "Potable Potions": "Potable Potions",
+            "Potion Distillery": "Potion Distillery",
+            "Potionworks": "Potionworks",
+            "Silver Apothecary": "Silver Apothecary",
+            "The Potion Shoppe": "The Potion Shoppe",
+        }
+
+    def normalize_name(self, name):
+        name = name.strip()
+        if name.startswith("Peacekkeepers Mission"):
+            name = name.replace("Peacekkeepers", "Peacekeepers", 1)
+        name = name.lstrip("*_~").rstrip("*_~")
+        return self.nickname_map.get(name, name)
+
+    def update_database(self, data, table, next_update):
+        scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+
+                if table == "guilds":
+                    cursor.execute(f"""
+                        UPDATE {table}
+                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
+                        WHERE Name NOT LIKE 'Peacekeepers Mission%'
+                    """, (next_update, scrape_timestamp))
+                else:
+                    cursor.execute(f"""
+                        UPDATE {table}
+                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
+                    """, (next_update, scrape_timestamp))
+
+                for name, column, row in data:
+                    if table == "shops" and "Peacekeepers Mission" in name:
+                        logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
+                        continue
+
+                    try:
+                        cursor.execute(f"""
+                            INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT(Name) DO UPDATE SET
+                                `Column`=excluded.`Column`,
+                                `Row`=excluded.`Row`,
+                                `next_update`=excluded.`next_update`,
+                                `last_scraped`=excluded.`last_scraped`
+                        """, (name, column, row, next_update, scrape_timestamp))
+                    except sqlite3.Error as e:
+                        logging.error(f"Failed to update {table} entry '{name}': {e}")
+
+                if table == "guilds":
+                    cursor.executemany(f"""
+                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(Name) DO UPDATE SET
+                            `Column`=excluded.`Column`,
+                            `Row`=excluded.`Row`,
+                            `next_update`=excluded.`next_update`,
+                            `last_scraped`=excluded.`last_scraped`
+                    """, [
+                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_timestamp),
+                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_timestamp),
+                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_timestamp),
+                    ])
+
+                conn.commit()
+                logging.info(f"Database updated for {table}.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Database operation for {table} failed: {e}")
+
     def scrape(self):
-        avitd_data, guilds_next, shops_next = self.scrape_avitd()
-        terrible_data = self.scrape_terrible()
-        discord_data = self.scrape_discord_bot()
+        timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        avitd_data, guilds_next, shops_next = self.scrape_avitd(timestamp)
+        terrible_data = self.scrape_terrible(timestamp)
+        discord_data = self.scrape_discord_bot(timestamp)
 
-        # Chain merge Discord → Terrible → AVITD for both guilds and shops
-        combined_guilds = self.merge_data(terrible_data["guilds"], discord_data["guilds"], source_a="Terrible", source_b="Discord")
-        final_guilds = self.merge_data(avitd_data["guilds"], combined_guilds, source_a="AVITD", source_b="Terrible/Discord")
-
-        combined_shops = self.merge_data(terrible_data["shops"], discord_data["shops"], source_a="Terrible", source_b="Discord")
-        final_shops = self.merge_data(avitd_data["shops"], combined_shops, source_a="AVITD", source_b="Terrible/Discord")
+        final_guilds = self.merge_by_recency(avitd_data['guilds'], terrible_data['guilds'], discord_data['guilds'])
+        final_shops = self.merge_by_recency(avitd_data['shops'], terrible_data['shops'], discord_data['shops'])
 
         self.update_database(final_guilds, "guilds", guilds_next)
         self.update_database(final_shops, "shops", shops_next)
 
-    def scrape_avitd(self):
+    def scrape_avitd(self, timestamp):
         try:
             response = requests.get(self.avitd_url, headers=self.headers)
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -6066,16 +6157,15 @@ class Scraper:
             logging.error(f"AVITD fetch failed: {e}")
             return {'guilds': {}, 'shops': {}}, 'NA', 'NA'
 
-        guilds = self.scrape_section(soup, "the guilds")
-        shops = self.scrape_section(soup, "the shops")
+        guilds_raw = self.scrape_section(soup, "the guilds")
+        shops_raw = self.scrape_section(soup, "the shops")
         guilds_next = self.extract_next_update_time(soup, 'Guilds')
         shops_next = self.extract_next_update_time(soup, 'Shops')
 
+        guilds = {self.normalize_name(name): ((col, row), timestamp) for name, col, row in guilds_raw}
+        shops = {self.normalize_name(name): ((col, row), timestamp) for name, col, row in shops_raw}
         logging.info(f"AVITD provided {len(guilds)} guilds and {len(shops)} shops.")
-        return {
-            'guilds': {self.normalize_name(name): (col, row) for name, col, row in guilds},
-            'shops': {self.normalize_name(name): (col, row) for name, col, row in shops}
-        }, guilds_next, shops_next
+        return {'guilds': guilds, 'shops': shops}, guilds_next, shops_next
 
     def scrape_section(self, soup, alt_text):
         section = soup.find('img', alt=alt_text)
@@ -6106,7 +6196,7 @@ class Scraper:
                     return (datetime.now(timezone.utc) + delta).strftime('%Y-%m-%d %H:%M:%S')
         return 'NA'
 
-    def scrape_terrible(self):
+    def scrape_terrible(self, timestamp):
         try:
             response = requests.get(self.terrible_url, timeout=10)
             data = response.json()
@@ -6118,19 +6208,25 @@ class Scraper:
         shops = {}
 
         for loc in data:
-            name = self.normalize_name(loc["building_name"])
-            col = str(loc["coordinate_x"])
-            row = str(loc["coordinate_y"])
+            if not loc.get("is_active"):
+                continue
+            base_name = loc["building_name"].strip()
+            column = loc.get("street_name", "")
+            row = loc.get("street_number", "")
             typ = loc["building_type"]
+            level = loc.get("guild_level")
+            if not column or not row:
+                continue
             if typ == "guild":
-                guilds[name] = (col, row)
+                full_name = f"{base_name} {level}" if level else base_name
+                guilds[self.normalize_name(full_name)] = ((column, row), timestamp)
             elif typ == "shop":
-                shops[name] = (col, row)
+                shops[self.normalize_name(base_name)] = ((column, row), timestamp)
 
         logging.info(f"Terrible API provided {len(guilds)} guilds and {len(shops)} shops.")
         return {'guilds': guilds, 'shops': shops}
 
-    def scrape_discord_bot(self):
+    def scrape_discord_bot(self, timestamp):
         try:
             response = requests.get(self.discord_bot_url, timeout=10)
             data = response.json()
@@ -6138,107 +6234,24 @@ class Scraper:
             logging.error(f"Discord bot API fetch failed: {e}")
             return {'guilds': {}, 'shops': {}}
 
-        guilds = {}
-        shops = {}
-
-        for name, coord in data.get("guilds", {}).items():
-            norm_name = self.normalize_name(name)
-            guilds[norm_name] = (coord["column"], coord["row"])
-        for name, coord in data.get("shops", {}).items():
-            norm_name = self.normalize_name(name)
-            shops[norm_name] = (coord["column"], coord["row"])
-
+        guilds = {
+            self.normalize_name(name): ((coord["column"], coord["row"]), timestamp)
+            for name, coord in data.get("guilds", {}).items()
+        }
+        shops = {
+            self.normalize_name(name): ((coord["column"], coord["row"]), timestamp)
+            for name, coord in data.get("shops", {}).items()
+        }
         logging.info(f"Discord bot provided {len(guilds)} guilds and {len(shops)} shops.")
         return {'guilds': guilds, 'shops': shops}
 
-    def normalize_name(self, name):
-        """Standardizes building names by fixing known typos and stripping formatting."""
-        name = name.strip()
-
-        # Fix known typo in AVITD source
-        if name.startswith("Peacekkeepers Mission"):
-            name = name.replace("Peacekkeepers", "Peacekeepers", 1)
-
-        # Remove Markdown-like decorations
-        name = name.lstrip("*_~").rstrip("*_~")
-
-        return name
-
-    def merge_data(self, a_dict, b_dict, source_a="A", source_b="B"):
+    def merge_by_recency(self, *sources):
         merged = {}
-        all_keys = set(a_dict.keys()) | set(b_dict.keys())
-        for key in all_keys:
-            if key in a_dict:
-                merged[key] = a_dict[key]
-                logging.debug(f"Using {source_a} data for {key}: {a_dict[key]}")
-            else:
-                merged[key] = b_dict[key]
-                logging.debug(f"Using {source_b} data for {key}: {b_dict[key]}")
-        return merged
-
-    def update_database(self, merged_dict, table, next_update):
-        scrape_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-
-                # Reset existing entries
-                if table == "guilds":
-                    cursor.execute(f"""
-                        UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                        WHERE Name NOT LIKE 'Peacekeepers Mission%'
-                    """, (next_update, scrape_time))
-                else:
-                    cursor.execute(f"""
-                        UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                    """, (next_update, scrape_time))
-
-                # Insert or update entries in sorted order
-                for name in sorted(merged_dict):
-                    if table == "shops" and "Peacekeepers Mission" in name:
-                        logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
-                        continue
-
-                    col, row = merged_dict[name]
-                    norm_name = self.normalize_name(name)
-                    cursor.execute(f"""
-                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(Name) DO UPDATE SET
-                            `Column`=excluded.`Column`,
-                            `Row`=excluded.`Row`,
-                            `next_update`=excluded.`next_update`,
-                            `last_scraped`=excluded.`last_scraped`
-                    """, (norm_name, col, row, next_update, scrape_time))
-
-                # Manually insert Peacekeepers if in guilds
-                if table == "guilds":
-                    cursor.executemany(f"""
-                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(Name) DO UPDATE SET
-                            `Column`=excluded.`Column`,
-                            `Row`=excluded.`Row`,
-                            `next_update`=excluded.`next_update`,
-                            `last_scraped`=excluded.`last_scraped`
-                    """, [
-                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_time),
-                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_time),
-                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_time),
-                    ])
-
-                conn.commit()
-                logging.info(f"{table.capitalize()} table updated with {len(merged_dict)} entries.")
-
-        except sqlite3.Error as e:
-            logging.error(f"Failed to update database: {e}")
-
-    def close_connection(self):
-        if self.connection:
-            self.connection.close()
-            logging.info("Database connection closed.")
+        for source in sources:
+            for name, (coords, ts) in source.items():
+                if name not in merged or ts > merged[name][1]:
+                    merged[name] = (coords, ts)
+        return {name: coords for name, (coords, _) in merged.items()}
 
 # -----------------------
 # Set Destination Dialog
@@ -6458,24 +6471,74 @@ class SetDestinationDialog(QDialog):
 
     def update_combo_boxes(self):
         logging.info("Updating combo boxes.")
-        self.show_notification("Updating Shop and Guild Data. Please wait...")
+
+        if not self.parent:
+            logging.warning("No parent found; cannot update combo boxes.")
+            return
+
+        parent = cast("MainWindowType", self.parent)
+
+        status_dialog = QDialog(self)
+        status_dialog.setWindowTitle("Updating Data")
+        status_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        layout = QVBoxLayout(status_dialog)
+        status_label = QLabel("Step 1: Initializing update...")
+        layout.addWidget(status_label)
+        status_dialog.setFixedSize(350, 100)
+        status_dialog.show()
+        QApplication.processEvents()
 
         try:
-            if not self.parent:
-                logging.warning("No parent found; cannot update combo boxes.")
-                return
+            timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
-            parent = cast("MainWindowType", self.parent)
-
-            # Run scraper to update shops and guilds
-            parent.scraper.scrape()
+            # Step 2: Checking Move Times
+            status_label.setText("Step 2: Checking Move Times...")
+            QApplication.processEvents()
             self.load_next_move_times()
 
-            # Update only shops and guilds coordinates from database
+            # Step 3: Scanning AVITD
+            status_label.setText("Step 3: Scanning AVITD...")
+            QApplication.processEvents()
+            avitd_data, guilds_next, shops_next = parent.scraper.scrape_avitd(timestamp)
+
+            # Step 4: Scanning Terrible API
+            status_label.setText("Step 4: Scanning Terrible API...")
+            QApplication.processEvents()
+            terrible_data = parent.scraper.scrape_terrible(timestamp)
+
+            # Step 5: Scanning Discord Bot
+            status_label.setText("Step 5: Scanning Discord Bot...")
+            QApplication.processEvents()
+            discord_data = parent.scraper.scrape_discord_bot(timestamp)
+
+            # Merge data by recency
+            final_guilds = parent.scraper.merge_by_recency(
+                avitd_data["guilds"], terrible_data["guilds"], discord_data["guilds"]
+            )
+            final_shops = parent.scraper.merge_by_recency(
+                avitd_data["shops"], terrible_data["shops"], discord_data["shops"]
+            )
+
+            # Step 6: Updating Database
+            status_label.setText("Step 6: Updating Database...")
+            QApplication.processEvents()
+
+            parent.scraper.update_database(
+                [(name, coords[0], coords[1]) for name, coords in final_guilds.items()],
+                "guilds", guilds_next
+            )
+            parent.scraper.update_database(
+                [(name, coords[0], coords[1]) for name, coords in final_shops.items()],
+                "shops", shops_next
+            )
+
+            # Step 7: Updating Dropdowns
+            status_label.setText("Step 7: Updating Dropdowns...")
+            QApplication.processEvents()
+
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
-                # Fetch columns and rows for coordinate conversion
                 cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
                 columns = {row[0]: row[1] for row in cursor.fetchall()}
                 cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
@@ -6484,23 +6547,22 @@ class SetDestinationDialog(QDialog):
                 def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
                     return (columns.get(col_name, 0) + 1, rows.get(row_name, 0) + 1)
 
-                # Update shops_coordinates
                 cursor.execute("SELECT Name, `Column`, `Row` FROM shops")
-                parent.shops_coordinates = {
+                parent.shops_coordinates.clear()
+                parent.shops_coordinates.update({
                     name: to_coords(col, row)
                     for name, col, row in cursor.fetchall()
                     if col != "NA" and row != "NA"
-                }
+                })
 
-                # Update guilds_coordinates
                 cursor.execute("SELECT Name, `Column`, `Row` FROM guilds")
-                parent.guilds_coordinates = {
+                parent.guilds_coordinates.clear()
+                parent.guilds_coordinates.update({
                     name: to_coords(col, row)
                     for name, col, row in cursor.fetchall()
                     if col != "NA" and row != "NA"
-                }
+                })
 
-            # Populate dropdowns
             self.populate_dropdown(self.tavern_dropdown, parent.taverns_coordinates.keys())
             self.populate_dropdown(self.bank_dropdown, parent.banks_coordinates.keys())
             self.populate_dropdown(self.transit_dropdown, parent.transits_coordinates.keys())
@@ -6510,10 +6572,18 @@ class SetDestinationDialog(QDialog):
             self.populate_dropdown(self.user_building_dropdown, parent.user_buildings_coordinates.keys())
 
             parent.update_minimap()
+
+            status_label.setText("✅ Update complete.")
+            QApplication.processEvents()
+            QTimer.singleShot(2000, status_dialog.accept)
+
             logging.info("Combo boxes updated successfully.")
 
         except Exception as e:
-            logging.error(f"Failed to update Combo boxes: {e}")
+            logging.exception("Failed to update Combo boxes:")
+            status_label.setText("❌ Update failed.")
+            QApplication.processEvents()
+            QTimer.singleShot(3000, status_dialog.accept)
             self.show_error_dialog("Update Failed", str(e))
 
     def show_notification(self, message: str) -> None:
