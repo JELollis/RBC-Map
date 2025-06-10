@@ -6077,7 +6077,8 @@ class Scraper:
         if name.startswith("Peacekkeepers Mission"):
             name = name.replace("Peacekkeepers", "Peacekeepers", 1)
         name = name.lstrip("*_~").rstrip("*_~")
-        return self.nickname_map.get(name, name)
+        name = self.nickname_map.get(name, name)
+        return name.title()
 
     def update_database(self, data, table, next_update):
         scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -6086,6 +6087,7 @@ class Scraper:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
+                # Invalidate old data first
                 if table == "guilds":
                     cursor.execute(f"""
                         UPDATE {table}
@@ -6098,24 +6100,30 @@ class Scraper:
                         SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
                     """, (next_update, scrape_timestamp))
 
+                # Update only existing records
                 for name, column, row in data:
-                    if table == "shops" and "Peacekeepers Mission" in name:
-                        logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
+                    # Normalize and title-case name
+                    normalized_name = self.normalize_name(name).title()
+
+                    # Skip misplaced Peacekeepers
+                    if table == "shops" and "Peacekeepers Mission" in normalized_name:
+                        logging.warning(f"Skipping {normalized_name} as it belongs in guilds, not shops.")
                         continue
 
                     try:
                         cursor.execute(f"""
-                            INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(Name) DO UPDATE SET
-                                `Column`=excluded.`Column`,
-                                `Row`=excluded.`Row`,
-                                `next_update`=excluded.`next_update`,
-                                `last_scraped`=excluded.`last_scraped`
-                        """, (name, column, row, next_update, scrape_timestamp))
-                    except sqlite3.Error as e:
-                        logging.error(f"Failed to update {table} entry '{name}': {e}")
+                            UPDATE {table}
+                            SET `Column`=?, `Row`=?, `next_update`=?, `last_scraped`=?
+                            WHERE Name=?
+                        """, (column, row, next_update, scrape_timestamp, normalized_name))
 
+                        if cursor.rowcount == 0:
+                            logging.warning(f"Skipped update for '{normalized_name}' — not found in {table}.")
+
+                    except sqlite3.Error as e:
+                        logging.error(f"Failed to update {table} entry '{normalized_name}': {e}")
+
+                # Peacekeepers are always ensured
                 if table == "guilds":
                     cursor.executemany(f"""
                         INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)

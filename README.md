@@ -22,6 +22,8 @@ This project is an attempt to create an interactive map coded in Python for use 
   - **Set Destination**: Click "Set Destination" to mark the destination on the map.
   - **Green Line**: Paints a green line on the map to the destination.
 - **Customizable Themes**: Personalize the minimap and interface themes for a more customized experience.
+- **Rendering Fixes**: Improved fallback minimap rendering and stability in zoomed views.
+- **Auto-Refreshing Dropdowns**: Destination list updates dynamically when the dialog is opened.
 
 ![Minimap Theme](Screenshots/Minimap%20Theme.png "Minimap Theme")
 
@@ -32,6 +34,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 - **Local Data Storage**:
   - User data is securely stored in a local SQLite database.
   - No user data is stored on external servers.
+- **Session Persistence**: Destination, theme, and other settings are restored across sessions.
 
 ![New User Dialog](Screenshots/New%20User%20Dialog.png "New User Dialog")
 
@@ -40,6 +43,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 ### 3) Keybinding Support (NEW in v0.10.3)
 - **WASD and Arrow Key Movement**: Toggle between **WASD** and **Arrow Key** navigation.
 - **Persistent Settings**: Keybinding configuration is stored in SQLite for consistency across sessions.
+- **Input Protection**: Movement keys are disabled when typing in input fields to avoid accidental moves.
 
 ---
 
@@ -47,6 +51,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 - Create and manage shopping lists for in-game items.
 - Automatically calculate total costs for required items.
 - View available coins and plan purchases accordingly.
+- **Countdown Timer**: Displays time until the next shop update based on AVITD scrape.
 
 ![Shopping List Tool](Screenshots/Shopping%20List%20Tool.png "Shopping List Tool")
 
@@ -56,7 +61,9 @@ This project is an attempt to create an interactive map coded in Python for use 
 - **Modify Interface Styling**: Customize the UI with CSS modifications.
 - **New Features**: **Box Shadow, Font Selection, and Background Image Support**.
 - **Live Preview**: See CSS changes in real-time before applying them.
+
 ![CSS Customization Tool](Screenshots/CSS%20Customization%20Dialog.png "CSS Customization Tool")
+
 ---
 
 ### 6) Database Viewer
@@ -77,6 +84,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 
 ### 8) Power Information
 - View detailed information about the powers available in the game, including their descriptions, costs, and effects.
+- **Countdown Timer**: Displays time remaining until next guild move.
 
 ![Power Information](Screenshots/Power%20Information.png "Power Information")
 
@@ -111,6 +119,7 @@ The RBC City Map Application is licensed under the [Apache License 2.0](https://
 - [**A View in the Dark**](https://aviewinthedark.net/) by Cliff Burton, providing the source for shops and guilds data.
 - [**RavenBlack Wiki**](https://ravenblack.city/) contributors.
 - **Anders** for **RBNav** and ongoing support.
+- **Vespertine** for [**Vespertine's City Crawler**](https://vampires.terrible.engineering/) providing additional sources for shop and guild data.
 
 ---
 
