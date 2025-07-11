@@ -27,3 +27,4 @@ Version Control/__pycache__/variables.cpython-312.pyc
 /Qonda
 .DS_Store
 */sesions*/
+*.json

@@ -2226,15 +2226,17 @@ def clear_cookie_db() -> bool:
 # Splash Messages Decorator
 # -----------------------
 
-def splash_message(splash):
+def splash_message(splash_getter):
     def decorator(func):
         def wrapper(self, *args, **kwargs):
+            splash = splash_getter(self) if callable(splash_getter) else splash_getter
             if splash and not splash.isHidden():
-                splash.show_message(func.__name__)  # Show the original method name
+                splash.show_message(func.__name__)
             return func(self, *args, **kwargs)
-        wrapper.__name__ = func.__name__  # Preserve the original method name
+        wrapper.__name__ = func.__name__
         return wrapper
     return decorator
+
 
 # -----------------------
 # OS Specific Environs
@@ -2260,7 +2262,7 @@ class RBCCommunityMap(QMainWindow):
     Main application class for the RBC Community Map.
     """
 
-    def __init__(self):
+    def __init__(self, splash = None):
         """
         Initialize the RBCCommunityMap and its components efficiently.
 
@@ -2273,7 +2275,7 @@ class RBCCommunityMap(QMainWindow):
         self.is_updating_minimap = False
         self.login_needed = True
         self.webview_loaded = False
-        self.splash = None
+        self.splash = splash
 
         # Compass route state
         self.selected_route_label = None  # "Direct Route" or "Transit Route"
@@ -2291,6 +2293,9 @@ class RBCCommunityMap(QMainWindow):
         self._init_window_properties()
         self._init_web_profile()
 
+        # Update map data from scraper bot
+        self._init_map_data()
+
         # UI and character setup
         self._init_ui_state()
         self._init_characters()
@@ -2299,7 +2304,7 @@ class RBCCommunityMap(QMainWindow):
         # Final setup steps
         self._finalize_setup()
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_window_properties(self) -> None:
         """Set up main window properties."""
         try:
@@ -2313,7 +2318,7 @@ class RBCCommunityMap(QMainWindow):
             # Fallback to default icon/title if needed
             self.setWindowTitle('RBC Community Map (Fallback)')
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_web_profile(self) -> None:
         """Set up QWebEngineProfile for cookie handling."""
         self.web_profile = QWebEngineProfile.defaultProfile()
@@ -2328,7 +2333,34 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Failed to set up cookie storage at {cookie_storage_path}: {e}")
             # Continue with in-memory cookies if storage fails
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
+    def _init_map_data(self) -> None:
+        """Silently trigger the Discord bot scrape and update the map database."""
+        try:
+            logging.info("[Startup] Requesting secure token...")
+            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response.raise_for_status()
+            token = token_response.text.strip()
+
+            logging.info(f"[Startup] Token received: {token}")
+            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
+            trigger_response.raise_for_status()
+
+            logging.info("[Startup] Bot scrape triggered. Waiting 10 seconds...")
+            time.sleep(10)
+
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
+            json_response.raise_for_status()
+            data = json_response.json()
+
+            self.update_database_with_json(data)
+            logging.info("[Startup] Database updated with fresh bot data.")
+        except Exception as e:
+            logging.warning(f"[Startup] Silent update failed: {e}")
+
+    @splash_message(lambda self: self.splash)
     def _init_data(self) -> None:
         """Load initial data from the database with fallback."""
         try:
@@ -2339,7 +2371,6 @@ class RBCCommunityMap(QMainWindow):
                 self.keybind_config, self.current_css_profile,
                 self.selected_character, self.destination  # <-- just store, don't update minimap yet
             ) = load_data()
-
         except sqlite3.Error as e:
             logging.critical(f"Failed to load initial data: {e}")
             # Use fallback data
@@ -2352,7 +2383,7 @@ class RBCCommunityMap(QMainWindow):
             self.selected_character = None
             self.destination = None
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_ui_state(self) -> None:
         """Initialize UI-related state variables."""
         self.zoom_level = 3
@@ -2373,7 +2404,7 @@ class RBCCommunityMap(QMainWindow):
             "hall_severance": PySide6.QtGui.QPixmap("images/severance.png"),
         }
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_characters(self) -> None:
         """Initialize character-related data and widgets."""
         self.characters = []
@@ -2383,20 +2414,18 @@ class RBCCommunityMap(QMainWindow):
         if not self.characters:
             self.firstrun_character_creation()
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_ui_components(self) -> None:
         """Set up UI components and console logging."""
         self.setup_ui_components()
         self.setup_console_logging()
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _finalize_setup(self) -> None:
         """Complete initialization with UI display and final configurations."""
         self.show()
-
         if self.selected_character and self.destination:
             self.update_minimap()
-
         self.load_last_active_character()
         self.setup_keybindings()
         # noinspection PyUnresolvedReferences
@@ -6176,6 +6205,15 @@ class SetDestinationDialog(QDialog):
         main_layout = QVBoxLayout(self)
         dropdown_style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
 
+        # Label for last updated time
+        self.last_updated_label = QLabel("Data last updated: calculating...")
+        main_layout.addWidget(self.last_updated_label)
+        self.update_last_updated_label()
+
+        self.last_updated_timer = QTimer(self)
+        self.last_updated_timer.timeout.connect(self.update_last_updated_label)
+        self.last_updated_timer.start(1000)
+
         # Create all dropdowns
         self.recent_destinations_dropdown = QComboBox()
         self.tavern_dropdown = QComboBox()
@@ -6284,7 +6322,7 @@ class SetDestinationDialog(QDialog):
         self.countdown_timer = QTimer(self)
         self.countdown_timer.timeout.connect(self.update_countdown_labels)
         self.countdown_timer.start(1000)
-        self.update_combo_boxes()
+        #self.update_combo_boxes()
 
     def _populate_initial_dropdowns(self) -> None:
         """Populate predefined destination dropdowns with initial data."""
@@ -6654,6 +6692,35 @@ class SetDestinationDialog(QDialog):
 
         format_countdown(self.next_guild_update, self.guildCountdownLabel, "Guilds")
         format_countdown(self.next_shop_update, self.shopCountdownLabel, "Shops")
+
+    def update_last_updated_label(self):
+        """Update the label showing how long ago the last update occurred."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT MAX(last_scraped) FROM (
+                        SELECT last_scraped FROM guilds WHERE last_scraped IS NOT NULL
+                        UNION ALL
+                        SELECT last_scraped FROM shops WHERE last_scraped IS NOT NULL
+                    )
+                """)
+                result = cursor.fetchone()
+                if result and result[0]:
+                    last_scraped_time = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    delta = now - last_scraped_time
+                    days = delta.days
+                    hours, rem = divmod(delta.seconds, 3600)
+                    minutes, seconds = divmod(rem, 60)
+                    self.last_updated_label.setText(
+                        f"🕒 Location data last updated {days}d {hours}h {minutes}m {seconds}s ago"
+                    )
+                else:
+                    self.last_updated_label.setText("🕒 Location data last updated: unknown")
+        except Exception as e:
+            logging.warning(f"Failed to update last_updated_label: {e}")
+            self.last_updated_label.setText("🕒 Location data last updated: error")
 
 # -----------------------
 # Shopping List Tools
@@ -7594,8 +7661,9 @@ class CompassOverlay(QDialog):
 # Main Entry Point
 # -----------------------
 
+# Main Entry Point
+
 def main() -> None:
-    """Run the RBC City Map Application."""
     global APP_ICON
     app = QApplication(sys.argv)
     APP_ICON = PySide6.QtGui.QIcon('./images/favicon.ico')
@@ -7605,23 +7673,9 @@ def main() -> None:
     splash.show()
     splash.show_message("Starting up...")
 
-    # Delay decorating until instance is created
-    main_window = RBCCommunityMap()
+    # Pass splash into the constructor
+    main_window = RBCCommunityMap(splash=splash)
 
-    init_methods = [
-        '_init_window_properties',
-        '_init_web_profile',
-        '_init_ui_state',
-        '_init_characters',
-        '_init_ui_components',
-        '_finalize_setup'
-    ]
-
-    for name in init_methods:
-        method = getattr(main_window, name)
-        setattr(main_window, name, splash_message(splash)(method))
-
-    main_window.splash = splash
     main_window.show()
     splash.finish(main_window)
 
