@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.12.1
+# Filename: main_0.12.2
 
 """
 ======================
@@ -21,6 +21,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 import platform
+import time
 
 """
 =================================
@@ -685,13 +686,13 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
     cursor = conn.cursor()
     initial_data = [
-        ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
+        ("REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
             ('keybind_config', 1),
             ('css_profile', 'Default'),
             ('log_level', str(DEFAULT_LOG_LEVEL))
         ]),
 
-        ("INSERT OR IGNORE INTO banks (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO banks (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Aardvark','82nd','OmniBank'),
             (2,'Alder','40th','OmniBank'),
              (3,'Alder','80th','OmniBank'),
@@ -893,7 +894,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
              (199,'Zelkova','73rd','OmniBank'),
              (200,'Zinc','74th','OmniBank')
         ]),
-        ("INSERT OR IGNORE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
+        ("REPLACE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
             (1, 'bank', '#0000ff'),
             (2, 'tavern', '#887700'),
             (3, 'transit', '#880000'),
@@ -916,7 +917,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (20, 'button_border_color', '#222244'),
             (21, 'graveyard', '#888888')
         ]),
-        ("INSERT OR IGNORE INTO `columns` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
+        ("REPLACE INTO `columns` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'WCL', '0'),
             ('2', 'Western City Limits', '0'),
             ('3', 'Aardvark', '2'),
@@ -1020,8 +1021,8 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('101', 'Zinc', '198'),
             ('102', 'Zestless', '200')
         ]),
-        ("INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)", [("Default",)]),
-        ("INSERT OR IGNORE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)", [
+        ("REPLACE INTO css_profiles (profile_name) VALUES (?)", [("Default",)]),
+        ("REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)", [
             ("Default", "BODY", "background-color:#000000;"),
             ("Default", "H1,DIV,BODY,P,A", "font-family:Verdana,Arial,sans-serif;"),
             ("Default", "BODY,H1", "text-align:center;"),
@@ -1099,7 +1100,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (17,'Peacekeepers Mission 2','Unicorn','33rd',''),
             (18,'Peacekeepers Mission 3','Emerald','33rd','')
         ]),
-        ("INSERT OR IGNORE INTO placesofinterest (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO placesofinterest (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
             (1,'Battle Arena','Zelkova','52nd'),
             (2,'Hall of Binding','Vervain','40th'),
             (3,'Hall of Severance','Walrus','40th'),
@@ -1108,7 +1109,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (6,'Eternal Aubade of Mystical Treasures','Zelkova','47th'),
             (7,'Kindred Hospital','Woe','13th')
         ]),
-        ("INSERT OR IGNORE INTO powers (power_id, name, guild, cost, quest_info, skill_info) VALUES (?, ?, ?, ?, ?, ?)", [
+        ("REPLACE INTO powers (power_id, name, guild, cost, quest_info, skill_info) VALUES (?, ?, ?, ?, ?, ?)", [
             (1,'Battle Cloak','Any Peacekeeper''s Mission',2000,'None','Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
             (2,'Celerity 1','Travellers Guild 1',4000,'Bring items to 3 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
             (3,'Celerity 2','Travellers Guild 2',8000,'Bring items to 6 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
@@ -1144,7 +1145,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (33,'Thrift 2','Allurists Guild 2',3000,'Buy 1 Perfect Red Rose from 3 specified shops.','10% chance to keep a used item/scroll instead of it burning up.'),
             (34,'Thrift 3','Allurists Guild 3',10000,'Buy 1 Perfect Red Rose from 6 specified shops.','15% chance to keep a used item/scroll instead of it burning up.')
         ]),
-        ("INSERT OR IGNORE INTO `rows` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
+        ("REPLACE INTO `rows` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'NCL', '0'),
             ('2', 'Northern City Limits', '0'),
             ('3', '1st', '2'),
@@ -1248,7 +1249,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('101', '99th', '198'),
             ('102', '100th', '200')
         ]),
-        ("INSERT OR IGNORE INTO shop_items (id, shop_name, item_name, base_price, charisma_level_1, charisma_level_2, charisma_level_3) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+        ("REPLACE INTO shop_items (id, shop_name, item_name, base_price, charisma_level_1, charisma_level_2, charisma_level_3) VALUES (?, ?, ?, ?, ?, ?, ?)", [
             (1,'Discount Magic','Perfect Dandelion',35,33,32,31),
             (2,'Discount Magic','Sprint Potion',105,101,97,94),
             (3,'Discount Magic','Perfect Red Rose',350,339,325,315),
@@ -1518,7 +1519,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (24,'White Light','NA','NA',''),
             (25,'Ye Olde Scrolles','NA','NA','')
         ]),
-        ("INSERT OR IGNORE INTO taverns (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO taverns (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Gum','33rd','Abbot''s Tavern'),
             (2,'Knotweed','11th','Archer''s Tavern'),
             (3,'Torment','16th','Baker''s Tavern'),
@@ -1615,7 +1616,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (94,'Anguish','68th','Xendom Tavern'),
             (95,'Pyrites','70th','Ye Olde Gallows Ale House')
         ]),
-        ("INSERT OR IGNORE INTO transits (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO transits (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1,'Mongoose','25th','Calliope'),
             (2,'Zelkova','25th','Clio'),
             (3,'Malachite','25th','Erato'),
@@ -1626,164 +1627,165 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (8,'Zelkova','75th','Thalia'),
             (9,'Malachite','75th','Urania')
         ]),
-        ("INSERT OR IGNORE INTO userbuildings (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
-            (1, 'Ace''s House of Dumont', 'Cedar', '99th'),
-            (2, 'Alatáriël Maenor', 'Diamond', '50th'),
-            (3, 'Alpha Dragon''s and Lyric''s House of Dragon and Flame', 'Amethyst', '90th'),
-            (4, 'AmadisdeGaula''s Stellaburgi', 'Wulfenite', '38th'),
-            (5, 'Andre''s Crypt', 'Ferret', '10th'),
-            (6, 'Annabelle''s Paradise', 'Emerald', '85th'),
-            (7, 'Anthony''s Castle Pacherontis', 'Walrus', '39th'),
-            (8, 'Anthony''s Gero Claw', 'Vulture', '39th'),
-            (9, 'Anthony''s Training Grounds', 'Vulture', '35th'),
-            (10, 'Aphaythean Vineyards', 'Willow', '13th'),
-            (11, 'Archangel''s Castle', 'Beech', '4th'),
-            (12, 'Avant''s Garden', 'Amethyst', '68th'),
-            (13, 'BaShalor''s Rose Garden', 'Cobalt', '41st'),
-            (14, 'Bitercat''s mews', 'Lion', '42nd'),
-            (15, 'Black dragonet''s mansion', 'Oppression', '80th'),
-            (16, 'Blutengel''s Temple of Blood', 'Fear', '13th'),
-            (17, 'Café Damari', 'Zelkova', '68th'),
-            (18, 'Cair Paravel', 'Lion', '27th'),
-            (19, 'Capadocian Castle', 'Larch', '49th'),
-            (20, 'Carnal Desires', 'Ivy', '66th'),
-            (21, 'Castle of Shadows', 'Turquoise', '86th'),
-            (22, 'Castle RavenesQue', 'Raven', 'NCL'),
-            (23, 'ChaosRaven''s Dimensional Tower', 'Killjoy', '23rd'),
-            (24, 'CHASS''s forever-blues hall', 'Torment', '75th'),
-            (25, 'CrimsonClover''s Hideaway', 'Diamond', '85th'),
-            (26, 'CrowsSong''s Blackbird Towers', 'Wulfenite', '3rd'),
-            (27, 'D''dary Manor', 'Aardvark', '1st'),
-            (28, 'Daphne''s Dungeons', 'Malachite', '64th'),
-            (29, 'DarkestDesire''s Chambers', 'Despair', '56th'),
-            (30, 'Darkwolf''s and liquid-vamp''s Country Cottage', 'Wulfenite', '69th'),
-            (31, 'Deaths embrace''s Shadow Keep', 'Holly', '81st'),
-            (32, 'Devil Miyu''s Abeir-Toril', 'Fear', '2nd'),
-            (33, 'Devil Miyu''s Edge of Reason', 'Fear', 'NCL'),
-            (34, 'Devil Miyu''s Lair', 'Fear', '1st'),
-            (35, 'Dreamcatcher Haven', 'Torment', '2nd'),
-            (36, 'Elijah''s Hall of the Lost', 'Zinc', '99th'),
-            (37, 'ElishaDraken''s Sanguine Ankh', 'Nightingale', '59th'),
-            (38, 'Epineux Manoir', 'Olive', '70th'),
-            (39, 'Espy''s Jaded Sorrows', 'Jaded', '69th'),
-            (40, 'Freedom Trade Alliance', 'Amethyst', '46th'),
-            (41, 'Gypsychild''s Caravan', 'Torment', '69th'),
-            (42, 'Halls of Shadow Court', 'Horror', '99th'),
-            (43, 'Hells Gate''s Castle of Destruction', 'Lonely', '45th'),
-            (44, 'Hesu''s Place', 'Raven', '24th'),
-            (45, 'Hexenkessel', 'Jackal', '83rd'),
-            (47, 'Ildiko''s and Brom''s Insanity', 'Killjoy', '53rd'),
-            (48, 'Jacomo Varis'' Shadow Manor', 'Raven', '96th'),
-            (49, 'Jaxi''s and Speedy''s Cave', 'Raven', '23rd'),
-            (50, 'Julia''s Villa', 'Gloom', '76th'),
-            (51, 'King Lestat''s Le Paradis Caché', 'Cobalt', '90th'),
-            (52, 'La Cucina', 'Diamond', '28th'),
-            (53, 'Lady Ophy''s Bougainvillea Mansion', 'Jaded', '84th'),
-            (54, 'LadyFae''s and nitenurse''s Solas Gealaí Caisleán', 'Raven', '76th'),
-            (55, 'Lasc Talon''s Estate', 'Willow', '42nd'),
-            (56, 'Lass'' Lair', 'Vervain', '1st'),
-            (57, 'Liski''s Shadow Phial', 'Gloom', '99th'),
-            (58, 'Lord Galamushi''s Enchanted Mansion', 'Anguish', '52nd'),
-            (59, 'Louvain''s Sanctuary', 'Gibbon', '21st'),
-            (60, 'Majica''s Playground', 'Willow', '50th'),
-            (61, 'Mandruleanu Manor', 'Diamond', '86th'),
-            (62, 'Mansion of Malice', 'Horror', '69th'),
-            (63, 'Marlena''s Wishing Well', 'Fear', '56th'),
-            (64, 'Moirai''s Gate to the Church of Blood', 'Horror', '13th'),
-            (65, 'Moondreamer''s Darkest Desire''s Lighthouse', 'Fear', '9th'),
-            (66, 'Moonlight Gardens', 'Turquoise', '87th'),
-            (67, 'Ms Delgado''s Manor', 'Sorrow', '69th'),
-            (68, 'MyMotherInLaw''s Home for Wayward Ghouls', 'Amethyst', '69th'),
-            (69, 'Narcisssa''s Vineyard', 'Aardvark', '60th'),
-            (70, 'Nemesis'' Asyl', 'Zinc', '85th'),
-            (71, 'NightWatch Headquarters', 'Larch', '51st'),
-            (72, 'Obsidian''s Arboretum', 'Obsidian', '88th'),
-            (73, 'Obsidian''s Castle of Warwick', 'Obsidian', 'NCL'),
-            (74, 'Obsidian''s Château de la Lumière', 'Obsidian', '66th'),
-            (75, 'Obsidian''s château noir', 'Obsidian', '99th'),
-            (76, 'Obsidian''s Hall of Shifting Realms', 'Obsidian', '15th'),
-            (77, 'Obsidian''s Penthouse', 'Obsidian', '29th'),
-            (78, 'Obsidian''s Silver Towers', 'Obsidian', '51st'),
-            (79, 'Obsidian''s Tranquility', 'Obsidian', '80th'),
-            (80, 'Obsidian''s, Phoenixxe''s and Em''s Heaven''s Gate', 'Obsidian', '45th'),
-            (81, 'Occamrazor''s House of Ears', 'Yew', '30th'),
-            (82, 'Ordo Dracul Sanctum', 'Nightingale', '77th'),
-            (83, 'Orgasmerilla''s Warehouse', 'Zinc', '80th'),
-            (84, 'Pace Family Ranch', 'Fir', '69th'),
-            (85, 'Palazzo Lucius', 'Zebra', '27th'),
-            (86, 'Pandrora and CBK''s Chamber of Horrors', 'Torment', '95th'),
-            (87, 'RemipunX''s Sacred Yew', 'Cobalt', '42nd'),
-            (88, 'Renovate''s grove', 'Umbrella', '71st'),
-            (89, 'Saki''s Fondest Wish', 'Nightingale', '17th'),
-            (90, 'Samantha Dawn''s Salacious Sojourn', 'Anguish', '53rd'),
-            (91, 'Sanctuary Hotel', 'Kraken', '27th'),
-            (92, 'Sartori''s Domicile', 'Elm', '1st'),
-            (93, 'SCORPIOUS1''s Tower of Truth', 'Yearning', '58th'),
-            (94, 'Setitevampyr''s temple', 'Raven', '50th'),
-            (95, 'Shaarinya`s Sanguine Sanctuary', 'Raven', '77th'),
-            (96, 'Shadow bat''s Sanctorium', 'Cobalt', '76th'),
-            (97, 'SIE Compound', 'Raven', '13th'),
-            (98, 'Sitrence''s Lab', 'Ferret', '3rd'),
-            (99, 'Solanea''s Family Home', 'Ruby', '56th'),
-            (100, 'The Angelarium', 'Zinc', 'NCL'),
-            (101, 'St. John Bathhouse', 'Sycamore', '76th'),
-            (102, 'Starreagle''s Paradise Lair', 'Beryl', '24th'),
-            (103, 'Steele Industries', 'Umbrella', '44th'),
-            (104, 'Stormy jayne''s web', 'Nickel', '99th'),
-            (105, 'Talon Castle', 'Willow', '35th'),
-            (106, 'tejas_dragon''s Lair', 'Zelkova', '69th'),
-            (107, 'The Ailios Asylum', 'Amethyst', '36th'),
-            (108, 'The Belly of the Whale', 'Amethyst', '2nd'),
-            (109, 'The Calignite', 'Eagle', '16th'),
-            (110, 'The COVE', 'Knowteed', '51st'),
-            (111, 'The Dragons Lair Club', 'Vervain', '39th'),
-            (112, 'The Eternal Spiral', 'Anguish', '69th'),
-            (113, 'The goatsucker''s lair', 'Yak', '13th'),
-            (114, 'The Halls of Heorot', 'Jaded', '75th'),
-            (115, 'The House of Night', 'Walrus', '38th'),
-            (116, 'The Inner Circle Manor', 'Diamond', '26th'),
-            (117, 'The Ivory Tower', 'Zelkova', '76th'),
-            (118, 'The Ixora Estate', 'Lead', '48th'),
-            (119, 'The Kyoto Club', 'Lion', '22nd'),
-            (120, 'The Lokason Myrkrasetur', 'Wulfenite', '40th'),
-            (121, 'The Path of Enlightenment Castle', 'Willow', '80th'),
-            (122, 'The RavenBlack Bite', 'Oppression', '40th'),
-            (123, 'The Reynolds'' Estate', 'Beryl', '23rd'),
-            (124, 'The River Passage', 'Yew', '33rd'),
-            (125, 'The Sakura Garden', 'Nickel', '77th'),
-            (126, 'The Sanctum of Vermathrax-rex and Bellina', 'Vexation', '99th'),
-            (127, 'The Sanguinarium', 'Fear', '4th'),
-            (128, 'The Scythe''s Negotiation Offices', 'Vauxite', '88th'),
-            (129, 'The Sepulchre of Shadows', 'Ennui', '1st'),
-            (130, 'The Tower of Thorns', 'Pilchard', '70th'),
-            (131, 'The Towers of the Crossed Swords', 'Torment', '66th'),
-            (132, 'The White House', 'Nervous', '75th'),
-            (133, 'University of Vampiric Enlightenment', 'Yak', '80th'),
-            (134, 'Virgo''s obsidian waygate', 'Obsidian', '2nd'),
-            (135, 'Vulture''s Pagoda', 'Vulture', '50th'),
-            (136, 'Wilde Sanctuary', 'Willow', '51st'),
-            (137, 'Wilde Wolfe Estate', 'Vervain', '50th'),
-            (138, 'Willhelm''s Warrior House', 'Horror', '53rd'),
-            (139, 'Willow Lake Manse', 'Willow', '99th'),
-            (140, 'Willow Woods'' & The Ent Moot', 'Willow', '54th'),
-            (141, 'Wolfshadow''s and Crazy''s RBC Casino', 'Lead', '72nd'),
-            (142, 'Wyndcryer''s TygerNight''s and Bambi''s Lair', 'Unicorn', '77th'),
-            (143, 'Wyvernhall', 'Ivy', '38th'),
-            (144, 'X', 'Emerald', 'NCL'),
-            (145, 'Requiem of Hades', 'Walrus', '41st')
+        ("REPLACE INTO userbuildings (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
+            (1, "Ace's House of Dumont", "Cedar", "99th"),
+            (2, "Alatáriël Maenor", "Diamond", "50th"),
+            (3, "Alpha Dragon's and Lyric's House of Dragon and Flame", "Amethyst", "90th"),
+            (4, "AmadisdeGaula's Stellaburgi", "Wulfenite", "38th"),
+            (5, "Andre's Crypt", "Ferret", "10th"),
+            (6, "Annabelle's Paradise", "Emerald", "85th"),
+            (7, "Anthony's Castle Pacherontis", "Walrus", "39th"),
+            (8, "Anthony's Gero Claw", "Vulture", "39th"),
+            (9, "Anthony's Training Grounds", "Vulture", "35th"),
+            (10, "Aphaythean Vineyards", "Willow", "13th"),
+            (11, "Archangel's Castle", "Beech", "4th"),
+            (12, "Avant's Garden", "Amethyst", "68th"),
+            (13, "BaShalor's Rose Garden", "Cobalt", "41st"),
+            (14, "Bitercat's mews", "Lion", "42nd"),
+            (15, "Black dragonet's mansion", "Oppression", "80th"),
+            (16, "Blutengel's Temple of Blood", "Fear", "13th"),
+            (17, "Café Damari", "Zelkova", "68th"),
+            (18, "Cair Paravel", "Lion", "27th"),
+            (19, "Capadocian Castle", "Larch", "49th"),
+            (20, "Carnal Desires", "Ivy", "66th"),
+            (21, "Castle of Shadows", "Turquoise", "86th"),
+            (22, "Castle RavenesQue", "Raven", "NCL"),
+            (23, "ChaosRaven's Dimensional Tower", "Killjoy", "23rd"),
+            (24, "CHASS's forever-blues hall", "Torment", "75th"),
+            (25, "CrimsonClover's Hideaway", "Diamond", "85th"),
+            (26, "CrowsSong's Blackbird Towers", "Wulfenite", "3rd"),
+            (27, "D'dary Manor", "Aardvark", "1st"),
+            (28, "Daphne's Dungeons", "Malachite", "64th"),
+            (29, "DarkestDesire's Chambers", "Despair", "56th"),
+            (30, "Darkwolf's and liquid-vamp's Country Cottage", "Wulfenite", "69th"),
+            (31, "Deamhan Estate", "Yak", "81st"),
+            (32, "Deaths embrace's Shadow Keep", "Holly", "81st"),
+            (33, "Devil Miyu's Abeir-Toril", "Fear", "2nd"),
+            (34, "Devil Miyu's Edge of Reason", "Fear", "NCL"),
+            (35, "Devil Miyu's Lair", "Fear", "1st"),
+            (36, "Dreamcatcher Haven", "Torment", "2nd"),
+            (37, "Elijah's Hall of the Lost", "Zinc", "99th"),
+            (38, "ElishaDraken's Sanguine Ankh", "Nightingale", "59th"),
+            (39, "Epineux Manoir", "Olive", "70th"),
+            (40, "Espy's Jaded Sorrows", "Jaded", "69th"),
+            (41, "Freedom Trade Alliance", "Amethyst", "46th"),
+            (42, "Gypsychild's Caravan", "Torment", "69th"),
+            (43, "Halls of Shadow Court", "Horror", "99th"),
+            (44, "Hells Gate's Castle of Destruction", "Lonely", "45th"),
+            (45, "Hesu's Place", "Raven", "24th"),
+            (46, "Hexenkessel", "Jackal", "83rd"),
+            (47, "Ildiko's and Brom's Insanity", "Killjoy", "53rd"),
+            (48, "Jacomo Varis' Shadow Manor", "Raven", "96th"),
+            (49, "Jaxi's and Speedy's Cave", "Raven", "23rd"),
+            (50, "Julia's Villa", "Gloom", "76th"),
+            (51, "King Lestat's Le Paradis Caché", "Cobalt", "90th"),
+            (52, "La Cucina", "Diamond", "28th"),
+            (53, "Lady Ophy's Bougainvillea Mansion", "Jaded", "84th"),
+            (54, "LadyFae's and nitenurse's Solas Gealaí Caisleán", "Raven", "76th"),
+            (55, "Lasc Talon's Estate", "Willow", "42nd"),
+            (56, "Lass' Lair", "Vervain", "1st"),
+            (57, "Liski's Shadow Phial", "Gloom", "99th"),
+            (58, "Lord Galamushi's Enchanted Mansion", "Anguish", "52nd"),
+            (59, "Louvain's Sanctuary", "Gibbon", "21st"),
+            (60, "Majica's Playground", "Willow", "50th"),
+            (61, "Mandruleanu Manor", "Diamond", "86th"),
+            (62, "Mansion of Malice", "Horror", "69th"),
+            (63, "Marlena's Wishing Well", "Fear", "56th"),
+            (64, "Moirai's Gate to the Church of Blood", "Horror", "13th"),
+            (65, "Moondreamer's Darkest Desire's Lighthouse", "Fear", "9th"),
+            (66, "Moonlight Gardens", "Turquoise", "87th"),
+            (67, "Ms Delgado's Manor", "Sorrow", "69th"),
+            (68, "MyMotherInLaw's Home for Wayward Ghouls", "Amethyst", "69th"),
+            (69, "Narcisssa's Vineyard", "Aardvark", "60th"),
+            (70, "Nemesis' Asyl", "Zinc", "85th"),
+            (71, "NightWatch Headquarters", "Larch", "51st"),
+            (72, "Obsidian's Arboretum", "Obsidian", "88th"),
+            (73, "Obsidian's Castle of Warwick", "Obsidian", "NCL"),
+            (74, "Obsidian's Château de la Lumière", "Obsidian", "66th"),
+            (75, "Obsidian's château noir", "Obsidian", "99th"),
+            (76, "Obsidian's Hall of Shifting Realms", "Obsidian", "15th"),
+            (77, "Obsidian's Penthouse", "Obsidian", "29th"),
+            (78, "Obsidian's Silver Towers", "Obsidian", "51st"),
+            (79, "Obsidian's Tranquility", "Obsidian", "80th"),
+            (80, "Obsidian's, Phoenixxe's and Em's Heaven's Gate", "Obsidian", "45th"),
+            (81, "Occamrazor's House of Ears", "Yew", "30th"),
+            (82, "Ordo Dracul Sanctum", "Nightingale", "77th"),
+            (83, "Orgasmerilla's Warehouse", "Zinc", "80th"),
+            (84, "Pace Family Ranch", "Fir", "69th"),
+            (85, "Palazzo Lucius", "Zebra", "27th"),
+            (86, "Pandrora and CBK's Chamber of Horrors", "Torment", "95th"),
+            (87, "RemipunX's Sacred Yew", "Cobalt", "42nd"),
+            (88, "Renovate's grove", "Umbrella", "71st"),
+            (89, "Saki's Fondest Wish", "Nightingale", "17th"),
+            (90, "Samantha Dawn's Salacious Sojourn", "Anguish", "53rd"),
+            (91, "Sanctuary Hotel", "Kraken", "27th"),
+            (92, "Sartori's Domicile", "Elm", "1st"),
+            (93, "SCORPIOUS1's Tower of Truth", "Yearning", "58th"),
+            (94, "Setitevampyr's temple", "Raven", "50th"),
+            (95, "Shaarinya`s Sanguine Sanctuary", "Raven", "77th"),
+            (96, "Shadow bat's Sanctorium", "Cobalt", "76th"),
+            (97, "SIE Compound", "Raven", "13th"),
+            (98, "Sitrence's Lab", "Ferret", "3rd"),
+            (99, "Solanea's Family Home", "Ruby", "56th"),
+            (100, "The Angelarium", "Zinc", "NCL"),
+            (101, "St. John Bathhouse", "Sycamore", "76th"),
+            (102, "Starreagle's Paradise Lair", "Beryl", "24th"),
+            (103, "Steele Industries", "Umbrella", "44th"),
+            (104, "Stormy jayne's web", "Nickel", "99th"),
+            (105, "Talon Castle", "Willow", "35th"),
+            (106, "tejas_dragon's Lair", "Zelkova", "69th"),
+            (107, "The Ailios Asylum", "Amethyst", "36th"),
+            (108, "The Belly of the Whale", "Amethyst", "2nd"),
+            (109, "The Calignite", "Eagle", "16th"),
+            (110, "The COVE", "Knowteed", "51st"),
+            (111, "The Dragons Lair Club", "Vervain", "39th"),
+            (112, "The Eternal Spiral", "Anguish", "69th"),
+            (113, "The goatsucker's lair", "Yak", "13th"),
+            (114, "The Halls of Heorot", "Jaded", "75th"),
+            (115, "The House of Night", "Walrus", "38th"),
+            (116, "The Inner Circle Manor", "Diamond", "26th"),
+            (117, "The Ivory Tower", "Zelkova", "76th"),
+            (118, "The Ixora Estate", "Lead", "48th"),
+            (119, "The Kyoto Club", "Lion", "22nd"),
+            (120, "The Lokason Myrkrasetur", "Wulfenite", "40th"),
+            (121, "The Path of Enlightenment Castle", "Willow", "80th"),
+            (122, "The RavenBlack Bite", "Oppression", "40th"),
+            (123, "The Reynolds' Estate", "Beryl", "23rd"),
+            (124, "The River Passage", "Yew", "33rd"),
+            (125, "The Sakura Garden", "Nickel", "77th"),
+            (126, "The Sanctum of Vermathrax-rex and Bellina", "Vexation", "99th"),
+            (127, "The Sanguinarium", "Fear", "4th"),
+            (128, "The Scythe's Negotiation Offices", "Vauxite", "88th"),
+            (129, "The Sepulchre of Shadows", "Ennui", "1st"),
+            (130, "The Tower of Thorns", "Pilchard", "70th"),
+            (131, "The Towers of the Crossed Swords", "Torment", "66th"),
+            (132, "The White House", "Nervous", "75th"),
+            (133, "University of Vampiric Enlightenment", "Yak", "80th"),
+            (134, "Virgo's obsidian waygate", "Obsidian", "2nd"),
+            (135, "Vulture's Pagoda", "Vulture", "50th"),
+            (136, "Wilde Sanctuary", "Willow", "51st"),
+            (137, "Wilde Wolfe Estate", "Vervain", "50th"),
+            (138, "Willhelm's Warrior House", "Horror", "53rd"),
+            (139, "Willow Lake Manse", "Willow", "99th"),
+            (140, "Willow Woods' & The Ent Moot", "Willow", "54th"),
+            (141, "Wolfshadow's and Crazy's RBC Casino", "Lead", "72nd"),
+            (142, "Wyndcryer's TygerNight's and Bambi's Lair", "Unicorn", "77th"),
+            (143, "Wyvernhall", "Ivy", "38th"),
+            (144, "X", "Emerald", "NCL"),
+            (145, "Requiem of Hades", "Walrus", "41st")
         ]),
-        ("INSERT OR IGNORE INTO discord_servers (id, name, invite_link) VALUES (?, ?, ?)", [
-            (1, "Ab Antiquo Headquarters", "https://discord.gg/AhPEzkJyA4"),
-            (2, "Hellfire Club", "https://discord.gg/qZCbbKEt3z"),
-            (3, "RB Improvement Group", "https://discord.gg/8ent8jn54u"),
-            (4, "RBCH", "https://discord.gg/ktdG9FZ"),
-            (5, "Raven Black: Boroughs and Barrios", "https://discord.gg/RTSXJ5tC4d"),
-            (6, "RavenBlack Community Center", "https://discord.gg/SVMmGcvNCV"),
-            (7, "The Moon over Orion", "https://discord.gg/EArPr7vqHC"),
-            (8, "The Ravenblack Historical Society", "https://discord.gg/zqPXpw8sMw"),
-            (9, "rêverie", "https://discord.gg/jAVHpGvgCf")
+        ("REPLACE INTO discord_servers (id, name, invite_link) VALUES (?, ?, ?)", [
+            (1, "RBC Community Map Hub", "https://discord.gg/rKamEZvK6X"),
+            (2, "Ab Antiquo Headquarters", "https://discord.gg/AhPEzkJyA4"),
+            (3, "Hellfire Club", "https://discord.gg/qZCbbKEt3z"),
+            (4, "RB Improvement Group", "https://discord.gg/8ent8jn54u"),
+            (5, "RBCH", "https://discord.gg/ktdG9FZ"),
+            (6, "Raven Black: Boroughs and Barrios", "https://discord.gg/RTSXJ5tC4d"),
+            (7, "RavenBlack Community Center", "https://discord.gg/SVMmGcvNCV"),
+            (8, "The Moon over Orion", "https://discord.gg/EArPr7vqHC"),
+            (9, "The Ravenblack Historical Society", "https://discord.gg/zqPXpw8sMw"),
+            (10, "rêverie", "https://discord.gg/jAVHpGvgCf")
         ])
-
     ]
     for query, data in initial_data:
         try:
@@ -2114,7 +2116,6 @@ def load_data() -> tuple:
         logging.error(f"Failed to load data from database {DB_PATH}: {e}")
         raise
 
-
 # Load data at startup
 try:
     (
@@ -2249,6 +2250,7 @@ elif sys.platform == "darwin":
     os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
     os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
     os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
+
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
@@ -2286,7 +2288,6 @@ class RBCCommunityMap(QMainWindow):
 
         # Initialize essential components early
         self._init_data()
-        self._init_scraper()
         self._init_window_properties()
         self._init_web_profile()
 
@@ -2297,15 +2298,6 @@ class RBCCommunityMap(QMainWindow):
 
         # Final setup steps
         self._finalize_setup()
-
-    @splash_message(None)
-    def _init_scraper(self) -> None:
-        """Initialize the  scraper and start scraping in a separate thread."""
-        self.scraper = Scraper()
-        # Use QThread for non-blocking scraping (assuming Scraper supports it)
-        from PySide6.QtCore import QThreadPool
-        QThreadPool.globalInstance().start(lambda: self.scraper.scrape_guilds_and_shops())
-        logging.debug("Started scraper in background thread")
 
     @splash_message(None)
     def _init_window_properties(self) -> None:
@@ -5436,18 +5428,105 @@ class RBCCommunityMap(QMainWindow):
 
         self.update_minimap()
 
+    def update_data(self):
+        """
+        Securely triggers the bot to update locations.json using the token-based API flow,
+        waits for completion, and then updates the local database.
+        """
+        logging.info("Requesting secure token...")
+
+        try:
+            # Step 1: Request a one-time token
+            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response.raise_for_status()
+            token = token_response.text.strip()
+
+            logging.info(f"Token received: {token}")
+
+            # Step 2: Trigger the update using the token
+            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
+            trigger_response.raise_for_status()
+
+            logging.info("Bot scrape triggered. Waiting 5 seconds for update to complete...")
+            time.sleep(5)
+
+            # Step 3: Fetch the updated JSON
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
+            json_response.raise_for_status()
+            data = json_response.json()
+
+            # Step 4: Update local DB from JSON
+            self.update_database_with_json(data)
+            QMessageBox.information(self, "Update Complete", "Location data has been updated successfully.")
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Update error: {e}")
+            QMessageBox.critical(self, "Network Error", f"An error occurred:\n{e}")
+        except Exception as e:
+            logging.error(f"Unexpected error during update: {e}")
+            QMessageBox.critical(self, "Error", str(e))
+
+    def update_database_with_json(self, data):
+        """
+        Updates the local shops and guilds tables based on the JSON structure from the bot.
+        """
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+
+                # Clear old locations
+                cursor.execute("UPDATE shops SET `Column`='NA', `Row`='NA'")
+                cursor.execute("UPDATE guilds SET `Column`='NA', `Row`='NA'")
+
+                for key, entry in data.items():
+                    name = entry.get("name", key)
+                    col = entry.get("Column", "NA")
+                    row = entry.get("Row", "NA")
+                    kind = entry.get("type")
+
+                    if kind == "shop":
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO shops (Name, `Column`, `Row`)
+                            VALUES (?, ?, ?)""", (name, col, row))
+                    elif kind == "guild":
+                        cursor.execute("""
+                            INSERT OR REPLACE INTO guilds (Name, `Column`, `Row`)
+                            VALUES (?, ?, ?)""", (name, col, row))
+
+                conn.commit()
+                logging.info(f"Database updated with {len(data)} entries from locations.json.")
+        except Exception as e:
+            logging.error(f"Error updating database: {e}")
+
 # -----------------------
 # Database Viewer Class
 # -----------------------
 
 class DatabaseViewer(QDialog):
     """
-    Graphical interface for viewing SQLite database tables in a tabbed layout.
+    Graphical interface for viewing SQLite database tables in grouped tabbed layout.
     """
+
+    TAB_GROUPS = {
+        "App Info": [
+            "rows", "columns", "settings", "last_active_character",
+            "cookies", "css_profiles", "custom_css", "color_mappings",
+            "discord_servers", "powers", "shop_items"
+        ],
+        "Character Info": [
+            "characters", "coins", "destinations"
+        ],
+        "Building Info": [
+            "banks", "placesofinterest", "taverns", "transits",
+            "userbuildings", "shops", "guilds"
+        ]
+    }
 
     def __init__(self, db_connection, parent=None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle('SQLite Database Viewer')
+        self.setWindowTitle("SQLite Database Viewer")
         self.setWindowIcon(APP_ICON)
         self.setGeometry(100, 100, 800, 600)
 
@@ -5455,23 +5534,43 @@ class DatabaseViewer(QDialog):
         self.cursor = db_connection.cursor()
         self.color_mappings = color_mappings or {}
 
-        layout = QVBoxLayout(self)
-        self.tab_widget = QTabWidget()
-        layout.addWidget(self.tab_widget)
+        main_layout = QVBoxLayout(self)
+        self.parent_tab_widget = QTabWidget()
+        main_layout.addWidget(self.parent_tab_widget)
 
         if self.color_mappings:
             apply_theme_to_widget(self, self.color_mappings)
 
         try:
             self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in self.cursor.fetchall()]
-            for table_name in tables:
-                column_names, data = self.get_table_data(table_name)
-                self.add_table_tab(table_name, column_names, data)
-            logging.debug(f"Loaded {len(tables)} tables into viewer")
+            all_tables = [row[0] for row in self.cursor.fetchall()]
         except sqlite3.Error as e:
             logging.error(f"Failed to load tables: {e}")
             QMessageBox.critical(self, "Error", "Failed to load database tables.")
+            return
+
+        # Track added tables
+        added_tables = set()
+
+        for group_name, table_list in self.TAB_GROUPS.items():
+            child_tab_widget = QTabWidget()
+            for table in table_list:
+                if table in all_tables:
+                    column_names, data = self.get_table_data(table)
+                    self.add_table_tab(child_tab_widget, table, column_names, data)
+                    added_tables.add(table)
+            self.parent_tab_widget.addTab(child_tab_widget, group_name)
+
+        # Add remaining tables to 'Other' tab
+        other_tab_widget = QTabWidget()
+        remaining_tables = sorted(set(all_tables) - added_tables)
+        for table in remaining_tables:
+            column_names, data = self.get_table_data(table)
+            self.add_table_tab(other_tab_widget, table, column_names, data)
+        if remaining_tables:
+            self.parent_tab_widget.addTab(other_tab_widget, "Other")
+
+        logging.debug(f"Loaded {len(all_tables)} tables into grouped viewer")
 
     def get_table_data(self, table_name: str) -> tuple[list[str], list[tuple]]:
         try:
@@ -5484,7 +5583,8 @@ class DatabaseViewer(QDialog):
             logging.error(f"Failed to fetch data for table '{table_name}': {e}")
             return [], []
 
-    def add_table_tab(self, table_name: str, column_names: list[str], data: list[tuple]) -> None:
+    def add_table_tab(self, tab_widget: QTabWidget, table_name: str,
+                      column_names: list[str], data: list[tuple]) -> None:
         table_widget = QTableWidget()
         table_widget.setRowCount(len(data))
         table_widget.setColumnCount(len(column_names))
@@ -5495,7 +5595,7 @@ class DatabaseViewer(QDialog):
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
 
         table_widget.resizeColumnsToContents()
-        self.tab_widget.addTab(table_widget, table_name)
+        tab_widget.addTab(table_widget, table_name)
         logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
 
     def closeEvent(self, event) -> None:
@@ -6030,238 +6130,6 @@ class CSSCustomizationDialog(QDialog):
             QMessageBox.critical(self, "Error", "Failed to clear customizations")
 
 # -----------------------
-# Scraper Class
-# -----------------------
-
-class Scraper:
-    def __init__(self):
-        self.avitd_url = "https://aviewinthedark.net/"
-        self.terrible_url = "https://vampires.terrible.engineering/api/locations"
-        self.discord_bot_url = "https://lollis-home.ddns.net/api/locations.json"
-        self.connection = sqlite3.connect(DB_PATH)
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        }
-        logging.info("Scraper initialized.")
-
-        self.nickname_map = {
-            "Ace Pawn": "Ace Porn",
-            "Checkers Pawn Shop": "Checkers Porn Shop",
-            "Reversi Pawn": "Reversi Porn",
-            "Spinners Pawn": "Spinners Porn",
-            "Dark Desires": "Dark Desires",
-            "Discount Magic": "Discount Magic",
-            "Discount Potions": "Discount Potions",
-            "Discount Scrolls": "Discount Scrolls",
-            "Interesting Times": "Interesting Times",
-            "Sparks": "Sparks",
-            "The Magic Box": "The Magic Box",
-            "White Light": "White Light",
-            "Herman's Scrolls": "Herman's Scrolls",
-            "Paper and Scrolls": "Paper and Scrolls",
-            "Scrollmania": "Scrollmania",
-            "Scrolls 'n' Stuff": "Scrolls 'n' Stuff",
-            "Scrolls R Us": "Scrolls R Us",
-            "Scrollworks": "Scrollworks",
-            "Ye Olde Scrolles": "Ye Olde Scrolles",
-            "McPotions": "McPotions",
-            "Potable Potions": "Potable Potions",
-            "Potion Distillery": "Potion Distillery",
-            "Potionworks": "Potionworks",
-            "Silver Apothecary": "Silver Apothecary",
-            "The Potion Shoppe": "The Potion Shoppe",
-        }
-
-    def normalize_name(self, name):
-        name = name.strip()
-        if name.startswith("Peacekkeepers Mission"):
-            name = name.replace("Peacekkeepers", "Peacekeepers", 1)
-        name = name.lstrip("*_~").rstrip("*_~")
-        name = self.nickname_map.get(name, name)
-        return name.title()
-
-    def update_database(self, data, table, next_update):
-        scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-
-                # Invalidate old data first
-                if table == "guilds":
-                    cursor.execute(f"""
-                        UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                        WHERE Name NOT LIKE 'Peacekeepers Mission%'
-                    """, (next_update, scrape_timestamp))
-                else:
-                    cursor.execute(f"""
-                        UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                    """, (next_update, scrape_timestamp))
-
-                # Update only existing records
-                for name, column, row in data:
-                    # Normalize and title-case name
-                    normalized_name = self.normalize_name(name).title()
-
-                    # Skip misplaced Peacekeepers
-                    if table == "shops" and "Peacekeepers Mission" in normalized_name:
-                        logging.warning(f"Skipping {normalized_name} as it belongs in guilds, not shops.")
-                        continue
-
-                    try:
-                        cursor.execute(f"""
-                            UPDATE {table}
-                            SET `Column`=?, `Row`=?, `next_update`=?, `last_scraped`=?
-                            WHERE Name=?
-                        """, (column, row, next_update, scrape_timestamp, normalized_name))
-
-                        if cursor.rowcount == 0:
-                            logging.warning(f"Skipped update for '{normalized_name}' — not found in {table}.")
-
-                    except sqlite3.Error as e:
-                        logging.error(f"Failed to update {table} entry '{normalized_name}': {e}")
-
-                # Peacekeepers are always ensured
-                if table == "guilds":
-                    cursor.executemany(f"""
-                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(Name) DO UPDATE SET
-                            `Column`=excluded.`Column`,
-                            `Row`=excluded.`Row`,
-                            `next_update`=excluded.`next_update`,
-                            `last_scraped`=excluded.`last_scraped`
-                    """, [
-                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_timestamp),
-                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_timestamp),
-                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_timestamp),
-                    ])
-
-                conn.commit()
-                logging.info(f"Database updated for {table}.")
-
-        except sqlite3.Error as e:
-            logging.error(f"Database operation for {table} failed: {e}")
-
-    def scrape(self):
-        timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-        avitd_data, guilds_next, shops_next = self.scrape_avitd(timestamp)
-        terrible_data = self.scrape_terrible(timestamp)
-        discord_data = self.scrape_discord_bot(timestamp)
-
-        final_guilds = self.merge_by_recency(avitd_data['guilds'], terrible_data['guilds'], discord_data['guilds'])
-        final_shops = self.merge_by_recency(avitd_data['shops'], terrible_data['shops'], discord_data['shops'])
-
-        self.update_database(final_guilds, "guilds", guilds_next)
-        self.update_database(final_shops, "shops", shops_next)
-
-    def scrape_avitd(self, timestamp):
-        try:
-            response = requests.get(self.avitd_url, headers=self.headers)
-            soup = BeautifulSoup(response.text, 'html.parser')
-        except Exception as e:
-            logging.error(f"AVITD fetch failed: {e}")
-            return {'guilds': {}, 'shops': {}}, 'NA', 'NA'
-
-        guilds_raw = self.scrape_section(soup, "the guilds")
-        shops_raw = self.scrape_section(soup, "the shops")
-        guilds_next = self.extract_next_update_time(soup, 'Guilds')
-        shops_next = self.extract_next_update_time(soup, 'Shops')
-
-        guilds = {self.normalize_name(name): ((col, row), timestamp) for name, col, row in guilds_raw}
-        shops = {self.normalize_name(name): ((col, row), timestamp) for name, col, row in shops_raw}
-        logging.info(f"AVITD provided {len(guilds)} guilds and {len(shops)} shops.")
-        return {'guilds': guilds, 'shops': shops}, guilds_next, shops_next
-
-    def scrape_section(self, soup, alt_text):
-        section = soup.find('img', alt=alt_text)
-        if not section:
-            return []
-        table = section.find_next('table')
-        rows = table.find_all('tr', class_=['odd', 'even'])
-        result = []
-        for row in rows:
-            cols = row.find_all('td')
-            if len(cols) < 2:
-                continue
-            name = cols[0].text.strip()
-            try:
-                col, row = cols[1].text.replace("SE of ", "").strip().split(" and ")
-                result.append((name, col, row))
-            except ValueError:
-                continue
-        return result
-
-    def extract_next_update_time(self, soup, label):
-        divs = soup.find_all('div', class_='next_change')
-        for div in divs:
-            if label in div.text:
-                match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
-                if match:
-                    delta = timedelta(days=int(match[1]), hours=int(match[2]), minutes=int(match[3]), seconds=int(match[4]))
-                    return (datetime.now(timezone.utc) + delta).strftime('%Y-%m-%d %H:%M:%S')
-        return 'NA'
-
-    def scrape_terrible(self, timestamp):
-        try:
-            response = requests.get(self.terrible_url, timeout=10)
-            data = response.json()
-        except Exception as e:
-            logging.error(f"Terrible API fetch failed: {e}")
-            return {'guilds': {}, 'shops': {}}
-
-        guilds = {}
-        shops = {}
-
-        for loc in data:
-            if not loc.get("is_active"):
-                continue
-            base_name = loc["building_name"].strip()
-            column = loc.get("street_name", "")
-            row = loc.get("street_number", "")
-            typ = loc["building_type"]
-            level = loc.get("guild_level")
-            if not column or not row:
-                continue
-            if typ == "guild":
-                full_name = f"{base_name} {level}" if level else base_name
-                guilds[self.normalize_name(full_name)] = ((column, row), timestamp)
-            elif typ == "shop":
-                shops[self.normalize_name(base_name)] = ((column, row), timestamp)
-
-        logging.info(f"Terrible API provided {len(guilds)} guilds and {len(shops)} shops.")
-        return {'guilds': guilds, 'shops': shops}
-
-    def scrape_discord_bot(self, timestamp):
-        try:
-            response = requests.get(self.discord_bot_url, timeout=10)
-            data = response.json()
-        except Exception as e:
-            logging.error(f"Discord bot API fetch failed: {e}")
-            return {'guilds': {}, 'shops': {}}
-
-        guilds = {
-            self.normalize_name(name): ((coord["column"], coord["row"]), timestamp)
-            for name, coord in data.get("guilds", {}).items()
-        }
-        shops = {
-            self.normalize_name(name): ((coord["column"], coord["row"]), timestamp)
-            for name, coord in data.get("shops", {}).items()
-        }
-        logging.info(f"Discord bot provided {len(guilds)} guilds and {len(shops)} shops.")
-        return {'guilds': guilds, 'shops': shops}
-
-    def merge_by_recency(self, *sources):
-        merged = {}
-        for source in sources:
-            for name, (coords, ts) in source.items():
-                if name not in merged or ts > merged[name][1]:
-                    merged[name] = (coords, ts)
-        return {name: coords for name, (coords, _) in merged.items()}
-
-# -----------------------
 # Set Destination Dialog
 # -----------------------
 
@@ -6497,51 +6365,14 @@ class SetDestinationDialog(QDialog):
         QApplication.processEvents()
 
         try:
-            timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-            # Step 2: Checking Move Times
-            status_label.setText("Step 2: Checking Move Times...")
-            QApplication.processEvents()
-            self.load_next_move_times()
-
-            # Step 3: Scanning AVITD
-            status_label.setText("Step 3: Scanning AVITD...")
-            QApplication.processEvents()
-            avitd_data, guilds_next, shops_next = parent.scraper.scrape_avitd(timestamp)
-
-            # Step 4: Scanning Terrible API
-            status_label.setText("Step 4: Scanning Terrible API...")
-            QApplication.processEvents()
-            terrible_data = parent.scraper.scrape_terrible(timestamp)
-
-            # Step 5: Scanning Discord Bot
-            status_label.setText("Step 5: Scanning Discord Bot...")
-            QApplication.processEvents()
-            discord_data = parent.scraper.scrape_discord_bot(timestamp)
-
-            # Merge data by recency
-            final_guilds = parent.scraper.merge_by_recency(
-                avitd_data["guilds"], terrible_data["guilds"], discord_data["guilds"]
-            )
-            final_shops = parent.scraper.merge_by_recency(
-                avitd_data["shops"], terrible_data["shops"], discord_data["shops"]
-            )
-
-            # Step 6: Updating Database
-            status_label.setText("Step 6: Updating Database...")
+            # Step 2: Trigger bot scrape and wait for JSON
+            status_label.setText("Step 2: Triggering data scrape...")
             QApplication.processEvents()
 
-            parent.scraper.update_database(
-                [(name, coords[0], coords[1]) for name, coords in final_guilds.items()],
-                "guilds", guilds_next
-            )
-            parent.scraper.update_database(
-                [(name, coords[0], coords[1]) for name, coords in final_shops.items()],
-                "shops", shops_next
-            )
+            parent.update_data()
 
-            # Step 7: Updating Dropdowns
-            status_label.setText("Step 7: Updating Dropdowns...")
+            # Step 3: Reload data from DB
+            status_label.setText("Step 3: Reloading dropdown data...")
             QApplication.processEvents()
 
             with sqlite3.connect(DB_PATH) as conn:
@@ -6571,6 +6402,7 @@ class SetDestinationDialog(QDialog):
                     if col != "NA" and row != "NA"
                 })
 
+            # Step 4: Refresh dropdowns
             self.populate_dropdown(self.tavern_dropdown, parent.taverns_coordinates.keys())
             self.populate_dropdown(self.bank_dropdown, parent.banks_coordinates.keys())
             self.populate_dropdown(self.transit_dropdown, parent.transits_coordinates.keys())
@@ -7075,7 +6907,6 @@ class ShoppingListTool(QDialog):
             except sqlite3.Error as e:
                 logging.error(f"Failed to close connection: {e}")
         event.accept()
-
 
 # -----------------------
 # Damage Calculator Tool
@@ -7756,7 +7587,6 @@ def main() -> None:
     main_window = RBCCommunityMap()
 
     init_methods = [
-        '_init_scraper',
         '_init_window_properties',
         '_init_web_profile',
         '_init_ui_state',

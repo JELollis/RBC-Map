@@ -46,7 +46,7 @@ Modules Used:
 - **requests**: Handles HTTP requests for web scraping operations.
 - **re**: Regular expression operations for parsing HTML and text.
 - **datetime**: Used in timestamps, logs, and database operations.
-- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in AVITDScraper).
+- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in Scraper).
 - **PySide6**: Provides a **Qt-based GUI framework**, handling UI elements, WebEngine, and event management.
 - **sqlite3**: Database engine for persistent storage of map data, character info, and settings.
 - **webbrowser**: Enables external browser interactions (e.g., opening the RBC website or Discord).
@@ -104,8 +104,8 @@ Allows users to modify webview styles using custom CSS.
 - **add_tab**: Adds a category tab for CSS elements.
 - **save_and_apply_changes**: Saves and injects custom CSS into the webview.
 
-#### AVITDScraper (Web Scraping Engine)
-Fetches guild and shop location data from "A View in the Dark."
+#### Scraper (Web Scraping Engine)
+Fetches guild and shop location data from multiple locations.
 
 - **__init__**: Sets up scraper parameters.
 - **scrape_guilds_and_shops**: Collects shop and guild locations.
@@ -152,8 +152,9 @@ import logging.handlers
 # -----------------------
 # Global Constants
 # -----------------------
+
 # Database Path
-DB_PATH = 'sessions/rbc_map_scratch_data.db'
+DB_PATH = 'sessions/rbc_map_data.db'
 
 # Logging Configuration
 LOG_DIR = 'logs'
@@ -305,7 +306,7 @@ from PySide6.QtWidgets import (
 
 # PySide6 Web
 from PySide6.QtWebChannel import QWebChannel
-from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings, QWebEngineScript
+from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 # PySide6 Network
@@ -319,7 +320,7 @@ from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar, cast
 # -----------------------
 
 if TYPE_CHECKING:
-    class AVITDScraper:
+    class Scraper:
         def scrape_guilds_and_shops(self) -> None: ...
 
         def close_connection(self) -> None: ...
@@ -330,7 +331,7 @@ if TYPE_CHECKING:
         selected_character: dict | None
         destination: tuple[int, int] | None
         website_frame: QWebEngineView
-        AVITD_scraper: AVITDScraper
+        scraper: Scraper
 
         def apply_custom_css(self, css: str) -> None: ...
 
@@ -489,7 +490,7 @@ def setup_logging(log_dir: str = LOG_DIR, log_level: int = DEFAULT_LOG_LEVEL, lo
     """
     log_filename = None  # Predefine so it's always available in except blocks
     try:
-        log_filename = datetime.now().strftime(f'{log_dir}/rbc_%Y-%m-%d-Scratch.log')
+        log_filename = datetime.now().strftime(f'{log_dir}/rbc_%Y-%m-%d.log')
 
         # Clear any existing handlers to avoid duplication if called multiple times
         logger = logging.getLogger()
@@ -528,10 +529,10 @@ def save_logging_level_to_db(level: int) -> bool:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                           INSERT INTO settings (setting_name, setting_value)
-                           VALUES (?, ?)
-                           ON CONFLICT(setting_name) DO UPDATE SET setting_value=excluded.setting_value
-                           """, ('log_level', str(level)))
+                INSERT INTO settings (setting_name, setting_value)
+                VALUES (?, ?)
+                ON CONFLICT(setting_name) DO UPDATE SET setting_value=excluded.setting_value
+            """, ('log_level', str(level)))
             conn.commit()
             logging.info(f"Log level updated to {logging.getLevelName(level)} in settings")
             return True
@@ -547,183 +548,146 @@ def create_tables(conn: sqlite3.Connection) -> None:
     """Create database tables if they don’t exist."""
     cursor = conn.cursor()
     tables = [
-        """CREATE TABLE IF NOT EXISTS banks
-           (
-               ID     INTEGER PRIMARY KEY,
-               `Column` TEXT NOT NULL,
-               `Row`    TEXT NOT NULL,
-               Name   TEXT DEFAULT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS characters
-           (
-               id            INTEGER PRIMARY KEY AUTOINCREMENT,
-               name          TEXT NOT NULL,
-               password      TEXT,
-               active_cookie INTEGER DEFAULT NULL
-           )
+        """CREATE TABLE IF NOT EXISTS banks (
+            ID INTEGER PRIMARY KEY,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL,
+            Name TEXT DEFAULT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS characters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            password TEXT,
+            active_cookie INTEGER DEFAULT NULL
+        )
         """,
-        """CREATE TABLE IF NOT EXISTS coins
-           (
-               character_id INTEGER,
-               pocket       INTEGER DEFAULT 0,
-               bank         INTEGER DEFAULT 0,
-               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-           )""",
-        """CREATE TABLE IF NOT EXISTS color_mappings
-           (
-               id    INTEGER PRIMARY KEY,
-               type  TEXT NOT NULL,
-               color TEXT NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS `columns`
-           (
-               ID         INTEGER PRIMARY KEY,
-               Name       TEXT    NOT NULL,
-               Coordinate INTEGER NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS cookies
-           (
-               id         INTEGER PRIMARY KEY,
-               name       TEXT,
-               value      TEXT,
-               domain     TEXT,
-               path       TEXT,
-               expiration TEXT,
-               secure     INTEGER,
-               httponly   INTEGER
-           )""",
-        """CREATE TABLE IF NOT EXISTS css_profiles
-           (
-               profile_name TEXT PRIMARY KEY
-           )""",
-        """CREATE TABLE IF NOT EXISTS custom_css
-           (
-               profile_name TEXT NOT NULL,
-               element      TEXT NOT NULL,
-               value        TEXT NOT NULL,
-               PRIMARY KEY (profile_name, element),
-               FOREIGN KEY (profile_name) REFERENCES css_profiles (profile_name) ON DELETE CASCADE
-           )""",
-        """CREATE TABLE IF NOT EXISTS destinations
-           (
-               id           INTEGER PRIMARY KEY AUTOINCREMENT,
-               character_id INTEGER,
-               col          INTEGER,
-               `Row`          INTEGER,
-               timestamp    TEXT,
-               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-           )""",
-        """CREATE TABLE IF NOT EXISTS guilds
-           (
-               ID           INTEGER PRIMARY KEY,
-               Name         TEXT NOT NULL UNIQUE,
-               `Column`       TEXT NOT NULL,
-               `Row`          TEXT NOT NULL,
-               next_update  TIMESTAMP DEFAULT NULL,
-               last_scraped TIMESTAMP DEFAULT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS last_active_character
-           (
-               character_id INTEGER,
-               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-           )""",
-        """CREATE TABLE IF NOT EXISTS placesofinterest
-           (
-               ID     INTEGER PRIMARY KEY,
-               Name   TEXT NOT NULL,
-               `Column` TEXT NOT NULL,
-               `Row`    TEXT NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS powers
-           (
-               power_id   INTEGER PRIMARY KEY,
-               name       TEXT NOT NULL,
-               guild      TEXT NOT NULL,
-               cost       INTEGER DEFAULT NULL,
-               quest_info TEXT,
-               skill_info TEXT
-           )""",
-        """CREATE TABLE IF NOT EXISTS recent_destinations
-           (
-               id           INTEGER PRIMARY KEY AUTOINCREMENT,
-               character_id INTEGER,
-               col          INTEGER,
-               `Row`          INTEGER,
-               timestamp    DATETIME DEFAULT CURRENT_TIMESTAMP,
-               FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
-           )""",
-        """CREATE TABLE IF NOT EXISTS `rows`
-           (
-               ID         INTEGER PRIMARY KEY,
-               Name       TEXT    NOT NULL,
-               Coordinate INTEGER NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS settings
-           (
-               setting_name  TEXT PRIMARY KEY,
-               setting_value BLOB
-           )""",
-        """CREATE TABLE IF NOT EXISTS shop_items
-           (
-               id               INTEGER PRIMARY KEY,
-               shop_name        TEXT    DEFAULT NULL,
-               item_name        TEXT    DEFAULT NULL,
-               base_price       INTEGER DEFAULT NULL,
-               charisma_level_1 INTEGER DEFAULT NULL,
-               charisma_level_2 INTEGER DEFAULT NULL,
-               charisma_level_3 INTEGER DEFAULT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS shops
-           (
-               ID           INTEGER PRIMARY KEY,
-               Name         TEXT NOT NULL UNIQUE,
-               `Column`       TEXT NOT NULL,
-               `Row`          TEXT NOT NULL,
-               next_update  TIMESTAMP DEFAULT NULL,
-               last_scraped TIMESTAMP DEFAULT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS taverns
-           (
-               ID     INTEGER PRIMARY KEY,
-               `Column` TEXT NOT NULL,
-               `Row`    TEXT NOT NULL,
-               Name   TEXT NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS transits
-           (
-               ID     INTEGER PRIMARY KEY,
-               `Column` TEXT NOT NULL,
-               `Row`    TEXT NOT NULL,
-               Name   TEXT NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS userbuildings
-           (
-               ID     INTEGER PRIMARY KEY,
-               Name   TEXT NOT NULL,
-               `Column` TEXT NOT NULL,
-               `Row`    TEXT NOT NULL
-           )""",
-        """CREATE TABLE IF NOT EXISTS user_scripts
-        (
-                id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                name          TEXT NOT NULL UNIQUE,
-                match_pattern TEXT NOT NULL,
-                enabled       INTEGER DEFAULT 1,
-                script        TEXT NOT NULL
+        """CREATE TABLE IF NOT EXISTS coins (
+            character_id INTEGER,
+            pocket INTEGER DEFAULT 0,
+            bank INTEGER DEFAULT 0,
+            FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
         )""",
-        """CREATE TABLE IF NOT EXISTS user_script_matches
-           (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                script_id INTEGER NOT NULL,
-                match_pattern TEXT NOT NULL,
-                FOREIGN KEY(script_id) REFERENCES user_scripts(id) ON DELETE CASCADE
+        """CREATE TABLE IF NOT EXISTS color_mappings (
+            id INTEGER PRIMARY KEY,
+            type TEXT NOT NULL,
+            color TEXT NOT NULL
         )""",
-        """CREATE TABLE IF NOT EXISTS discord_servers
-           (
-               id          INTEGER PRIMARY KEY AUTOINCREMENT,
-               name        TEXT NOT NULL UNIQUE,
-               invite_link TEXT NOT NULL
-           );"""
+        """CREATE TABLE IF NOT EXISTS `columns` (
+            ID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            Coordinate INTEGER NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS cookies (
+            id INTEGER PRIMARY KEY,
+            name TEXT,
+            value TEXT,
+            domain TEXT,
+            path TEXT,
+            expiration TEXT,
+            secure INTEGER,
+            httponly INTEGER
+        )""",
+        """CREATE TABLE IF NOT EXISTS css_profiles (
+                    profile_name TEXT PRIMARY KEY
+                )""",
+        """CREATE TABLE IF NOT EXISTS custom_css (
+            profile_name TEXT NOT NULL,
+            element TEXT NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY (profile_name, element),
+            FOREIGN KEY (profile_name) REFERENCES css_profiles(profile_name) ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS destinations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id INTEGER,
+            col INTEGER,
+            row INTEGER,
+            timestamp TEXT,
+            FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS guilds (
+            ID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL UNIQUE,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL,
+            next_update TIMESTAMP DEFAULT NULL,
+            last_scraped TIMESTAMP DEFAULT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS last_active_character (
+            character_id INTEGER,
+            FOREIGN KEY (character_id) REFERENCES characters (id) ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS placesofinterest (
+            ID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS powers (
+            power_id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            guild TEXT NOT NULL,
+            cost INTEGER DEFAULT NULL,
+            quest_info TEXT,
+            skill_info TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS recent_destinations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id INTEGER,
+            col INTEGER,
+            row INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(character_id) REFERENCES characters(id) ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS `rows` (
+            ID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            Coordinate INTEGER NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS settings (
+            setting_name TEXT PRIMARY KEY,
+            setting_value BLOB
+        )""",
+        """CREATE TABLE IF NOT EXISTS shop_items (
+            id INTEGER PRIMARY KEY,
+            shop_name TEXT DEFAULT NULL,
+            item_name TEXT DEFAULT NULL,
+            base_price INTEGER DEFAULT NULL,
+            charisma_level_1 INTEGER DEFAULT NULL,
+            charisma_level_2 INTEGER DEFAULT NULL,
+            charisma_level_3 INTEGER DEFAULT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS shops (
+            ID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL UNIQUE,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL,
+            next_update TIMESTAMP DEFAULT NULL,
+            last_scraped TIMESTAMP DEFAULT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS taverns (
+            ID INTEGER PRIMARY KEY,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL,
+            Name TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS transits (
+            ID INTEGER PRIMARY KEY,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL,
+            Name TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS userbuildings (
+            ID INTEGER PRIMARY KEY,
+            Name TEXT NOT NULL,
+            `Column` TEXT NOT NULL,
+            Row TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS discord_servers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            invite_link TEXT NOT NULL
+        );"""
     ]
     for table_sql in tables:
         try:
@@ -734,17 +698,18 @@ def create_tables(conn: sqlite3.Connection) -> None:
             raise
     conn.commit()
 
+
 def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
     cursor = conn.cursor()
     initial_data = [
-        ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
+        ("REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
             ('keybind_config', 1),
             ('css_profile', 'Default'),
             ('log_level', str(DEFAULT_LOG_LEVEL))
         ]),
 
-        ("INSERT OR IGNORE INTO banks (ID, `Column`, `Row`, Name) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO banks (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1, 'Aardvark', '82nd', 'OmniBank'),
             (2, 'Alder', '40th', 'OmniBank'),
             (3, 'Alder', '80th', 'OmniBank'),
@@ -946,7 +911,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (199, 'Zelkova', '73rd', 'OmniBank'),
             (200, 'Zinc', '74th', 'OmniBank')
         ]),
-        ("INSERT OR IGNORE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
+        ("REPLACE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
             (1, 'bank', '#0000ff'),
             (2, 'tavern', '#887700'),
             (3, 'transit', '#880000'),
@@ -969,7 +934,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (20, 'button_border_color', '#222244'),
             (21, 'graveyard', '#888888')
         ]),
-        ("INSERT OR IGNORE INTO `columns` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
+        ("REPLACE INTO `columns` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'WCL', '0'),
             ('2', 'Western City Limits', '0'),
             ('3', 'Aardvark', '2'),
@@ -1073,8 +1038,8 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('101', 'Zinc', '198'),
             ('102', 'Zestless', '200')
         ]),
-        ("INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)", [("Default",)]),
-        ("INSERT OR IGNORE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)", [
+        ("REPLACE INTO css_profiles (profile_name) VALUES (?)", [("Default",)]),
+        ("REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)", [
             ("Default", "BODY", "background-color:#000000;"),
             ("Default", "H1,DIV,BODY,P,A", "font-family:Verdana,Arial,sans-serif;"),
             ("Default", "BODY,H1", "text-align:center;"),
@@ -1140,7 +1105,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ("Default", ".mh",
              "border:none; background-color:transparent; text-decoration:underline; color:white; padding:0px; cursor:hand;")
         ]),
-        ("INSERT OR IGNORE INTO guilds (ID, Name, `Column`, `Row`, next_update) VALUES (?, ?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO guilds (ID, Name, `Column`, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1, 'Allurists Guild 1', 'NA', 'NA', ''),
             (2, 'Allurists Guild 2', 'NA', 'NA', ''),
             (3, 'Allurists Guild 3', 'NA', 'NA', ''),
@@ -1160,7 +1125,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (17, 'Peacekeepers Mission 2', 'Unicorn', '33rd', ''),
             (18, 'Peacekeepers Mission 3', 'Emerald', '33rd', '')
         ]),
-        ("INSERT OR IGNORE INTO placesofinterest (ID, Name, `Column`, `Row`) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO placesofinterest (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
             (1, 'Battle Arena', 'Zelkova', '52nd'),
             (2, 'Hall of Binding', 'Vervain', '40th'),
             (3, 'Hall of Severance', 'Walrus', '40th'),
@@ -1169,84 +1134,83 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (6, 'Eternal Aubade of Mystical Treasures', 'Zelkova', '47th'),
             (7, 'Kindred Hospital', 'Woe', '13th')
         ]),
-        ("INSERT OR IGNORE INTO powers (power_id, name, guild, cost, quest_info, skill_info) VALUES (?, ?, ?, ?, ?, ?)",
-         [
-             (1, 'Battle Cloak', 'Any Peacekeeper''s Mission', 2000, 'None',
-              'Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
-             (2, 'Celerity 1', 'Travellers Guild 1', 4000, 'Bring items to 3 pubs, no transits but you can teleport.',
-              'AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
-             (3, 'Celerity 2', 'Travellers Guild 2', 8000, 'Bring items to 6 pubs, no transits but you can teleport.',
-              'AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
-             (4, 'Celerity 3', 'Travellers Guild 3', 17500, 'Bring items to 12 pubs, no transits but you can teleport.',
-              'AP regeneration time reduced by 5 minutes per AP (15 minutes/AP).'),
-             (5, 'Charisma 1', 'Allurists Guild 1', 1000,
-              'Convince 3 vampires to visit a specific pub and say "VampName sent me".', 'Shop prices reduced by 3%.'),
-             (6, 'Charisma 2', 'Allurists Guild 2', 3000,
-              'Convince 6 vampires to visit a specific pub and say "VampName sent me".', 'Shop prices reduced by 7%.'),
-             (7, 'Charisma 3', 'Allurists Guild 3', 5000,
-              'Convince 9 vampires to visit a specific pub and say "VampName sent me".',
-              'Shop prices reduced by 10%, with an additional coin discount on each item.'),
-             (8, 'Locate 1', 'Empaths Guild 1', 1500,
-              'Visit specific locations, say "Check-Point", and drain 10 BP per location.',
-              'You can now determine the distance to a specific vampire.'),
-             (9, 'Locate 2', 'Empaths Guild 2', 4000,
-              'Visit specific locations, say "Check-Point", and drain 15 BP per location.',
-              'Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
-             (10, 'Locate 3', 'Empaths Guild 3', 15000,
-              'Visit specific locations, say "Check-Point", and drain 25 BP per location.',
-              'Locate 3 reveals the exact street intersection of the vampire.'),
-             (11, 'Neutrality 1', 'Peacekeeper''s Mission 1', 10000, 'None',
-              'Neutrality designates a vampire as "non-violent", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
-             (12, 'Neutrality 2', 'Peacekeeper''s Mission 2', 10000, 'Additional 500 BP cost at this level.',
-              'Continues non-violent status with Peacekeeper protection.'),
-             (13, 'Neutrality 3', 'Peacekeeper''s Mission 3', 10000, 'Additional 1000 BP cost at this level.',
-              'Non-violent status continues, and Vial of Holy Water causes only 1 BP of damage.'),
-             (14, 'Perception 1', 'Allurists Guild', 7500, 'Hunt and kill 1 Vampire Hunter within 10 days.',
-              'Allows detection of hunters and potentially coin sounds in vampire pockets.'),
-             (15, 'Perception 2', 'Allurists Guild', 15000, 'Hunt and kill 3 Vampire Hunters within 10 days.',
-              'Detects Paladins and nearby hunters with concentration.'),
-             (16, 'Second Sight', 'Donation Required', '$5', 'Visit donation page for $5 or find a sponsor.',
-              'Grants a bonus power of choice from a list, including Celerity-1, Stamina-1, Thievery-1, Shadows-1, Telepathy-1, Charisma-1, or Locate-1.'),
-             (17, 'Shadows 1', 'Thieves Guild 1', 1000, 'None',
-              'Allows you to fall into shadows after 3 days of inactivity.'),
-             (18, 'Shadows 2', 'Thieves Guild 2', 2000, 'None',
-              'Allows you to fall into shadows after 2 days of inactivity.'),
-             (19, 'Shadows 3', 'Thieves Guild 3', 4000, 'None',
-              'Allows you to fall into shadows after 1 day of inactivity.'),
-             (20, 'Stamina 1', 'Immolators Guild 1', 1000, 'Walk to a specified location, say code word, lose 500 BP.',
-              'Increases max AP by 10 and adds resistance to scrolls of turning (25% chance).'),
-             (21, 'Stamina 2', 'Immolators Guild 2', 2500, 'Walk to a specified location, say code word, lose 1000 BP.',
-              'Increases max AP by 10 and adds resistance to scrolls of turning (50% chance).'),
-             (22, 'Stamina 3', 'Immolators Guild 3', 5000, 'Walk to a specified location, say code word, lose 1500 BP.',
-              'Increases max AP by 10 and adds resistance to scrolls of turning (75% chance).'),
-             (23, 'Suction 1', 'Immolators Guild (ALL)', 7500,
-              'Bite 20 vampires with higher BP, spit blood into wineskin.',
-              'Gain ability to drink 2 pints from vampires and up to 4 from humans.'),
-             (24, 'Suction 2', 'Immolators Guild (ALL)', 15000,
-              'Bite 20 vampires with higher BP, spit blood into wineskin.',
-              'Gain ability to drink 4 pints from vampires and up to 10 from humans.'),
-             (25, 'Surprise', 'Empaths Guild (ALL)', 20000, 'None',
-              'Allows access to overcrowded squares (blue squares), but entry may still be limited if it''s too full.'),
-             (26, 'Telepathy 1', 'Travellers Guild 1', 2500, 'None',
-              'Allows sending messages to vampires from a distance with an AP cost of 10 for unrelated vampires and 5 for sire or childer.'),
-             (27, 'Telepathy 2', 'Travellers Guild 2', 5000, 'None',
-              'Allows sending messages to vampires from a distance with an AP cost of 6 for unrelated vampires and 3 for sire or childer.'),
-             (28, 'Telepathy 3', 'Travellers Guild 3', 10000, 'None',
-              'Allows sending messages to vampires from a distance with an AP cost of 2 for unrelated vampires and 1 for sire or childer.'),
-             (29, 'Thievery 1', 'Thievery Guild 1', 2000, 'None',
-              'Adds a (rob) option to vampires, allowing you to rob up to 25% of their coins.'),
-             (30, 'Thievery 2', 'Thievery Guild 2', 5000, 'None',
-              'Improves the (rob) option, allowing you to rob up to 50% of a vampire''s coins.'),
-             (31, 'Thievery 3', 'Thievery Guild 3', 10000, 'None',
-              'Improves the (rob) option further, allowing you to rob up to 75% of a vampire''s coins.'),
-             (32, 'Thrift 1', 'Allurists Guild 1', 1000, 'Buy 1 Perfect Red Rose from a specified shop.',
-              '5% chance to keep a used item/scroll instead of it burning up.'),
-             (33, 'Thrift 2', 'Allurists Guild 2', 3000, 'Buy 1 Perfect Red Rose from 3 specified shops.',
-              '10% chance to keep a used item/scroll instead of it burning up.'),
-             (34, 'Thrift 3', 'Allurists Guild 3', 10000, 'Buy 1 Perfect Red Rose from 6 specified shops.',
-              '15% chance to keep a used item/scroll instead of it burning up.')
-         ]),
-        ("INSERT OR IGNORE INTO `rows` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
+        ("REPLACE INTO powers (power_id, name, guild, cost, quest_info, skill_info) VALUES (?, ?, ?, ?, ?, ?)", [
+            (1, 'Battle Cloak', 'Any Peacekeeper''s Mission', 2000, 'None',
+             'Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
+            (2, 'Celerity 1', 'Travellers Guild 1', 4000, 'Bring items to 3 pubs, no transits but you can teleport.',
+             'AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
+            (3, 'Celerity 2', 'Travellers Guild 2', 8000, 'Bring items to 6 pubs, no transits but you can teleport.',
+             'AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
+            (4, 'Celerity 3', 'Travellers Guild 3', 17500, 'Bring items to 12 pubs, no transits but you can teleport.',
+             'AP regeneration time reduced by 5 minutes per AP (15 minutes/AP).'),
+            (5, 'Charisma 1', 'Allurists Guild 1', 1000,
+             'Convince 3 vampires to visit a specific pub and say "VampName sent me".', 'Shop prices reduced by 3%.'),
+            (6, 'Charisma 2', 'Allurists Guild 2', 3000,
+             'Convince 6 vampires to visit a specific pub and say "VampName sent me".', 'Shop prices reduced by 7%.'),
+            (7, 'Charisma 3', 'Allurists Guild 3', 5000,
+             'Convince 9 vampires to visit a specific pub and say "VampName sent me".',
+             'Shop prices reduced by 10%, with an additional coin discount on each item.'),
+            (8, 'Locate 1', 'Empaths Guild 1', 1500,
+             'Visit specific locations, say "Check-Point", and drain 10 BP per location.',
+             'You can now determine the distance to a specific vampire.'),
+            (9, 'Locate 2', 'Empaths Guild 2', 4000,
+             'Visit specific locations, say "Check-Point", and drain 15 BP per location.',
+             'Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
+            (10, 'Locate 3', 'Empaths Guild 3', 15000,
+             'Visit specific locations, say "Check-Point", and drain 25 BP per location.',
+             'Locate 3 reveals the exact street intersection of the vampire.'),
+            (11, 'Neutrality 1', 'Peacekeeper''s Mission 1', 10000, 'None',
+             'Neutrality designates a vampire as "non-violent", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
+            (12, 'Neutrality 2', 'Peacekeeper''s Mission 2', 10000, 'Additional 500 BP cost at this level.',
+             'Continues non-violent status with Peacekeeper protection.'),
+            (13, 'Neutrality 3', 'Peacekeeper''s Mission 3', 10000, 'Additional 1000 BP cost at this level.',
+             'Non-violent status continues, and Vial of Holy Water causes only 1 BP of damage.'),
+            (14, 'Perception 1', 'Allurists Guild', 7500, 'Hunt and kill 1 Vampire Hunter within 10 days.',
+             'Allows detection of hunters and potentially coin sounds in vampire pockets.'),
+            (15, 'Perception 2', 'Allurists Guild', 15000, 'Hunt and kill 3 Vampire Hunters within 10 days.',
+             'Detects Paladins and nearby hunters with concentration.'),
+            (16, 'Second Sight', 'Donation Required', '$5', 'Visit donation page for $5 or find a sponsor.',
+             'Grants a bonus power of choice from a list, including Celerity-1, Stamina-1, Thievery-1, Shadows-1, Telepathy-1, Charisma-1, or Locate-1.'),
+            (17, 'Shadows 1', 'Thieves Guild 1', 1000, 'None',
+             'Allows you to fall into shadows after 3 days of inactivity.'),
+            (18, 'Shadows 2', 'Thieves Guild 2', 2000, 'None',
+             'Allows you to fall into shadows after 2 days of inactivity.'),
+            (19, 'Shadows 3', 'Thieves Guild 3', 4000, 'None',
+             'Allows you to fall into shadows after 1 day of inactivity.'),
+            (20, 'Stamina 1', 'Immolators Guild 1', 1000, 'Walk to a specified location, say code word, lose 500 BP.',
+             'Increases max AP by 10 and adds resistance to scrolls of turning (25% chance).'),
+            (21, 'Stamina 2', 'Immolators Guild 2', 2500, 'Walk to a specified location, say code word, lose 1000 BP.',
+             'Increases max AP by 10 and adds resistance to scrolls of turning (50% chance).'),
+            (22, 'Stamina 3', 'Immolators Guild 3', 5000, 'Walk to a specified location, say code word, lose 1500 BP.',
+             'Increases max AP by 10 and adds resistance to scrolls of turning (75% chance).'),
+            (23, 'Suction 1', 'Immolators Guild (ALL)', 7500,
+             'Bite 20 vampires with higher BP, spit blood into wineskin.',
+             'Gain ability to drink 2 pints from vampires and up to 4 from humans.'),
+            (24, 'Suction 2', 'Immolators Guild (ALL)', 15000,
+             'Bite 20 vampires with higher BP, spit blood into wineskin.',
+             'Gain ability to drink 4 pints from vampires and up to 10 from humans.'),
+            (25, 'Surprise', 'Empaths Guild (ALL)', 20000, 'None',
+             'Allows access to overcrowded squares (blue squares), but entry may still be limited if it''s too full.'),
+            (26, 'Telepathy 1', 'Travellers Guild 1', 2500, 'None',
+             'Allows sending messages to vampires from a distance with an AP cost of 10 for unrelated vampires and 5 for sire or childer.'),
+            (27, 'Telepathy 2', 'Travellers Guild 2', 5000, 'None',
+             'Allows sending messages to vampires from a distance with an AP cost of 6 for unrelated vampires and 3 for sire or childer.'),
+            (28, 'Telepathy 3', 'Travellers Guild 3', 10000, 'None',
+             'Allows sending messages to vampires from a distance with an AP cost of 2 for unrelated vampires and 1 for sire or childer.'),
+            (29, 'Thievery 1', 'Thievery Guild 1', 2000, 'None',
+             'Adds a (rob) option to vampires, allowing you to rob up to 25% of their coins.'),
+            (30, 'Thievery 2', 'Thievery Guild 2', 5000, 'None',
+             'Improves the (rob) option, allowing you to rob up to 50% of a vampire''s coins.'),
+            (31, 'Thievery 3', 'Thievery Guild 3', 10000, 'None',
+             'Improves the (rob) option further, allowing you to rob up to 75% of a vampire''s coins.'),
+            (32, 'Thrift 1', 'Allurists Guild 1', 1000, 'Buy 1 Perfect Red Rose from a specified shop.',
+             '5% chance to keep a used item/scroll instead of it burning up.'),
+            (33, 'Thrift 2', 'Allurists Guild 2', 3000, 'Buy 1 Perfect Red Rose from 3 specified shops.',
+             '10% chance to keep a used item/scroll instead of it burning up.'),
+            (34, 'Thrift 3', 'Allurists Guild 3', 10000, 'Buy 1 Perfect Red Rose from 6 specified shops.',
+             '15% chance to keep a used item/scroll instead of it burning up.')
+        ]),
+        ("REPLACE INTO `rows` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'NCL', '0'),
             ('2', 'Northern City Limits', '0'),
             ('3', '1st', '2'),
@@ -1350,7 +1314,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('101', '99th', '198'),
             ('102', '100th', '200')
         ]),
-        ("INSERT OR IGNORE INTO shop_items (id, shop_name, item_name, base_price, charisma_level_1, charisma_level_2, charisma_level_3) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("REPLACE INTO shop_items (id, shop_name, item_name, base_price, charisma_level_1, charisma_level_2, charisma_level_3) VALUES (?, ?, ?, ?, ?, ?, ?)",
          [
              (1, 'Discount Magic', 'Perfect Dandelion', 35, 33, 32, 31),
              (2, 'Discount Magic', 'Sprint Potion', 105, 101, 97, 94),
@@ -1594,7 +1558,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
              (240, 'The White House', 'Compass', 11999, 11999, 11999, 11999),
              (241, 'The White House', 'Pewter Tankard', 15000, 15000, 15000, 15000)
          ]),
-        ("INSERT OR IGNORE INTO shops (ID, Name, `Column`, `Row`, next_update) VALUES (?, ?, ?, ?, ?)", [
+        ("INSERT OR IGNORE INTO shops (ID, Name, `Column`, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
             (1, 'Ace Porn', 'NA', 'NA', ''),
             (2, 'Checkers Porn Shop', 'NA', 'NA', ''),
             (3, 'Dark Desires', 'NA', 'NA', ''),
@@ -1621,7 +1585,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (24, 'White Light', 'NA', 'NA', ''),
             (25, 'Ye Olde Scrolles', 'NA', 'NA', '')
         ]),
-        ("INSERT OR IGNORE INTO taverns (ID, `Column`, `Row`, Name) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO taverns (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1, 'Gum', '33rd', 'Abbot''s Tavern'),
             (2, 'Knotweed', '11th', 'Archer''s Tavern'),
             (3, 'Torment', '16th', 'Baker''s Tavern'),
@@ -1718,7 +1682,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (94, 'Anguish', '68th', 'Xendom Tavern'),
             (95, 'Pyrites', '70th', 'Ye Olde Gallows Ale House')
         ]),
-        ("INSERT OR IGNORE INTO transits (ID, `Column`, `Row`, Name) VALUES (?, ?, ?, ?)", [
+        ("REPLACE INTO transits (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
             (1, 'Mongoose', '25th', 'Calliope'),
             (2, 'Zelkova', '25th', 'Clio'),
             (3, 'Malachite', '25th', 'Erato'),
@@ -1729,153 +1693,154 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (8, 'Zelkova', '75th', 'Thalia'),
             (9, 'Malachite', '75th', 'Urania')
         ]),
-        ("INSERT OR IGNORE INTO userbuildings (ID, Name, `Column`, `Row`) VALUES (?, ?, ?, ?)", [
-            (1, 'Ace''s House of Dumont', 'Cedar', '99th'),
-            (2, 'Alatáriël Maenor', 'Diamond', '50th'),
-            (3, 'Alpha Dragon''s and Lyric''s House of Dragon and Flame', 'Amethyst', '90th'),
-            (4, 'AmadisdeGaula''s Stellaburgi', 'Wulfenite', '38th'),
-            (5, 'Andre''s Crypt', 'Ferret', '10th'),
-            (6, 'Annabelle''s Paradise', 'Emerald', '85th'),
-            (7, 'Anthony''s Castle Pacherontis', 'Walrus', '39th'),
-            (8, 'Anthony''s Gero Claw', 'Vulture', '39th'),
-            (9, 'Anthony''s Training Grounds', 'Vulture', '35th'),
-            (10, 'Aphaythean Vineyards', 'Willow', '13th'),
-            (11, 'Archangel''s Castle', 'Beech', '4th'),
-            (12, 'Avant''s Garden', 'Amethyst', '68th'),
-            (13, 'BaShalor''s Rose Garden', 'Cobalt', '41st'),
-            (14, 'Bitercat''s mews', 'Lion', '42nd'),
-            (15, 'Black dragonet''s mansion', 'Oppression', '80th'),
-            (16, 'Blutengel''s Temple of Blood', 'Fear', '13th'),
-            (17, 'Café Damari', 'Zelkova', '68th'),
-            (18, 'Cair Paravel', 'Lion', '27th'),
-            (19, 'Capadocian Castle', 'Larch', '49th'),
-            (20, 'Carnal Desires', 'Ivy', '66th'),
-            (21, 'Castle of Shadows', 'Turquoise', '86th'),
-            (22, 'Castle RavenesQue', 'Raven', 'NCL'),
-            (23, 'ChaosRaven''s Dimensional Tower', 'Killjoy', '23rd'),
-            (24, 'CHASS''s forever-blues hall', 'Torment', '75th'),
-            (25, 'CrimsonClover''s Hideaway', 'Diamond', '85th'),
-            (26, 'CrowsSong''s Blackbird Towers', 'Wulfenite', '3rd'),
-            (27, 'D''dary Manor', 'Aardvark', '1st'),
-            (28, 'Daphne''s Dungeons', 'Malachite', '64th'),
-            (29, 'DarkestDesire''s Chambers', 'Despair', '56th'),
-            (30, 'Darkwolf''s and liquid-vamp''s Country Cottage', 'Wulfenite', '69th'),
-            (31, 'Deaths embrace''s Shadow Keep', 'Holly', '81st'),
-            (32, 'Devil Miyu''s Abeir-Toril', 'Fear', '2nd'),
-            (33, 'Devil Miyu''s Edge of Reason', 'Fear', 'NCL'),
-            (34, 'Devil Miyu''s Lair', 'Fear', '1st'),
-            (35, 'Dreamcatcher Haven', 'Torment', '2nd'),
-            (36, 'Elijah''s Hall of the Lost', 'Zinc', '99th'),
-            (37, 'ElishaDraken''s Sanguine Ankh', 'Nightingale', '59th'),
-            (38, 'Epineux Manoir', 'Olive', '70th'),
-            (39, 'Espy''s Jaded Sorrows', 'Jaded', '69th'),
-            (40, 'Freedom Trade Alliance', 'Amethyst', '46th'),
-            (41, 'Gypsychild''s Caravan', 'Torment', '69th'),
-            (42, 'Halls of Shadow Court', 'Horror', '99th'),
-            (43, 'Hells Gate''s Castle of Destruction', 'Lonely', '45th'),
-            (44, 'Hesu''s Place', 'Raven', '24th'),
-            (45, 'Hexenkessel', 'Jackal', '83rd'),
-            (47, 'Ildiko''s and Brom''s Insanity', 'Killjoy', '53rd'),
-            (48, 'Jacomo Varis'' Shadow Manor', 'Raven', '96th'),
-            (49, 'Jaxi''s and Speedy''s Cave', 'Raven', '23rd'),
-            (50, 'Julia''s Villa', 'Gloom', '76th'),
-            (51, 'King Lestat''s Le Paradis Caché', 'Cobalt', '90th'),
-            (52, 'La Cucina', 'Diamond', '28th'),
-            (53, 'Lady Ophy''s Bougainvillea Mansion', 'Jaded', '84th'),
-            (54, 'LadyFae''s and nitenurse''s Solas Gealaí Caisleán', 'Raven', '76th'),
-            (55, 'Lasc Talon''s Estate', 'Willow', '42nd'),
-            (56, 'Lass'' Lair', 'Vervain', '1st'),
-            (57, 'Liski''s Shadow Phial', 'Gloom', '99th'),
-            (58, 'Lord Galamushi''s Enchanted Mansion', 'Anguish', '52nd'),
-            (59, 'Louvain''s Sanctuary', 'Gibbon', '21st'),
-            (60, 'Majica''s Playground', 'Willow', '50th'),
-            (61, 'Mandruleanu Manor', 'Diamond', '86th'),
-            (62, 'Mansion of Malice', 'Horror', '69th'),
-            (63, 'Marlena''s Wishing Well', 'Fear', '56th'),
-            (64, 'Moirai''s Gate to the Church of Blood', 'Horror', '13th'),
-            (65, 'Moondreamer''s Darkest Desire''s Lighthouse', 'Fear', '9th'),
-            (66, 'Moonlight Gardens', 'Turquoise', '87th'),
-            (67, 'Ms Delgado''s Manor', 'Sorrow', '69th'),
-            (68, 'MyMotherInLaw''s Home for Wayward Ghouls', 'Amethyst', '69th'),
-            (69, 'Narcisssa''s Vineyard', 'Aardvark', '60th'),
-            (70, 'Nemesis'' Asyl', 'Zinc', '85th'),
-            (71, 'NightWatch Headquarters', 'Larch', '51st'),
-            (72, 'Obsidian''s Arboretum', 'Obsidian', '88th'),
-            (73, 'Obsidian''s Castle of Warwick', 'Obsidian', 'NCL'),
-            (74, 'Obsidian''s Château de la Lumière', 'Obsidian', '66th'),
-            (75, 'Obsidian''s château noir', 'Obsidian', '99th'),
-            (76, 'Obsidian''s Hall of Shifting Realms', 'Obsidian', '15th'),
-            (77, 'Obsidian''s Penthouse', 'Obsidian', '29th'),
-            (78, 'Obsidian''s Silver Towers', 'Obsidian', '51st'),
-            (79, 'Obsidian''s Tranquility', 'Obsidian', '80th'),
-            (80, 'Obsidian''s, Phoenixxe''s and Em''s Heaven''s Gate', 'Obsidian', '45th'),
-            (81, 'Occamrazor''s House of Ears', 'Yew', '30th'),
-            (82, 'Ordo Dracul Sanctum', 'Nightingale', '77th'),
-            (83, 'Orgasmerilla''s Warehouse', 'Zinc', '80th'),
-            (84, 'Pace Family Ranch', 'Fir', '69th'),
-            (85, 'Palazzo Lucius', 'Zebra', '27th'),
-            (86, 'Pandrora and CBK''s Chamber of Horrors', 'Torment', '95th'),
-            (87, 'RemipunX''s Sacred Yew', 'Cobalt', '42nd'),
-            (88, 'Renovate''s grove', 'Umbrella', '71st'),
-            (89, 'Saki''s Fondest Wish', 'Nightingale', '17th'),
-            (90, 'Samantha Dawn''s Salacious Sojourn', 'Anguish', '53rd'),
-            (91, 'Sanctuary Hotel', 'Kraken', '27th'),
-            (92, 'Sartori''s Domicile', 'Elm', '1st'),
-            (93, 'SCORPIOUS1''s Tower of Truth', 'Yearning', '58th'),
-            (94, 'Setitevampyr''s temple', 'Raven', '50th'),
-            (95, 'Shaarinya`s Sanguine Sanctuary', 'Raven', '77th'),
-            (96, 'Shadow bat''s Sanctorium', 'Cobalt', '76th'),
-            (97, 'SIE Compound', 'Raven', '13th'),
-            (98, 'Sitrence''s Lab', 'Ferret', '3rd'),
-            (99, 'Solanea''s Family Home', 'Ruby', '56th'),
-            (100, 'The Angelarium', 'Zinc', 'NCL'),
-            (101, 'St. John Bathhouse', 'Sycamore', '76th'),
-            (102, 'Starreagle''s Paradise Lair', 'Beryl', '24th'),
-            (103, 'Steele Industries', 'Umbrella', '44th'),
-            (104, 'Stormy jayne''s web', 'Nickel', '99th'),
-            (105, 'Talon Castle', 'Willow', '35th'),
-            (106, 'tejas_dragon''s Lair', 'Zelkova', '69th'),
-            (107, 'The Ailios Asylum', 'Amethyst', '36th'),
-            (108, 'The Belly of the Whale', 'Amethyst', '2nd'),
-            (109, 'The Calignite', 'Eagle', '16th'),
-            (110, 'The COVE', 'Knowteed', '51st'),
-            (111, 'The Dragons Lair Club', 'Vervain', '39th'),
-            (112, 'The Eternal Spiral', 'Anguish', '69th'),
-            (113, 'The goatsucker''s lair', 'Yak', '13th'),
-            (114, 'The Halls of Heorot', 'Jaded', '75th'),
-            (115, 'The House of Night', 'Walrus', '38th'),
-            (116, 'The Inner Circle Manor', 'Diamond', '26th'),
-            (117, 'The Ivory Tower', 'Zelkova', '76th'),
-            (118, 'The Ixora Estate', 'Lead', '48th'),
-            (119, 'The Kyoto Club', 'Lion', '22nd'),
-            (120, 'The Lokason Myrkrasetur', 'Wulfenite', '40th'),
-            (121, 'The Path of Enlightenment Castle', 'Willow', '80th'),
-            (122, 'The RavenBlack Bite', 'Oppression', '40th'),
-            (123, 'The Reynolds'' Estate', 'Beryl', '23rd'),
-            (124, 'The River Passage', 'Yew', '33rd'),
-            (125, 'The Sakura Garden', 'Nickel', '77th'),
-            (126, 'The Sanctum of Vermathrax-rex and Bellina', 'Vexation', '99th'),
-            (127, 'The Sanguinarium', 'Fear', '4th'),
-            (128, 'The Scythe''s Negotiation Offices', 'Vauxite', '88th'),
-            (129, 'The Sepulchre of Shadows', 'Ennui', '1st'),
-            (130, 'The Tower of Thorns', 'Pilchard', '70th'),
-            (131, 'The Towers of the Crossed Swords', 'Torment', '66th'),
-            (132, 'The White House', 'Nervous', '75th'),
-            (133, 'University of Vampiric Enlightenment', 'Yak', '80th'),
-            (134, 'Virgo''s obsidian waygate', 'Obsidian', '2nd'),
-            (135, 'Vulture''s Pagoda', 'Vulture', '50th'),
-            (136, 'Wilde Sanctuary', 'Willow', '51st'),
-            (137, 'Wilde Wolfe Estate', 'Vervain', '50th'),
-            (138, 'Willhelm''s Warrior House', 'Horror', '53rd'),
-            (139, 'Willow Lake Manse', 'Willow', '99th'),
-            (140, 'Willow Woods'' & The Ent Moot', 'Willow', '54th'),
-            (141, 'Wolfshadow''s and Crazy''s RBC Casino', 'Lead', '72nd'),
-            (142, 'Wyndcryer''s TygerNight''s and Bambi''s Lair', 'Unicorn', '77th'),
-            (143, 'Wyvernhall', 'Ivy', '38th'),
-            (144, 'X', 'Emerald', 'NCL'),
-            (145, 'Requiem of Hades', 'Walrus', '41st')
+        ("REPLACE INTO userbuildings (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
+            (1, "Ace's House of Dumont", "Cedar", "99th"),
+            (2, "Alatáriël Maenor", "Diamond", "50th"),
+            (3, "Alpha Dragon's and Lyric's House of Dragon and Flame", "Amethyst", "90th"),
+            (4, "AmadisdeGaula's Stellaburgi", "Wulfenite", "38th"),
+            (5, "Andre's Crypt", "Ferret", "10th"),
+            (6, "Annabelle's Paradise", "Emerald", "85th"),
+            (7, "Anthony's Castle Pacherontis", "Walrus", "39th"),
+            (8, "Anthony's Gero Claw", "Vulture", "39th"),
+            (9, "Anthony's Training Grounds", "Vulture", "35th"),
+            (10, "Aphaythean Vineyards", "Willow", "13th"),
+            (11, "Archangel's Castle", "Beech", "4th"),
+            (12, "Avant's Garden", "Amethyst", "68th"),
+            (13, "BaShalor's Rose Garden", "Cobalt", "41st"),
+            (14, "Bitercat's mews", "Lion", "42nd"),
+            (15, "Black dragonet's mansion", "Oppression", "80th"),
+            (16, "Blutengel's Temple of Blood", "Fear", "13th"),
+            (17, "Café Damari", "Zelkova", "68th"),
+            (18, "Cair Paravel", "Lion", "27th"),
+            (19, "Capadocian Castle", "Larch", "49th"),
+            (20, "Carnal Desires", "Ivy", "66th"),
+            (21, "Castle of Shadows", "Turquoise", "86th"),
+            (22, "Castle RavenesQue", "Raven", "NCL"),
+            (23, "ChaosRaven's Dimensional Tower", "Killjoy", "23rd"),
+            (24, "CHASS's forever-blues hall", "Torment", "75th"),
+            (25, "CrimsonClover's Hideaway", "Diamond", "85th"),
+            (26, "CrowsSong's Blackbird Towers", "Wulfenite", "3rd"),
+            (27, "D'dary Manor", "Aardvark", "1st"),
+            (28, "Daphne's Dungeons", "Malachite", "64th"),
+            (29, "DarkestDesire's Chambers", "Despair", "56th"),
+            (30, "Darkwolf's and liquid-vamp's Country Cottage", "Wulfenite", "69th"),
+            (31, "Deamhan Estate", "Yak", "81st"),
+            (32, "Deaths embrace's Shadow Keep", "Holly", "81st"),
+            (33, "Devil Miyu's Abeir-Toril", "Fear", "2nd"),
+            (34, "Devil Miyu's Edge of Reason", "Fear", "NCL"),
+            (35, "Devil Miyu's Lair", "Fear", "1st"),
+            (36, "Dreamcatcher Haven", "Torment", "2nd"),
+            (37, "Elijah's Hall of the Lost", "Zinc", "99th"),
+            (38, "ElishaDraken's Sanguine Ankh", "Nightingale", "59th"),
+            (39, "Epineux Manoir", "Olive", "70th"),
+            (40, "Espy's Jaded Sorrows", "Jaded", "69th"),
+            (41, "Freedom Trade Alliance", "Amethyst", "46th"),
+            (42, "Gypsychild's Caravan", "Torment", "69th"),
+            (43, "Halls of Shadow Court", "Horror", "99th"),
+            (44, "Hells Gate's Castle of Destruction", "Lonely", "45th"),
+            (45, "Hesu's Place", "Raven", "24th"),
+            (46, "Hexenkessel", "Jackal", "83rd"),
+            (47, "Ildiko's and Brom's Insanity", "Killjoy", "53rd"),
+            (48, "Jacomo Varis' Shadow Manor", "Raven", "96th"),
+            (49, "Jaxi's and Speedy's Cave", "Raven", "23rd"),
+            (50, "Julia's Villa", "Gloom", "76th"),
+            (51, "King Lestat's Le Paradis Caché", "Cobalt", "90th"),
+            (52, "La Cucina", "Diamond", "28th"),
+            (53, "Lady Ophy's Bougainvillea Mansion", "Jaded", "84th"),
+            (54, "LadyFae's and nitenurse's Solas Gealaí Caisleán", "Raven", "76th"),
+            (55, "Lasc Talon's Estate", "Willow", "42nd"),
+            (56, "Lass' Lair", "Vervain", "1st"),
+            (57, "Liski's Shadow Phial", "Gloom", "99th"),
+            (58, "Lord Galamushi's Enchanted Mansion", "Anguish", "52nd"),
+            (59, "Louvain's Sanctuary", "Gibbon", "21st"),
+            (60, "Majica's Playground", "Willow", "50th"),
+            (61, "Mandruleanu Manor", "Diamond", "86th"),
+            (62, "Mansion of Malice", "Horror", "69th"),
+            (63, "Marlena's Wishing Well", "Fear", "56th"),
+            (64, "Moirai's Gate to the Church of Blood", "Horror", "13th"),
+            (65, "Moondreamer's Darkest Desire's Lighthouse", "Fear", "9th"),
+            (66, "Moonlight Gardens", "Turquoise", "87th"),
+            (67, "Ms Delgado's Manor", "Sorrow", "69th"),
+            (68, "MyMotherInLaw's Home for Wayward Ghouls", "Amethyst", "69th"),
+            (69, "Narcisssa's Vineyard", "Aardvark", "60th"),
+            (70, "Nemesis' Asyl", "Zinc", "85th"),
+            (71, "NightWatch Headquarters", "Larch", "51st"),
+            (72, "Obsidian's Arboretum", "Obsidian", "88th"),
+            (73, "Obsidian's Castle of Warwick", "Obsidian", "NCL"),
+            (74, "Obsidian's Château de la Lumière", "Obsidian", "66th"),
+            (75, "Obsidian's château noir", "Obsidian", "99th"),
+            (76, "Obsidian's Hall of Shifting Realms", "Obsidian", "15th"),
+            (77, "Obsidian's Penthouse", "Obsidian", "29th"),
+            (78, "Obsidian's Silver Towers", "Obsidian", "51st"),
+            (79, "Obsidian's Tranquility", "Obsidian", "80th"),
+            (80, "Obsidian's, Phoenixxe's and Em's Heaven's Gate", "Obsidian", "45th"),
+            (81, "Occamrazor's House of Ears", "Yew", "30th"),
+            (82, "Ordo Dracul Sanctum", "Nightingale", "77th"),
+            (83, "Orgasmerilla's Warehouse", "Zinc", "80th"),
+            (84, "Pace Family Ranch", "Fir", "69th"),
+            (85, "Palazzo Lucius", "Zebra", "27th"),
+            (86, "Pandrora and CBK's Chamber of Horrors", "Torment", "95th"),
+            (87, "RemipunX's Sacred Yew", "Cobalt", "42nd"),
+            (88, "Renovate's grove", "Umbrella", "71st"),
+            (89, "Saki's Fondest Wish", "Nightingale", "17th"),
+            (90, "Samantha Dawn's Salacious Sojourn", "Anguish", "53rd"),
+            (91, "Sanctuary Hotel", "Kraken", "27th"),
+            (92, "Sartori's Domicile", "Elm", "1st"),
+            (93, "SCORPIOUS1's Tower of Truth", "Yearning", "58th"),
+            (94, "Setitevampyr's temple", "Raven", "50th"),
+            (95, "Shaarinya`s Sanguine Sanctuary", "Raven", "77th"),
+            (96, "Shadow bat's Sanctorium", "Cobalt", "76th"),
+            (97, "SIE Compound", "Raven", "13th"),
+            (98, "Sitrence's Lab", "Ferret", "3rd"),
+            (99, "Solanea's Family Home", "Ruby", "56th"),
+            (100, "The Angelarium", "Zinc", "NCL"),
+            (101, "St. John Bathhouse", "Sycamore", "76th"),
+            (102, "Starreagle's Paradise Lair", "Beryl", "24th"),
+            (103, "Steele Industries", "Umbrella", "44th"),
+            (104, "Stormy jayne's web", "Nickel", "99th"),
+            (105, "Talon Castle", "Willow", "35th"),
+            (106, "tejas_dragon's Lair", "Zelkova", "69th"),
+            (107, "The Ailios Asylum", "Amethyst", "36th"),
+            (108, "The Belly of the Whale", "Amethyst", "2nd"),
+            (109, "The Calignite", "Eagle", "16th"),
+            (110, "The COVE", "Knowteed", "51st"),
+            (111, "The Dragons Lair Club", "Vervain", "39th"),
+            (112, "The Eternal Spiral", "Anguish", "69th"),
+            (113, "The goatsucker's lair", "Yak", "13th"),
+            (114, "The Halls of Heorot", "Jaded", "75th"),
+            (115, "The House of Night", "Walrus", "38th"),
+            (116, "The Inner Circle Manor", "Diamond", "26th"),
+            (117, "The Ivory Tower", "Zelkova", "76th"),
+            (118, "The Ixora Estate", "Lead", "48th"),
+            (119, "The Kyoto Club", "Lion", "22nd"),
+            (120, "The Lokason Myrkrasetur", "Wulfenite", "40th"),
+            (121, "The Path of Enlightenment Castle", "Willow", "80th"),
+            (122, "The RavenBlack Bite", "Oppression", "40th"),
+            (123, "The Reynolds' Estate", "Beryl", "23rd"),
+            (124, "The River Passage", "Yew", "33rd"),
+            (125, "The Sakura Garden", "Nickel", "77th"),
+            (126, "The Sanctum of Vermathrax-rex and Bellina", "Vexation", "99th"),
+            (127, "The Sanguinarium", "Fear", "4th"),
+            (128, "The Scythe's Negotiation Offices", "Vauxite", "88th"),
+            (129, "The Sepulchre of Shadows", "Ennui", "1st"),
+            (130, "The Tower of Thorns", "Pilchard", "70th"),
+            (131, "The Towers of the Crossed Swords", "Torment", "66th"),
+            (132, "The White House", "Nervous", "75th"),
+            (133, "University of Vampiric Enlightenment", "Yak", "80th"),
+            (134, "Virgo's obsidian waygate", "Obsidian", "2nd"),
+            (135, "Vulture's Pagoda", "Vulture", "50th"),
+            (136, "Wilde Sanctuary", "Willow", "51st"),
+            (137, "Wilde Wolfe Estate", "Vervain", "50th"),
+            (138, "Willhelm's Warrior House", "Horror", "53rd"),
+            (139, "Willow Lake Manse", "Willow", "99th"),
+            (140, "Willow Woods' & The Ent Moot", "Willow", "54th"),
+            (141, "Wolfshadow's and Crazy's RBC Casino", "Lead", "72nd"),
+            (142, "Wyndcryer's TygerNight's and Bambi's Lair", "Unicorn", "77th"),
+            (143, "Wyvernhall", "Ivy", "38th"),
+            (144, "X", "Emerald", "NCL"),
+            (145, "Requiem of Hades", "Walrus", "41st")
         ]),
-        ("INSERT OR IGNORE INTO discord_servers (id, name, invite_link) VALUES (?, ?, ?)", [
+        ("REPLACE INTO discord_servers (id, name, invite_link) VALUES (?, ?, ?)", [
             (1, "Ab Antiquo Headquarters", "https://discord.gg/AhPEzkJyA4"),
             (2, "Hellfire Club", "https://discord.gg/qZCbbKEt3z"),
             (3, "RB Improvement Group", "https://discord.gg/8ent8jn54u"),
@@ -1896,6 +1861,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             logging.error(f"Failed to insert data into {query.split('INTO ')[1].split(' ')[0]}: {e}")
             raise
     conn.commit()
+
 
 def migrate_schema(conn: sqlite3.Connection) -> None:
     """
@@ -1921,21 +1887,20 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                 logging.info("custom_css missing profile_name column. Rebuilding custom_css table.")
                 cursor.execute("ALTER TABLE custom_css RENAME TO custom_css_old")
                 cursor.execute("""
-                               CREATE TABLE IF NOT EXISTS custom_css
-                               (
-                                   profile_name TEXT NOT NULL,
-                                   element      TEXT NOT NULL,
-                                   value        TEXT NOT NULL,
-                                   PRIMARY KEY (profile_name, element),
-                                   FOREIGN KEY (profile_name) REFERENCES css_profiles (profile_name) ON DELETE CASCADE
-                               )
-                               """)
+                    CREATE TABLE IF NOT EXISTS custom_css (
+                        profile_name TEXT NOT NULL,
+                        element TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        PRIMARY KEY (profile_name, element),
+                        FOREIGN KEY (profile_name) REFERENCES css_profiles(profile_name) ON DELETE CASCADE
+                    )
+                """)
                 try:
+                    # noinspection SqlResolve
                     cursor.execute("""
-                                   INSERT INTO custom_css (element, value, profile_name)
-                                   SELECT element, value, 'Default'
-                                   FROM custom_css_old
-                                   """)
+                        INSERT INTO custom_css (element, value, profile_name)
+                        SELECT element, value, 'Default' FROM custom_css_old
+                    """)
                     logging.info("Migrated old custom_css data successfully.")
                 except sqlite3.Error as e:
                     logging.warning(f"Failed to migrate custom_css data: {e}")
@@ -1949,21 +1914,20 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                 logging.info("guilds table missing UNIQUE constraint on Name. Rebuilding guilds table.")
                 cursor.execute("ALTER TABLE guilds RENAME TO guilds_old")
                 cursor.execute("""
-                               CREATE TABLE IF NOT EXISTS guilds
-                               (
-                                   ID          INTEGER PRIMARY KEY,
-                                   Name        TEXT NOT NULL UNIQUE,
-                                   `Column`      TEXT NOT NULL,
-                                   `Row`         TEXT NOT NULL,
-                                   next_update TIMESTAMP DEFAULT NULL
-                               )
-                               """)
+                    CREATE TABLE IF NOT EXISTS guilds (
+                        ID INTEGER PRIMARY KEY,
+                        Name TEXT NOT NULL UNIQUE,
+                        Column TEXT NOT NULL,
+                        Row TEXT NOT NULL,
+                        next_update TIMESTAMP DEFAULT NULL
+                    )
+                """)
                 try:
+                    # noinspection SqlResolve
                     cursor.execute("""
-                                   INSERT INTO guilds (ID, Name, `Column`, `Row`, next_update)
-                                   SELECT ID, Name, `Column`, `Row`, next_update
-                                   FROM guilds_old
-                                   """)
+                        INSERT INTO guilds (ID, Name, `Column`, Row, next_update)
+                        SELECT ID, Name, `Column`, `Row`, next_update FROM guilds_old
+                    """)
                     logging.info("Migrated old guilds data successfully.")
                 except sqlite3.Error as e:
                     logging.warning(f"Failed to migrate guilds data: {e}")
@@ -1978,21 +1942,20 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
                 logging.info("shops table missing UNIQUE constraint on Name. Rebuilding shops table.")
                 cursor.execute("ALTER TABLE shops RENAME TO shops_old")
                 cursor.execute("""
-                               CREATE TABLE IF NOT EXISTS shops
-                               (
-                                   ID          INTEGER PRIMARY KEY,
-                                   Name        TEXT NOT NULL UNIQUE,
-                                   `Column`      TEXT NOT NULL,
-                                   `Row`         TEXT NOT NULL,
-                                   next_update TIMESTAMP DEFAULT NULL
-                               )
-                               """)
+                    CREATE TABLE IF NOT EXISTS shops (
+                        ID INTEGER PRIMARY KEY,
+                        Name TEXT NOT NULL UNIQUE,
+                        Column TEXT NOT NULL,
+                        Row TEXT NOT NULL,
+                        next_update TIMESTAMP DEFAULT NULL
+                    )
+                """)
                 try:
+                    # noinspection SqlResolve
                     cursor.execute("""
-                                   INSERT INTO shops (ID, Name, `Column`, `Row`, next_update)
-                                   SELECT ID, Name, `Column`, `Row`, next_update
-                                   FROM shops_old
-                                   """)
+                        INSERT INTO shops (ID, Name, `Column`, Row, next_update)
+                        SELECT ID, Name, `Column`, `Row`, next_update FROM shops_old
+                    """)
                     logging.info("Migrated old shops data successfully.")
                 except sqlite3.Error as e:
                     logging.warning(f"Failed to migrate shops data: {e}")
@@ -2059,6 +2022,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
             logging.error(f"Migration v4 failed: {e}")
             conn.rollback()
             raise
+
 
 def initialize_database(db_path: str = DB_PATH) -> bool:
     """
@@ -2203,7 +2167,7 @@ def load_data() -> tuple:
 
                     # Load last destination for this character
                     cursor.execute(
-                        "SELECT col, `Row` FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
+                        "SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
                         (character_id,)
                     )
                     row = cursor.fetchone()
@@ -2365,12 +2329,6 @@ elif sys.platform == "darwin":
     os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
     os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
 
-# -----------------------
-# REGEX
-# -----------------------
-def url_matches(pattern, url):
-    regex = re.escape(pattern).replace(r'\*', '.*').replace(r'\?', '.')
-    return re.match(regex, url)
 
 # -----------------------
 # RBC Community Map Main Class
@@ -2423,11 +2381,11 @@ class RBCCommunityMap(QMainWindow):
 
     @splash_message(None)
     def _init_scraper(self) -> None:
-        """Initialize the AVITD scraper and start scraping in a separate thread."""
-        self.AVITD_scraper = AVITDScraper()
-        # Use QThread for non-blocking scraping (assuming AVITDScraper supports it)
+        """Initialize the  scraper and start scraping in a separate thread."""
+        self.scraper = Scraper()
+        # Use QThread for non-blocking scraping (assuming Scraper supports it)
         from PySide6.QtCore import QThreadPool
-        QThreadPool.globalInstance().start(lambda: self.AVITD_scraper.scrape_guilds_and_shops())
+        QThreadPool.globalInstance().start(lambda: self.scraper.scrape_guilds_and_shops())
         logging.debug("Started scraper in background thread")
 
     @splash_message(None)
@@ -2846,13 +2804,9 @@ class RBCCommunityMap(QMainWindow):
 
                 # Check if this exact cookie already exists
                 cursor.execute("""
-                               SELECT id
-                               FROM cookies
-                               WHERE name = ?
-                                 AND value = ?
-                                 AND domain = ?
-                                 AND path = ?
-                               """, (name, value, domain, path))
+                    SELECT id FROM cookies 
+                    WHERE name = ? AND value = ? AND domain = ? AND path = ?
+                """, (name, value, domain, path))
                 existing = cursor.fetchone()
 
                 if existing:
@@ -2861,14 +2815,13 @@ class RBCCommunityMap(QMainWindow):
 
                 # Insert new cookie
                 cursor.execute("""
-                               INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
-                               VALUES (?, ?, ?, ?, ?, ?, ?)
-                               """, (
-                                   name, value, domain, path,
-                                   cookie.expirationDate().toString(
-                                       Qt.ISODate) if not cookie.isSessionCookie() else None,
-                                   int(cookie.isSecure()), int(cookie.isHttpOnly())
-                               ))
+                    INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    name, value, domain, path,
+                    cookie.expirationDate().toString(Qt.ISODate) if not cookie.isSessionCookie() else None,
+                    int(cookie.isSecure()), int(cookie.isHttpOnly())
+                ))
 
                 new_cookie_id = cursor.lastrowid
                 conn.commit()
@@ -2886,10 +2839,8 @@ class RBCCommunityMap(QMainWindow):
                     # Update character only if this is a login cookie
                     if is_login:
                         cursor.execute("""
-                                       UPDATE characters
-                                       SET active_cookie = ?
-                                       WHERE name = ?
-                                       """, (new_cookie_id, username))
+                            UPDATE characters SET active_cookie = ? WHERE name = ?
+                        """, (new_cookie_id, username))
                         conn.commit()
                         logging.debug(f"Set active_cookie for character '{username}' to cookie ID {new_cookie_id}")
 
@@ -2907,26 +2858,21 @@ class RBCCommunityMap(QMainWindow):
 
                 # Avoid duplicate
                 cursor.execute("""
-                               SELECT id
-                               FROM cookies
-                               WHERE name = 'ip'
-                                 AND value = ?
-                                 AND domain = ?
-                                 AND path = ?
-                               """, (value, domain, path))
+                    SELECT id FROM cookies WHERE name = 'ip' AND value = ? AND domain = ? AND path = ?
+                """, (value, domain, path))
                 row = cursor.fetchone()
 
                 if row:
                     cookie_id = row[0]
                 else:
                     cursor.execute('''
-                                   INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?)
-                                   ''', (
-                                       'ip', value, domain, path,
-                                       QDateTime.currentDateTime().addDays(30).toString(Qt.ISODate),
-                                       0, 0
-                                   ))
+                        INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        'ip', value, domain, path,
+                        QDateTime.currentDateTime().addDays(30).toString(Qt.ISODate),
+                        0, 0
+                    ))
                     cookie_id = cursor.lastrowid
 
                 # Set this cookie as active, clear others
@@ -3399,8 +3345,6 @@ class RBCCommunityMap(QMainWindow):
 
         self.update_log_level_menu()
 
-        settings_menu.addAction("Userscript Manager", self.open_userscript_manager)
-
         # Tools menu
         tools_menu = menu_bar.addMenu('Tools')
 
@@ -3758,51 +3702,71 @@ class RBCCommunityMap(QMainWindow):
         self.switch_to_character(character_name)
 
     def switch_to_character(self, character_name: str) -> None:
-        """
-        Switch to the selected character by loading its saved IP cookie into the WebEngine.
-        """
+        self.login_attempts = getattr(self, 'login_attempts', 0)
+        self.max_login_attempts = 2
+        self.login_attempts = 0
+        self.pending_login = True
+
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                               SELECT c.active_cookie, k.value
-                               FROM characters c
-                                        JOIN cookies k ON c.active_cookie = k.id
-                               WHERE c.name = ?
-                               """, (character_name,))
+                    SELECT c.active_cookie, k.value 
+                    FROM characters c
+                    JOIN cookies k ON c.active_cookie = k.id
+                    WHERE c.name = ?
+                """, (character_name,))
                 row = cursor.fetchone()
 
-                if not row:
-                    logging.error(f"No saved login cookie found for character '{character_name}'.")
-                    return
+                if row:
+                    cookie_id, cookie_value = row
+                    ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
+                    ip_cookie.setDomain('quiz.ravenblack.net')
+                    ip_cookie.setPath('/')
+                    ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
 
-                cookie_id, cookie_value = row
+                    self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
+                    logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
 
-                ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
-                ip_cookie.setDomain('quiz.ravenblack.net')
-                ip_cookie.setPath('/')
-                ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
-
-                self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
-                logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
-
-                # Reload page after injecting cookie
-                self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
+                    # ✅ Navigate only AFTER setting the cookie
+                    QTimer.singleShot(250,
+                                      lambda: self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl")))
+                else:
+                    logging.warning(
+                        f"No saved login cookie found for character '{character_name}'. Falling back to JS login.")
+                    self.login_selected_character()
 
         except sqlite3.Error as e:
             logging.error(f"Failed to switch character '{character_name}': {e}")
+            QMessageBox.critical(self, "Error", f"Failed to switch character: {e}")
+            self.login_attempts = self.max_login_attempts
 
     def login_selected_character(self):
+        """
+        Inject JavaScript to auto-fill and submit the login form.
+        Check login status after submission.
+        """
         if not self.selected_character:
             logging.warning("No character selected for login.")
             return
 
+        self.login_attempts = getattr(self, 'login_attempts', 0)  # Initialize if not exists
+        self.max_login_attempts = getattr(self, 'max_login_attempts', 2)  # Initialize if not exists
+        self.pending_login = True
+
+        if self.login_attempts >= self.max_login_attempts:
+            logging.error("Max login attempts reached. Stopping login process.")
+            QMessageBox.critical(self, "Login Error",
+                                 "Failed to log in after multiple attempts. Please check your credentials or cookie settings.")
+            return
+
+        self.login_attempts += 1
         name = self.selected_character['name']
         password = self.selected_character['password']
         logging.debug(f"Injecting login for character: {name} (ID: {self.selected_character.get('id')})")
 
         login_script = f"""
-            var loginForm = document.querySelector('form');
+            var loginForm = document.querySelector('form[action="/blood.pl"]');
             if (loginForm) {{
                 loginForm.iam.value = '{name}';
                 loginForm.passwd.value = '{password}';
@@ -3812,6 +3776,48 @@ class RBCCommunityMap(QMainWindow):
             }}
         """
         self.website_frame.page().runJavaScript(login_script)
+        self.pending_login = True
+
+    def check_login_status(self):
+        """
+        Check if login was successful by inspecting the page for the error message.
+        If failed, attempt JavaScript login or display error if max attempts reached.
+        """
+        check_script = """
+            var errorMessage = document.querySelector('p[style*="color:red"]');
+            if (errorMessage && errorMessage.textContent.includes("Please check your name and password")) {
+                "login_failed";
+            } else {
+                "login_success";
+            }
+        """
+
+        def handle_result(result):
+            self.login_attempts = getattr(self, 'login_attempts', 0)  # Initialize if not exists
+            self.max_login_attempts = getattr(self, 'max_login_attempts', 2)  # Initialize if not exists
+
+            if result == "login_failed":
+                logging.warning(f"Login attempt {self.login_attempts} failed for {self.selected_character['name']}.")
+                if self.login_attempts < self.max_login_attempts:
+                    # If cookie login failed, try JS login
+                    if self.login_attempts == 1:
+                        logging.info("Cookie login failed, attempting JavaScript login.")
+                        self.login_selected_character()
+                    else:
+                        logging.error("JavaScript login failed.")
+                        QMessageBox.critical(self, "Login Error",
+                                             "Login failed. Please check your credentials or cookie settings.")
+                else:
+                    logging.error("Max login attempts reached.")
+                    QMessageBox.critical(self, "Login Error",
+                                         "Failed to log in after multiple attempts. Please check your credentials or cookie settings.")
+            else:
+                logging.debug(f"Login successful for {self.selected_character['name']}.")
+                self.login_attempts = 0  # Reset on success
+                self.load_last_destination_for_character(self.selected_character['id'])
+                self.update_minimap()
+
+        self.website_frame.page().runJavaScript(check_script, handle_result)
 
     def firstrun_character_creation(self):
         """
@@ -3932,11 +3938,8 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                               UPDATE characters
-                               SET name     = ?,
-                                   password = ?
-                               WHERE id = ?
-                               """, (new_name, new_password, character['id']))
+                    UPDATE characters SET name = ?, password = ? WHERE id = ?
+                """, (new_name, new_password, character['id']))
                 conn.commit()
 
             # Update in-memory character and UI
@@ -4066,7 +4069,7 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "SELECT col, `Row` FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
+                    "SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
                     (character_id,)
                 )
                 result = cursor.fetchone()
@@ -4130,14 +4133,21 @@ class RBCCommunityMap(QMainWindow):
             return
 
         logging.info("Webpage loaded successfully.")
+        self.webview_loaded = True
         self.website_frame.page().toHtml(self.process_html)
         css = self.load_current_css()
         self.apply_custom_css(css)
 
-        if self.login_needed:
-            logging.debug("Logging in selected character via JS injection...")
-            self.login_selected_character()
+        if getattr(self, "pending_login", False):
             self.pending_login = False
+            logging.debug("Page load complete. Checking login status...")
+            self.check_login_status()
+            return
+
+        if getattr(self, "login_needed", False):
+            self.login_needed = False
+            logging.debug("login_needed flag set. Performing JS login.")
+            self.login_selected_character()
             return
 
         if self.pending_character_id_for_map:
@@ -5038,10 +5048,10 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                               INSERT INTO settings (setting_name, setting_value)
-                               VALUES ('minimap_zoom', ?)
-                               ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
-                               """, (self.zoom_level, self.zoom_level))
+                    INSERT INTO settings (setting_name, setting_value)
+                    VALUES ('minimap_zoom', ?)
+                    ON CONFLICT(setting_name) DO UPDATE SET setting_value = ?;
+                """, (self.zoom_level, self.zoom_level))
                 conn.commit()
                 logging.debug(f"Zoom level saved to database: {self.zoom_level}")
         except sqlite3.Error as e:
@@ -5184,20 +5194,18 @@ class RBCCommunityMap(QMainWindow):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                               INSERT INTO recent_destinations (character_id, col, `Row`, timestamp)
-                               VALUES (?, ?, ?, datetime('now'))
-                               """, (character_id, col, row))
+                    INSERT INTO recent_destinations (character_id, col, row, timestamp)
+                    VALUES (?, ?, ?, datetime('now'))
+                """, (character_id, col, row))
 
                 cursor.execute("""
-                               DELETE
-                               FROM recent_destinations
-                               WHERE character_id = ?
-                                 AND id NOT IN (SELECT id
-                                                FROM recent_destinations
-                                                WHERE character_id = ?
-                                                ORDER BY timestamp DESC
-                                                LIMIT 10)
-                               """, (character_id, character_id))
+                    DELETE FROM recent_destinations 
+                    WHERE character_id = ? AND id NOT IN (
+                        SELECT id FROM recent_destinations
+                        WHERE character_id = ?
+                        ORDER BY timestamp DESC LIMIT 10
+                    )
+                """, (character_id, character_id))
 
                 conn.commit()
                 logging.info(f"Destination ({col}, {row}) saved for character ID {character_id}.")
@@ -5417,9 +5425,10 @@ class RBCCommunityMap(QMainWindow):
             "Design and Layout: Shuvi, Blair Wilson (Ikunnaprinsess)\n\n\n\n"
             "Special Thanks:\n\n"
             "Cain \"Leprechaun\" McBride for the LIAM² program \nthat inspired this program\n\n"
-            "Cliff Burton for A View in the Dark which is \nwhere Shops and Guilds data is retrieved\n\n"
+            "Cliff Burton for A View in the Dark and \n The Ravenblack Wiki.\n\n"
             "Everyone who contributes to the \nRavenBlack Wiki and A View in the Dark\n\n"
             "Anders for RBNav and the help along the way\n\n\n\n"
+            "Vespertine for being inspirational and providing additional map data sources\n\n"
             "Most importantly, thank YOU for using this app. \nWe all hope it serves you well!"
         )
 
@@ -5592,9 +5601,6 @@ class RBCCommunityMap(QMainWindow):
 
         self.update_minimap()
 
-    def open_userscript_manager(self):
-        dialog = UserscriptManagerDialog(self.web_profile, self)
-        dialog.exec()
 
 # -----------------------
 # Database Viewer Class
@@ -5602,12 +5608,27 @@ class RBCCommunityMap(QMainWindow):
 
 class DatabaseViewer(QDialog):
     """
-    Graphical interface for viewing SQLite database tables in a tabbed layout.
+    Graphical interface for viewing SQLite database tables in grouped tabbed layout.
     """
+
+    TAB_GROUPS = {
+        "App Info": [
+            "rows", "columns", "settings", "last_active_character",
+            "cookies", "css_profiles", "custom_css", "color_mappings",
+            "discord_servers", "powers", "shop_items"
+        ],
+        "Character Info": [
+            "characters", "coins", "destinations"
+        ],
+        "Building Info": [
+            "banks", "placesofinterest", "taverns", "transits",
+            "userbuildings", "shops", "guilds"
+        ]
+    }
 
     def __init__(self, db_connection, parent=None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle('SQLite Database Viewer')
+        self.setWindowTitle("SQLite Database Viewer")
         self.setWindowIcon(APP_ICON)
         self.setGeometry(100, 100, 800, 600)
 
@@ -5615,23 +5636,43 @@ class DatabaseViewer(QDialog):
         self.cursor = db_connection.cursor()
         self.color_mappings = color_mappings or {}
 
-        layout = QVBoxLayout(self)
-        self.tab_widget = QTabWidget()
-        layout.addWidget(self.tab_widget)
+        main_layout = QVBoxLayout(self)
+        self.parent_tab_widget = QTabWidget()
+        main_layout.addWidget(self.parent_tab_widget)
 
         if self.color_mappings:
             apply_theme_to_widget(self, self.color_mappings)
 
         try:
             self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            tables = [row[0] for row in self.cursor.fetchall()]
-            for table_name in tables:
-                column_names, data = self.get_table_data(table_name)
-                self.add_table_tab(table_name, column_names, data)
-            logging.debug(f"Loaded {len(tables)} tables into viewer")
+            all_tables = [row[0] for row in self.cursor.fetchall()]
         except sqlite3.Error as e:
             logging.error(f"Failed to load tables: {e}")
             QMessageBox.critical(self, "Error", "Failed to load database tables.")
+            return
+
+        # Track added tables
+        added_tables = set()
+
+        for group_name, table_list in self.TAB_GROUPS.items():
+            child_tab_widget = QTabWidget()
+            for table in table_list:
+                if table in all_tables:
+                    column_names, data = self.get_table_data(table)
+                    self.add_table_tab(child_tab_widget, table, column_names, data)
+                    added_tables.add(table)
+            self.parent_tab_widget.addTab(child_tab_widget, group_name)
+
+        # Add remaining tables to 'Other' tab
+        other_tab_widget = QTabWidget()
+        remaining_tables = sorted(set(all_tables) - added_tables)
+        for table in remaining_tables:
+            column_names, data = self.get_table_data(table)
+            self.add_table_tab(other_tab_widget, table, column_names, data)
+        if remaining_tables:
+            self.parent_tab_widget.addTab(other_tab_widget, "Other")
+
+        logging.debug(f"Loaded {len(all_tables)} tables into grouped viewer")
 
     def get_table_data(self, table_name: str) -> tuple[list[str], list[tuple]]:
         try:
@@ -5644,7 +5685,8 @@ class DatabaseViewer(QDialog):
             logging.error(f"Failed to fetch data for table '{table_name}': {e}")
             return [], []
 
-    def add_table_tab(self, table_name: str, column_names: list[str], data: list[tuple]) -> None:
+    def add_table_tab(self, tab_widget: QTabWidget, table_name: str,
+                      column_names: list[str], data: list[tuple]) -> None:
         table_widget = QTableWidget()
         table_widget.setRowCount(len(data))
         table_widget.setColumnCount(len(column_names))
@@ -5655,7 +5697,7 @@ class DatabaseViewer(QDialog):
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
 
         table_widget.resizeColumnsToContents()
-        self.tab_widget.addTab(table_widget, table_name)
+        tab_widget.addTab(table_widget, table_name)
         logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
 
     def closeEvent(self, event) -> None:
@@ -6193,105 +6235,53 @@ class CSSCustomizationDialog(QDialog):
             logging.error(f"Failed to clear CSS customizations: {e}")
             QMessageBox.critical(self, "Error", "Failed to clear customizations")
 
-
 # -----------------------
-# AVITD Scraper Class (Updated)
+# Scraper Class
 # -----------------------
 
-class AVITDScraper:
-    """
-    A scraper class for 'A View in the Dark' to update guilds and shops data in the SQLite database.
-    """
-
+class Scraper:
     def __init__(self):
-        self.url = "https://aviewinthedark.net/"
+        self.discord_bot_url = "https://lollis-home.ddns.net/api/locations.json"
         self.connection = sqlite3.connect(DB_PATH)
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         }
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-        logging.info("AVITDScraper initialized.")
+        logging.info("Scraper initialized.")
 
-    def scrape_guilds_and_shops(self):
-        logging.info("Starting to scrape guilds and shops.")
-        response = requests.get(self.url, headers=self.headers)
-        logging.debug(f"Received response: {response.status_code}")
+        self.nickname_map = {
+            "Ace Pawn": "Ace Porn",
+            "Checkers Pawn Shop": "Checkers Porn Shop",
+            "Reversi Pawn": "Reversi Porn",
+            "Spinners Pawn": "Spinners Porn",
+            "Dark Desires": "Dark Desires",
+            "Discount Magic": "Discount Magic",
+            "Discount Potions": "Discount Potions",
+            "Discount Scrolls": "Discount Scrolls",
+            "Interesting Times": "Interesting Times",
+            "Sparks": "Sparks",
+            "The Magic Box": "The Magic Box",
+            "White Light": "White Light",
+            "Herman's Scrolls": "Herman's Scrolls",
+            "Paper and Scrolls": "Paper and Scrolls",
+            "Scrollmania": "Scrollmania",
+            "Scrolls 'n' Stuff": "Scrolls 'n' Stuff",
+            "Scrolls R Us": "Scrolls R Us",
+            "Scrollworks": "Scrollworks",
+            "Ye Olde Scrolles": "Ye Olde Scrolles",
+            "McPotions": "McPotions",
+            "Potable Potions": "Potable Potions",
+            "Potion Distillery": "Potion Distillery",
+            "Potionworks": "Potionworks",
+            "Silver Apothecary": "Silver Apothecary",
+            "The Potion Shoppe": "The Potion Shoppe",
+        }
 
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        guilds = self.scrape_section(soup, "the guilds")
-        shops = self.scrape_section(soup, "the shops")
-        guilds_next_update = self.extract_next_update_time(soup, 'Guilds')
-        shops_next_update = self.extract_next_update_time(soup, 'Shops')
-
-        self.display_results(guilds, shops, guilds_next_update, shops_next_update)
-
-        self.update_database(guilds, "guilds", guilds_next_update)
-        self.update_database(shops, "shops", shops_next_update)
-        logging.info("Finished scraping and updating the database.")
-
-    def scrape_section(self, soup, section_image_alt):
-        logging.debug(f"Scraping section: {section_image_alt}")
-        data = []
-        section_image = soup.find('img', alt=section_image_alt)
-        if not section_image:
-            logging.warning(f"No data found for {section_image_alt}.")
-            return data
-
-        table = section_image.find_next('table')
-        rows = table.find_all('tr', class_=['odd', 'even'])
-
-        for row in rows:
-            columns = row.find_all('td')
-            if len(columns) < 2:
-                logging.debug(f"Skipping row due to insufficient columns: {row}")
-                continue
-
-            name = columns[0].text.strip()
-            location = columns[1].text.strip().replace("SE of ", "").strip()
-
-            try:
-                column, row = location.split(" and ")
-                data.append((name, column, row))
-                logging.debug(f"Extracted data - Name: {name}, Column: {column}, Row: {row}")
-            except ValueError:
-                logging.warning(f"Location format unexpected for {name}: {location}")
-
-        logging.info(f"Scraped {len(data)} entries from {section_image_alt}.")
-        return data
-
-    def extract_next_update_time(self, soup, section_name):
-        logging.debug(f"Extracting next update time for section: {section_name}")
-        section_divs = soup.find_all('div', class_='next_change')
-
-        for div in section_divs:
-            if section_name in div.text:
-                match = re.search(r'(\d+)\s+days?,\s+(\d+)h\s+(\d+)m\s+(\d+)s', div.text)
-                if match:
-                    days = int(match.group(1))
-                    hours = int(match.group(2))
-                    minutes = int(match.group(3))
-                    seconds = int(match.group(4))
-
-                    next_update = datetime.now(timezone.utc) + timedelta(days=days, hours=hours, minutes=minutes,
-                                                                         seconds=seconds)
-                    logging.debug(f"Next update time for {section_name}: {next_update}")
-                    return next_update.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-        logging.warning(f"No next update time found for {section_name}.")
-        return 'NA'
-
-    def display_results(self, guilds, shops, guilds_next_update, shops_next_update):
-        logging.info(f"Guilds Next Update: {guilds_next_update}")
-        logging.info(f"Shops Next Update: {shops_next_update}")
-
-        logging.info("Guilds Data:")
-        for guild in guilds:
-            logging.info(f"Name: {guild[0]}, Column: {guild[1]}, Row: {guild[2]}")
-
-        logging.info("Shops Data:")
-        for shop in shops:
-            logging.info(f"Name: {shop[0]}, Column: {shop[1]}, Row: {shop[2]}")
+    def normalize_name(self, name):
+        name = name.strip()
+        if name.startswith("Peacekkeepers Mission"):
+            name = name.replace("Peacekkeepers", "Peacekeepers", 1)
+        name = name.lstrip("*_~").rstrip("*_~")
+        return self.nickname_map.get(name, name).title()
 
     def update_database(self, data, table, next_update):
         scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -6300,21 +6290,11 @@ class AVITDScraper:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
-                if table == "guilds":
-                    cursor.execute(f"""
-                        UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                        WHERE Name NOT LIKE 'Peace%'
-                    """, (next_update, scrape_timestamp))
-                else:
-                    cursor.execute(f"""
-                        UPDATE {table}
-                        SET `Column`='NA', `Row`='NA', `next_update`=?, `last_scraped`=?
-                    """, (next_update, scrape_timestamp))
-
                 for name, column, row in data:
-                    if table == "shops" and "Peacekeepers Mission" in name:
-                        logging.warning(f"Skipping {name} as it belongs in guilds, not shops.")
+                    normalized_name = self.normalize_name(name)
+
+                    if table == "shops" and "Peacekeepers Mission" in normalized_name:
+                        logging.warning(f"Skipping {normalized_name} as it belongs in guilds, not shops.")
                         continue
 
                     try:
@@ -6326,9 +6306,10 @@ class AVITDScraper:
                                 `Row`=excluded.`Row`,
                                 `next_update`=excluded.`next_update`,
                                 `last_scraped`=excluded.`last_scraped`
-                        """, (name, column, row, next_update, scrape_timestamp))
+                        """, (normalized_name, column, row, next_update, scrape_timestamp))
+
                     except sqlite3.Error as e:
-                        logging.error(f"Failed to update {table} entry '{name}': {e}")
+                        logging.error(f"Failed to upsert {table} entry '{normalized_name}': {e}")
 
                 if table == "guilds":
                     cursor.executemany(f"""
@@ -6351,11 +6332,34 @@ class AVITDScraper:
         except sqlite3.Error as e:
             logging.error(f"Database operation for {table} failed: {e}")
 
-    def close_connection(self):
-        if self.connection:
-            self.connection.close()
-            logging.info("Database connection closed.")
+    def scrape_discord_bot(self):
+        timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
+        try:
+            response = requests.get(self.discord_bot_url, timeout=10)
+            data = response.json()
+        except Exception as e:
+            logging.error(f"Discord bot API fetch failed: {e}")
+            return [], [], 'NA', 'NA'
+
+        guilds = [
+            (entry["display"], entry["column"], entry["row"])
+            for entry in data.get("guilds", {}).values()
+        ]
+        shops = [
+            (entry["display"], entry["column"], entry["row"])
+            for entry in data.get("shops", {}).values()
+        ]
+        guilds_next = data.get("guilds_next_update", 'NA')
+        shops_next = data.get("shops_next_update", 'NA')
+
+        logging.info(f"Discord bot provided {len(guilds)} guilds and {len(shops)} shops.")
+        return guilds, shops, guilds_next, shops_next
+
+    def scrape(self):
+        guilds, shops, guilds_next, shops_next = self.scrape_discord_bot()
+        self.update_database(guilds, "guilds", guilds_next)
+        self.update_database(shops, "shops", shops_next)
 
 # -----------------------
 # Set Destination Dialog
@@ -6568,31 +6572,55 @@ class SetDestinationDialog(QDialog):
         return None
 
     def populate_dropdown(self, dropdown: QComboBox, items: list | KeysView) -> None:
-        """Populate a dropdown with items."""
+        """Populate a dropdown with sorted items."""
         dropdown.clear()
         dropdown.addItem("Select a destination")
-        dropdown.addItems([str(item) for item in items])
-        logging.debug(f"Populated dropdown with {len(items)} items")
+        dropdown.addItems(sorted([str(item) for item in items]))
+        logging.debug(f"Populated dropdown with {len(items)} items (sorted)")
 
     def update_combo_boxes(self):
         logging.info("Updating combo boxes.")
-        self.show_notification("Updating Shop and Guild Data. Please wait...")
+
+        if not self.parent:
+            logging.warning("No parent found; cannot update combo boxes.")
+            return
+
+        parent = cast("MainWindowType", self.parent)
+
+        status_dialog = QDialog(self)
+        status_dialog.setWindowTitle("Updating Data")
+        status_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        layout = QVBoxLayout(status_dialog)
+        status_label = QLabel("Step 1: Initializing update...")
+        layout.addWidget(status_label)
+        status_dialog.setFixedSize(350, 100)
+        status_dialog.show()
+        QApplication.processEvents()
 
         try:
-            if not self.parent:
-                logging.warning("No parent found; cannot update combo boxes.")
-                return
+            # Step 2: Checking Move Times
+            status_label.setText("Step 2: Checking Move Times...")
+            QApplication.processEvents()
+            self.load_next_move_times()
 
-            parent = cast("MainWindowType", self.parent)
+            # Step 3: Fetching Data from Discord Bot
+            status_label.setText("Step 3: Fetching Data from Discord Bot...")
+            QApplication.processEvents()
+            shops, guilds, shops_next, guilds_next = parent.scraper.scrape_discord_bot()
 
-            # Run scraper to update shops and guilds
-            parent.AVITD_scraper.scrape_guilds_and_shops()
+            # Step 4: Updating Database
+            status_label.setText("Step 4: Updating Database...")
+            QApplication.processEvents()
+            parent.scraper.update_database(guilds, "guilds", guilds_next)
+            parent.scraper.update_database(shops, "shops", shops_next)
 
-            # Update only shops and guilds coordinates from database
+            # Step 5: Refreshing Dropdowns
+            status_label.setText("Step 5: Refreshing Dropdowns...")
+            QApplication.processEvents()
+
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
-                # Fetch columns and rows for coordinate conversion
                 cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
                 columns = {row[0]: row[1] for row in cursor.fetchall()}
                 cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
@@ -6601,23 +6629,22 @@ class SetDestinationDialog(QDialog):
                 def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
                     return (columns.get(col_name, 0) + 1, rows.get(row_name, 0) + 1)
 
-                # Update shops_coordinates
                 cursor.execute("SELECT Name, `Column`, `Row` FROM shops")
-                parent.shops_coordinates = {
+                parent.shops_coordinates.clear()
+                parent.shops_coordinates.update({
                     name: to_coords(col, row)
                     for name, col, row in cursor.fetchall()
                     if col != "NA" and row != "NA"
-                }
+                })
 
-                # Update guilds_coordinates
                 cursor.execute("SELECT Name, `Column`, `Row` FROM guilds")
-                parent.guilds_coordinates = {
+                parent.guilds_coordinates.clear()
+                parent.guilds_coordinates.update({
                     name: to_coords(col, row)
                     for name, col, row in cursor.fetchall()
                     if col != "NA" and row != "NA"
-                }
+                })
 
-            # Populate dropdowns
             self.populate_dropdown(self.tavern_dropdown, parent.taverns_coordinates.keys())
             self.populate_dropdown(self.bank_dropdown, parent.banks_coordinates.keys())
             self.populate_dropdown(self.transit_dropdown, parent.transits_coordinates.keys())
@@ -6627,10 +6654,18 @@ class SetDestinationDialog(QDialog):
             self.populate_dropdown(self.user_building_dropdown, parent.user_buildings_coordinates.keys())
 
             parent.update_minimap()
+
+            status_label.setText("✅ Update complete.")
+            QApplication.processEvents()
+            QTimer.singleShot(2000, status_dialog.accept)
+
             logging.info("Combo boxes updated successfully.")
 
         except Exception as e:
-            logging.error(f"Failed to update Combo boxes: {e}")
+            logging.exception("Failed to update Combo boxes:")
+            status_label.setText("❌ Update failed.")
+            QApplication.processEvents()
+            QTimer.singleShot(3000, status_dialog.accept)
             self.show_error_dialog("Update Failed", str(e))
 
     def show_notification(self, message: str) -> None:
@@ -6698,7 +6733,7 @@ class SetDestinationDialog(QDialog):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT OR REPLACE INTO destinations (character_id, col, `Row`, timestamp)
+                    INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp)
                     VALUES (?, ?, ?, datetime('now'))
                 """, (character_id, coords[0], coords[1]))
 
@@ -6839,7 +6874,6 @@ class SetDestinationDialog(QDialog):
 
         format_countdown(self.next_guild_update, self.guildCountdownLabel, "Guilds")
         format_countdown(self.next_shop_update, self.shopCountdownLabel, "Shops")
-
 
 # -----------------------
 # Shopping List Tools
@@ -7376,12 +7410,12 @@ class PowersDialog(QDialog):
                     self._enable_nearest_peacekeeper_mission()
                 elif guild:
                     cursor.execute("""
-                                   SELECT c.Coordinate, r.Coordinate
-                                   FROM guilds g
-                                            JOIN columns c ON g.Column = c.Name
-                                            JOIN rows r ON g.Row = r.Name
-                                   WHERE g.Name = ?
-                                   """, (guild,))
+                        SELECT c.Coordinate, r.Coordinate
+                        FROM guilds g
+                        JOIN columns c ON g.Column = c.Name
+                        JOIN rows r ON g.Row = r.Name
+                        WHERE g.Name = ?
+                    """, (guild,))
                     if loc := cursor.fetchone():
                         self._configure_destination_button(guild, loc[0], loc[1])
                     else:
@@ -7453,7 +7487,7 @@ class PowersDialog(QDialog):
             with sqlite3.connect(self.DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT OR REPLACE INTO destinations (character_id, col, `Row`, timestamp) "
+                    "INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp) "
                     "VALUES (?, ?, ?, datetime('now'))",
                     (character_id, col, row)
                 )
@@ -7792,168 +7826,6 @@ class CompassOverlay(QDialog):
         if route_info and self.parent():
             self.parent().set_compass_display_from_overlay(label_text, route_info)
 
-# -----------------------
-# Tampermonkey Script Dialog
-# -----------------------
-
-class UserscriptManagerDialog(QDialog):
-    def __init__(self, web_profile, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Userscript Manager")
-        self.profile = web_profile
-        self.scripts = []
-        self.init_ui()
-        self.load_scripts()
-
-    def init_ui(self):
-        self.list_widget = QListWidget()
-        self.name_edit = QLineEdit()
-        self.match_edit = QLineEdit()
-        self.script_edit = QTextEdit()
-
-        self.save_button = QPushButton("Save Script")
-        self.delete_button = QPushButton("Delete Script")
-        self.new_button = QPushButton("New Script")
-        self.reload_button = QPushButton("Reload Scripts")
-
-        self.list_widget.itemSelectionChanged.connect(self.load_selected_script)
-        self.save_button.clicked.connect(self.save_script)
-        self.delete_button.clicked.connect(self.delete_script)
-        self.new_button.clicked.connect(self.clear_fields)
-        self.reload_button.clicked.connect(self.load_scripts)
-
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel("Saved Scripts"))
-        left_layout.addWidget(self.list_widget)
-        left_layout.addWidget(self.new_button)
-        left_layout.addWidget(self.reload_button)
-
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(QLabel("Script Name"))
-        right_layout.addWidget(self.name_edit)
-        right_layout.addWidget(QLabel("@match Pattern (optional — auto-detected)"))
-        right_layout.addWidget(self.match_edit)
-        right_layout.addWidget(QLabel("Script Code"))
-        right_layout.addWidget(self.script_edit)
-        right_layout.addWidget(self.save_button)
-        right_layout.addWidget(self.delete_button)
-
-        layout = QHBoxLayout()
-        layout.addLayout(left_layout, 1)
-        layout.addLayout(right_layout, 2)
-
-        self.setLayout(layout)
-        self.resize(900, 600)
-
-    def load_scripts(self):
-        self.list_widget.clear()
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.execute("""
-                SELECT us.name, COALESCE(ms.match_pattern, '')
-                FROM user_scripts us
-                LEFT JOIN user_script_matches ms ON ms.script_id = us.id
-                GROUP BY us.id
-            """)
-            for name, match in cursor.fetchall():
-                display = f"{name} ({match})" if match else name
-                self.list_widget.addItem(display)
-        self.load_enabled_scripts()
-
-    def load_enabled_scripts(self):
-        self.profile.scripts().clear()
-        self.scripts = []
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.execute("SELECT id, name, script FROM user_scripts WHERE enabled = 1")
-            for script_id, name, code in cursor.fetchall():
-                match_cursor = conn.execute("SELECT match_pattern FROM user_script_matches WHERE script_id = ?", (script_id,))
-                patterns = [row[0] for row in match_cursor.fetchall()]
-                qscript = QWebEngineScript()
-                qscript.setName(name)
-                qscript.setInjectionPoint(QWebEngineScript.DocumentReady)
-                qscript.setWorldId(QWebEngineScript.MainWorld)
-                qscript.setRunsOnSubFrames(False)
-                qscript.setSourceCode(code)
-                self.scripts.append((patterns, qscript))
-
-    def inject_scripts_for_url(self, url: str):
-        self.profile.scripts().clear()
-        for patterns, script in self.scripts:
-            if any(url_matches(p, url) for p in patterns):
-                self.profile.scripts().insert(script)
-
-    def load_selected_script(self):
-        items = self.list_widget.selectedItems()
-        if not items:
-            return
-        name = items[0].text().split(" (")[0]  # Strip match from display name
-        with sqlite3.connect(DB_PATH) as conn:
-            row = conn.execute("SELECT id, name, script FROM user_scripts WHERE name = ?", (name,)).fetchone()
-            if row:
-                script_id = row[0]
-                self.name_edit.setText(row[1])
-                self.script_edit.setText(row[2])
-                matches = conn.execute("SELECT match_pattern FROM user_script_matches WHERE script_id = ?", (script_id,))
-                patterns = [m[0] for m in matches.fetchall()]
-                self.match_edit.setText("; ".join(patterns))  # Just for UI preview
-
-    def save_script(self):
-        name = self.name_edit.text().strip()
-        script = self.script_edit.toPlainText()
-        match_field = self.match_edit.text().strip()
-
-        # Extract all @match lines if not manually specified
-        match_lines = []
-        if match_field:
-            match_lines = [m.strip() for m in match_field.split(";")]
-        else:
-            match_lines = [
-                line.replace("// @match", "").strip()
-                for line in script.splitlines()
-                if line.strip().startswith("// @match")
-            ]
-
-        if not name or not match_lines:
-            QMessageBox.warning(self, "Error", "Script name and at least one @match pattern are required.")
-            return
-
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO user_scripts (name, script, enabled)
-                VALUES (?, ?, 1)
-                ON CONFLICT(name) DO UPDATE SET script=excluded.script
-            """, (name, script))
-            cursor.execute("SELECT id FROM user_scripts WHERE name=?", (name,))
-            script_id = cursor.fetchone()[0]
-
-            # Store enabled script in settings
-            cursor.execute("""
-                INSERT INTO settings (key, value)
-                VALUES ('enabled_script', ?)
-                ON CONFLICT(key) DO UPDATE SET value=excluded.value
-            """, (str(script_id),))
-
-            cursor.execute("DELETE FROM user_script_matches WHERE script_id = ?", (script_id,))
-            for match in match_lines:
-                cursor.execute("INSERT INTO user_script_matches (script_id, match_pattern) VALUES (?, ?)", (script_id, match))
-
-        self.load_scripts()
-
-    def delete_script(self):
-        items = self.list_widget.selectedItems()
-        if not items:
-            return
-        name = items[0].text().split(" (")[0]
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("DELETE FROM user_scripts WHERE name = ?", (name,))
-        self.clear_fields()
-        self.load_scripts()
-
-    def clear_fields(self):
-        self.name_edit.clear()
-        self.match_edit.clear()
-        self.script_edit.clear()
-        self.list_widget.clearSelection()
 
 # -----------------------
 # Main Entry Point
@@ -7992,6 +7864,7 @@ def main() -> None:
     splash.finish(main_window)
 
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()
