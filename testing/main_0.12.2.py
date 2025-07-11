@@ -5459,7 +5459,6 @@ class RBCCommunityMap(QMainWindow):
 
             # Step 4: Update local DB from JSON
             self.update_database_with_json(data)
-            QMessageBox.information(self, "Update Complete", "Location data has been updated successfully.")
 
         except requests.exceptions.RequestException as e:
             logging.error(f"Update error: {e}")
@@ -5470,33 +5469,55 @@ class RBCCommunityMap(QMainWindow):
 
     def update_database_with_json(self, data):
         """
-        Updates the local shops and guilds tables based on the JSON structure from the bot.
+        Updates the local shops and guilds tables based on the JSON structure from the bot,
+        while preserving Peacekeeper's Missions.
         """
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
-                # Clear old locations
-                cursor.execute("UPDATE shops SET `Column`='NA', `Row`='NA'")
-                cursor.execute("UPDATE guilds SET `Column`='NA', `Row`='NA'")
+                scrape_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                guilds_next = data.get("guilds_next_update")
+                shops_next = data.get("shops_next_update")
 
-                for key, entry in data.items():
-                    name = entry.get("name", key)
-                    col = entry.get("Column", "NA")
-                    row = entry.get("Row", "NA")
-                    kind = entry.get("type")
+                # Clear old locations except Peacekeepers
+                cursor.execute("""
+                    UPDATE guilds
+                    SET `Column` = 'NA', `Row` = 'NA', `next_update` = ?, `last_scraped` = ?
+                    WHERE Name NOT LIKE 'Peacekeepers Mission%'""",
+                    (guilds_next, scrape_timestamp)
+                )
+                cursor.execute("""
+                    UPDATE shops
+                    SET `Column` = 'NA', `Row` = 'NA', `next_update` = ?, `last_scraped` = ?""",
+                    (shops_next, scrape_timestamp)
+                )
 
-                    if kind == "shop":
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO shops (Name, `Column`, `Row`)
-                            VALUES (?, ?, ?)""", (name, col, row))
-                    elif kind == "guild":
-                        cursor.execute("""
-                            INSERT OR REPLACE INTO guilds (Name, `Column`, `Row`)
-                            VALUES (?, ?, ?)""", (name, col, row))
+                # Insert guilds
+                for key, entry in data.get("guilds", {}).items():
+                    name = entry.get("display", key)
+                    col = entry.get("column", "NA")
+                    row = entry.get("row", "NA")
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO guilds (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)""",
+                        (name, col, row, guilds_next, scrape_timestamp)
+                    )
+
+                # Insert shops
+                for key, entry in data.get("shops", {}).items():
+                    name = entry.get("display", key)
+                    col = entry.get("column", "NA")
+                    row = entry.get("row", "NA")
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO shops (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)""",
+                        (name, col, row, shops_next, scrape_timestamp)
+                    )
 
                 conn.commit()
-                logging.info(f"Database updated with {len(data)} entries from locations.json.")
+                logging.info(f"Database updated with {len(data.get('guilds', {}))} guilds and {len(data.get('shops', {}))} shops.")
+
         except Exception as e:
             logging.error(f"Error updating database: {e}")
 
@@ -6355,24 +6376,21 @@ class SetDestinationDialog(QDialog):
         parent = cast("MainWindowType", self.parent)
 
         status_dialog = QDialog(self)
-        status_dialog.setWindowTitle("Updating Data")
+        status_dialog.setWindowTitle("Updating Location Data")
         status_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         layout = QVBoxLayout(status_dialog)
-        status_label = QLabel("Step 1: Initializing update...")
+        status_label = QLabel("Step 1: Triggering bot scrape...")
         layout.addWidget(status_label)
-        status_dialog.setFixedSize(350, 100)
+        status_dialog.setFixedSize(400, 100)
         status_dialog.show()
         QApplication.processEvents()
 
         try:
-            # Step 2: Trigger bot scrape and wait for JSON
-            status_label.setText("Step 2: Triggering data scrape...")
-            QApplication.processEvents()
-
+            # Step 1: Trigger update
             parent.update_data()
 
-            # Step 3: Reload data from DB
-            status_label.setText("Step 3: Reloading dropdown data...")
+            # Step 2: Reload from DB
+            status_label.setText("Step 2: Reloading updated location data...")
             QApplication.processEvents()
 
             with sqlite3.connect(DB_PATH) as conn:
@@ -6402,7 +6420,10 @@ class SetDestinationDialog(QDialog):
                     if col != "NA" and row != "NA"
                 })
 
-            # Step 4: Refresh dropdowns
+            # Step 3: Populate UI dropdowns
+            status_label.setText("Step 3: Populating dropdowns...")
+            QApplication.processEvents()
+
             self.populate_dropdown(self.tavern_dropdown, parent.taverns_coordinates.keys())
             self.populate_dropdown(self.bank_dropdown, parent.banks_coordinates.keys())
             self.populate_dropdown(self.transit_dropdown, parent.transits_coordinates.keys())
@@ -6413,6 +6434,7 @@ class SetDestinationDialog(QDialog):
 
             parent.update_minimap()
 
+            # Step 4: Done
             status_label.setText("✅ Update complete.")
             QApplication.processEvents()
             QTimer.singleShot(2000, status_dialog.accept)
