@@ -101,6 +101,12 @@ This project is an attempt to create an interactive map coded in Python for use 
 
 This project is hosted on GitHub: [RBC-Map GitHub Repository](https://github.com/JELollis/RBC-Map). Contributions and feedback are always welcome!
 
+Please also join us on Discord.
+
+***NOTE*** This is a community server so it does have some steps to join it. Don't let that scare you away though. 
+
+https://discord.gg/rKamEZvK6X
+
 ### License
 The RBC City Map Application is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
