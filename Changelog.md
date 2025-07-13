@@ -806,3 +806,34 @@ Final patch before major 0.12.0 directory and architecture shift.
 
 - Over 20 SQLite tables, including `characters`, `coins`, `banks`, `shops`, `guilds`, `taverns`, `placesofinterest`, `color_mappings`, `custom_css`, `rows`, `columns`, `powers`, `discord_servers`.
 - Tables seeded with default data using `INSERT OR IGNORE` for first-time installs and upgrade-safe bootstrapping.
+
+---
+## Version 0.13.0
+
+### 🚀 Major Internal Refactor (Monolithic Final Form)
+
+Version 0.13.0 introduces substantial internal changes while retaining a monolithic file structure. All location scraping logic has been **fully removed** and replaced with a modern system that pulls shop and guild data from a live Discord bot-powered JSON endpoint (`locations.json`).
+
+### ✅ Key Changes in v0.13.0
+
+- 🔁 **Scraper Replaced**: No more scraping from AVITD or Terrible API in-app. Now syncs to `locations.json` from the Discord bot.
+- 🧭 **Countdown Timers**: Set Destination and Powers dialogs now show **next shop/guild move time** and **live countdowns**.
+- 🏷️ **Nickname-Based Dropdowns**: Canonical building names now normalized to internal nicknames in all dropdowns (e.g., "Ace Pawn" → "Ace Porn").
+- 🖌️ **Minimap Rendering Stabilized**: Refined `draw_minimap()` logic ensures label rendering is clean and consistent at all zoom levels.
+- 🪵 **Log Viewer Improved**: Filterable logs now support persistent logging level preference and visibility toggling in-app.
+- 🧠 **SetDestinationDialog Improvements**:
+  - Auto-fetches latest data on open
+  - Manual "Update Data" triggers external API scrape via the bot
+  - Countdown to next update clearly displayed
+- 🛡️ **Startup and Error Handling**:
+  - Webview loads are validated and logged
+  - Nickname normalization handled on input and dropdown population
+
+### 💡 Notable Refactor Milestones
+- Replaced all instances of `scrape_*()` logic with `fetch_locations_json()`.
+- Added persistent log level storage in the database.
+- Updated schema to track last scrape time per source.
+- Optimized coordinate display logic for improved grid clarity.
+
+> This is the final monolithic version before future potential modularization or mobile/packaged deployment revisions.
+

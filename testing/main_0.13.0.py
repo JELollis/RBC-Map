@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.12.2
+# Filename: main_0.13.0
 
 """
 ======================
@@ -19,134 +19,76 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-"""
-import platform
-import time
 
-"""
+
 =================================
-RBC City Map Application (v0.12.1)
+RBC City Map Application (v0.13.0)
 =================================
-This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
-(set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
-set destinations, and interact with dynamically updated data scraped from "A View in the Dark."
+
+This application provides an interactive mapping and character management tool for the browser-based vampire RPG
+**Vampires! The Dark Alleyway**, set in the fictional RavenBlack City.
+
+Version 0.13.0 represents a significant internal refinement of the monolithic architecture used in earlier releases.
+While the application is still packaged as a single file, major upgrades include improved nickname normalization,
+external API integration, enhanced minimap accuracy, and multiple dialog updates to improve usability and maintainability.
 
 Key Features:
-- **WASD Keyboard Navigation**: Move seamlessly through the minimap.
-- **Character Management**: Store and switch between multiple game accounts with encrypted credentials.
-- **Minimap System**: View **nearest banks, taverns, and transit stations** dynamically.
-- **SQLite Database Support**: Fast and lightweight storage with improved query performance.
-- **Theme Customization**: Fully customizable interface with **CSS styling** options.
-- **Web Scraper Integration**: Auto-fetch **guild/shop locations** from 'A View in the Dark'.
-- **Shopping List Tool**: Plan in-game purchases with cost breakdowns.
-- **Damage Calculator**: Calculate combat interactions and weapon damage efficiently.
+-------------
+- **WASD Minimap Navigation**: Move across the city grid using familiar keyboard controls.
+- **Character Management**: Add and switch between characters with saved login credentials.
+- **Minimap Visualization**: Display current location, nearby banks, taverns, transit stops, and AP-based destinations.
+- **Discord API Integration**: All guild/shop location data now pulled from a live Discord bot (`locations.json`)—
+  replaces in-app scraping and adds support for next move countdowns.
+- **Nickname Mapping**: Internal names are now fully normalized across dropdowns (e.g., "Ace Porn" → "Ace Pawn").
+- **Set Destination Dialog Enhancements**:
+  - Dropdowns show nicknames, sorted and searchable.
+  - Countdown overlays show remaining time to next guild/shop movement.
+  - "Update Data" triggers the Discord bot API for a fresh scrape.
+- **Theming Tools**: Customize UI colors and webview appearance using dedicated dialogs.
+- **Log Viewer**: Live filterable log output with optional debug visibility.
+- **Damage Calculator**: Plan combat attacks and see total required weapon damage.
+- **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
+- **Power Reference Dialog**: Browse powers and set guild destinations for training.
+
+Updated in v0.13.0:
+-------------------
+- Fully replaces legacy web scraping logic with Discord API sync (`locations.json`).
+- Countdown timers displayed for next shop/guild rotation in SetDestination and Powers dialogs.
+- Minimap draw method updated for stability and consistent label rendering.
+- Dropdowns across dialogs now use canonical nickname mapping and normalized sorting.
+- Logging system now uses debug level persistence and improved visibility control.
+- Miscellaneous performance improvements and logic consolidation throughout.
 
 Modules Used:
-- **sys**: Provides system-specific parameters and functions.
-- **os**: Used for interacting with the operating system (e.g., file and directory management).
-- **requests**: Handles HTTP requests for web scraping operations.
-- **re**: Regular expression operations for parsing HTML and text.
-- **datetime**: Used in timestamps, logs, and database operations.
-- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in Scraper).
-- **PySide6**: Provides a **Qt-based GUI framework**, handling UI elements, WebEngine, and event management.
-- **sqlite3**: Database engine for persistent storage of map data, character info, and settings.
-- **webbrowser**: Enables external browser interactions (e.g., opening the RBC website or Discord).
-- **math**: Used in **damage calculations** and navigation logic.
-- **logging**: Captures logs, errors, and system events.
+-------------
+- **sys, os**: Core system integration and path handling.
+- **requests**: API fetches from external JSON (locations.json).
+- **re**: Regex for parsing and name normalization.
+- **datetime**: Countdown and timestamp calculations.
+- **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
+- **PySide6**: Provides the full Qt GUI, dialogs, embedded webview, and event system.
+- **sqlite3**: Local data storage for characters, locations, settings, and logs.
+- **logging**: Captures logs for display and debugging.
+- **math**: AP cost and damage calculations.
 
-================================
-Classes and Methods (v0.12.1)
-================================
-
-#### RBCCommunityMap (Core Application)
-Handles the main UI, character management, minimap rendering, and keyboard navigation.
-
-- **__init__**: Initializes the main window, UI, and database connections.
-- **load_keybind_config**: Loads user-defined keybindings from the database.
-- **setup_keybindings**: Assigns keyboard controls for movement (WASD).
-- **move_character**: Moves the character in the desired direction.
-- **setup_ui_components**: Builds the main UI layout.
-- **refresh_page**: Reloads the webview content.
-- **apply_theme**: Applies custom themes to the UI.
-- **load_cookies**: Loads saved cookies into the embedded web browser.
-- **extract_coordinates_from_html**: Parses player coordinates from the web page.
-- **draw_minimap**: Renders the minimap based on extracted coordinates.
-- **zoom_in/zoom_out**: Controls the minimap zoom level.
-- **set_destination**: Marks a location on the minimap.
-- **calculate_ap_cost**: Computes movement costs between locations.
-- **mousePressEvent**: Captures mouse clicks to interact with the minimap.
-
-#### DatabaseViewer (Database Management)
-A utility to view and inspect data stored in the SQLite database.
-
-- **__init__**: Initializes the database viewer UI.
-- **get_table_data**: Fetches data from a selected table.
-- **add_table_tab**: Displays a new tab for a table's content.
-- **closeEvent**: Handles viewer closure and cleanup.
-
-#### CharacterDialog (Character Management UI)
-A dialog for adding and editing game characters.
-
-- **__init__**: Initializes the character creation/modification dialog.
-
-#### ThemeCustomizationDialog (Theme Settings)
-A UI tool to adjust the app’s theme colors.
-
-- **__init__**: Loads theme customization options.
-- **setup_ui_tab**: Configures the main UI color settings.
-- **setup_minimap_tab**: Configures minimap color customization.
-- **change_color**: Opens a color picker to adjust UI elements.
-- **apply_theme**: Saves and applies theme changes.
-
-#### CSSCustomizationDialog (Webview Customization)
-Allows users to modify webview styles using custom CSS.
-
-- **__init__**: Initializes CSS customization.
-- **add_tab**: Adds a category tab for CSS elements.
-- **save_and_apply_changes**: Saves and injects custom CSS into the webview.
-
-#### Scraper (Web Scraping Engine)
-Fetches guild and shop location data from multiple locations.
-
-- **__init__**: Sets up scraper parameters.
-- **scrape_guilds_and_shops**: Collects shop and guild locations.
-- **update_database**: Updates SQLite with fresh location data.
-
-#### SetDestinationDialog (Destination Selection UI)
-Allows users to select a travel destination within the city.
-
-- **__init__**: Loads the UI components.
-- **populate_recent_destinations**: Displays recently visited locations.
-- **set_destination**: Saves a new destination in the database.
-
-#### ShoppingListTool (In-Game Purchase Planning)
-A tool for calculating costs of items from different shops.
-
-- **__init__**: Initializes the shopping list interface.
-- **add_item**: Adds an item to the list.
-- **update_total**: Calculates total cost including charisma-based discounts.
-
-#### DamageCalculator (Combat Assistance Tool)
-Helps players estimate weapon damage needed to defeat opponents.
-
-- **__init__**: Loads calculator settings.
-- **calculate_damage**: Computes weapon-based damage outputs.
-
-#### PowersDialog (Powers Reference UI)
-Displays information about in-game powers and related locations.
-
-- **__init__**: Initializes the powers UI.
-- **load_powers**: Loads power descriptions.
-- **set_destination**: Sets a guild as the destination for training.
-
-================================
+=================================
 Installation Instructions
-================================
-
-To install dependencies, run:
-```sh
+=================================
+To install required dependencies:
+```bash
 pip install requests bs4 PySide6 PySide6-WebEngine
+```
+
+This version is distributed as a monolithic .py file or a compiled .exe via Nuitka.
+
+Join the community:
+
+Discord: https://discord.gg/rKamEZvK6X
+
 """
+
+import platform
+import time
 import logging
 import logging.handlers
 
@@ -172,7 +114,7 @@ def get_logging_level_from_db(default=logging.INFO) -> int:
         print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
-VERSION_NUMBER = "0.12.1"
+VERSION_NUMBER = "0.13.0"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {

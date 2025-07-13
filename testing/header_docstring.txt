@@ -1,72 +1,85 @@
-# Copyright 2024-2025 RBC Community Map Team
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at:
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """
-=========================
-RBC City Map Application
-=========================
+======================
+License Agreement
+======================
 
-An advanced, graphical mapping utility for *Vampires! The Dark Alleyway*, this tool allows players to navigate
-RavenBlack City with the aid of real-time data scraping, destination routing, character storage, visual customization,
-and built-in gameplay tools such as a damage calculator and shopping planner.
+Copyright 2024-2025 RBC Community Map Team
 
-Classes:
-- RBCCommunityMap: Main application controller managing UI, characters, scraping, minimap, routing, and utilities.
-- SplashScreen: Startup splash display with live initialization updates.
-- CharacterDialog: Dialog to create, edit, or validate vampire characters.
-- SetDestinationDialog: Guild picker for destination routing.
-- ThemeCustomizationDialog: Configure UI and minimap color scheme.
-- CSSCustomizationDialog: WYSIWYG CSS profile editor and previewer.
-- LogViewer: Allows viewing of log files with level filtering.
-- AVITDScraper: Fetches shop and guild data from 'A View in the Dark' website.
-- PowersDialog: Interactive guild/power browser and router.
-- ShoppingListTool: Generates item lists based on player needs and prices.
-- DamageCalculator: Calculates BP loss and shopping requirements.
-- DatabaseViewer: Displays all database tables in a tabbed inspector.
-- DiscordServerDialog: Quick-launch interface for community Discords.
-- CompassOverlay: Shows direct vs. transit AP routing paths graphically.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
 
-Top-Level Functions:
-- splash_message: Decorator to display loading messages on the splash screen.
-- ensure_directories_exist: Ensures log and session folders exist.
-- setup_logging: Sets up rotating file-based logging based on settings.
+    http://www.apache.org/licenses/LICENSE-2.0
 
-Embedded Methods in RBCCommunityMap (partial list):
-- initialize_database
-- load_characters
-- open_shopping_list_tool
-- open_damage_calculator_tool
-- open_css_customization_dialog
-- open_powers_dialog
-- display_shopping_list
-- set_log_level / update_log_level_menu
-- apply_theme / load_theme_settings
-- setup_console_logging / inject_console_logging / handle_console_message
-- save_webpage_screenshot / save_app_screenshot
-- zoom_in_browser / zoom_out_browser
-- open_help_file / show_about_dialog / show_credits_dialog
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
-Highlights:
-- Integrated QWebEngine-based map rendering
-- Dynamic minimap drawing with AP routing overlays
-- WASD/Arrow key movement navigation
-- SQLite-backed character, theme, and session storage
-- Modular dialog-based UI with dark mode and CSS themes
-- Full Discord integration and external web launchers
-- Forum-aware and GitHub-compatible logging system
-- Smart AP calculator and guild-distance routing
 
-To install required modules:
+=================================
+RBC City Map Application (v0.13.0)
+=================================
+
+This application provides an interactive mapping and character management tool for the browser-based vampire RPG
+**Vampires! The Dark Alleyway**, set in the fictional RavenBlack City.
+
+Version 0.13.0 represents a significant internal refinement of the monolithic architecture used in earlier releases.
+While the application is still packaged as a single file, major upgrades include improved nickname normalization,
+external API integration, enhanced minimap accuracy, and multiple dialog updates to improve usability and maintainability.
+
+Key Features:
+-------------
+- **WASD Minimap Navigation**: Move across the city grid using familiar keyboard controls.
+- **Character Management**: Add and switch between characters with saved login credentials.
+- **Minimap Visualization**: Display current location, nearby banks, taverns, transit stops, and AP-based destinations.
+- **Discord API Integration**: All guild/shop location data now pulled from a live Discord bot (`locations.json`)—
+  replaces in-app scraping and adds support for next move countdowns.
+- **Nickname Mapping**: Internal names are now fully normalized across dropdowns (e.g., "Ace Porn" → "Ace Pawn").
+- **Set Destination Dialog Enhancements**:
+  - Dropdowns show nicknames, sorted and searchable.
+  - Countdown overlays show remaining time to next guild/shop movement.
+  - "Update Data" triggers the Discord bot API for a fresh scrape.
+- **Theming Tools**: Customize UI colors and webview appearance using dedicated dialogs.
+- **Log Viewer**: Live filterable log output with optional debug visibility.
+- **Damage Calculator**: Plan combat attacks and see total required weapon damage.
+- **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
+- **Power Reference Dialog**: Browse powers and set guild destinations for training.
+
+Updated in v0.13.0:
+-------------------
+- Fully replaces legacy web scraping logic with Discord API sync (`locations.json`).
+- Countdown timers displayed for next shop/guild rotation in SetDestination and Powers dialogs.
+- Minimap draw method updated for stability and consistent label rendering.
+- Dropdowns across dialogs now use canonical nickname mapping and normalized sorting.
+- Logging system now uses debug level persistence and improved visibility control.
+- Miscellaneous performance improvements and logic consolidation throughout.
+
+Modules Used:
+-------------
+- **sys, os**: Core system integration and path handling.
+- **requests**: API fetches from external JSON (locations.json).
+- **re**: Regex for parsing and name normalization.
+- **datetime**: Countdown and timestamp calculations.
+- **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
+- **PySide6**: Provides the full Qt GUI, dialogs, embedded webview, and event system.
+- **sqlite3**: Local data storage for characters, locations, settings, and logs.
+- **logging**: Captures logs for display and debugging.
+- **math**: AP cost and damage calculations.
+
+=================================
+Installation Instructions
+=================================
+To install required dependencies:
 ```bash
 pip install requests bs4 PySide6 PySide6-WebEngine
+```
+
+This version is distributed as a monolithic .py file or a compiled .exe via Nuitka.
+
+Join the community:
+
+Discord: https://discord.gg/rKamEZvK6X
+
+"""
