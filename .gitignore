@@ -1,30 +1,51 @@
-/testing/logs
-/testing/sessions
-/testing/screenshots
-/logs
-/sessions
-qodana.yaml
-*.yaml
-/.idea
-/settings
-/testing/settings
-/MySQL Dump
-/Distributions
-/Distributions/*
-testing/secret.key
-testing/fernet_key.py
-/Version Control/__pycache__
-Version Control/__pycache__/variables.cpython-312.pyc
-/Version Control/logs
-/Version Control/sessions
-/MySQL Dump/
-*.xlsx
-/testing/*.sql
-/testing/*.txt
+# Logs and sessions
+/logs/
+/sessions/
+/Version Control/logs/
+/Version Control/sessions/
+/testing/logs/
+/testing/sessions/
+/testing/screenshots/
+/testing/settings/
+
+# System and IDE-specific
+/.idea/
+/.vs/
 /.vs/*
-/.vs
 */.vs/
 /Qonda
 .DS_Store
-*/sesions*/
+
+# Build and dist folders
+/Distributions/
+/Distributions/*
+
+# Sensitive or secret keys
+/testing/secret.key
+/testing/fernet_key.py
+
+# Database dumps and related
+/MySQL Dump/
+/testing/*.sql
+*.xlsx
+
+# Python cache
+__pycache__/
+/Version Control/__pycache__/
+/Version Control/__pycache__/variables.cpython-312.pyc
+
+# Config and YAML files
+qodana.yaml
+*.yaml
+
+# Misc
+/settings/
+*/sesions*/  # Possible typo? Should this be `/sessions*/` or corrected?
+
+# Data files
 *.json
+/testing/*.txt
+
+# IntelliJ IDEA and similar
+*/.idea
+/Helper Module Dev/API/wsgi/.idea
