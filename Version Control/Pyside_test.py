@@ -264,7 +264,7 @@ def load_data():
 (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates, 
  color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates) = load_data()
 """
-the_load_data[] = (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates,
+the_load_data = (columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates, user_buildings_coordinates,
  color_mappings, shops_coordinates, guilds_coordinates, places_of_interest_coordinates)
 
 

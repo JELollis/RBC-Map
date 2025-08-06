@@ -49,3 +49,5 @@ qodana.yaml
 # IntelliJ IDEA and similar
 */.idea
 /Helper Module Dev/API/wsgi/.idea
+Helper Module Dev/.env
+Helper Module Dev/tmp.py

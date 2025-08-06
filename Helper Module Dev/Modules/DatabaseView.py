@@ -84,7 +84,7 @@ class DatabaseViewer(QMainWindow):
             logging.error(f"Failed to load tables: {e}")
             sys.exit(f"Failed to load tables: {e}")
 
-    def fetch_table_data(sefl, cursor, table_name):
+    def fetch_table_data(self, cursor, table_name):
         """
         Fetch data from the specified table and return it as a list of tuples,
         including column names.
