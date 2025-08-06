@@ -37,6 +37,7 @@ __pycache__/
 # Config and YAML files
 qodana.yaml
 *.yaml
+*/.env
 
 # Misc
 /settings/
