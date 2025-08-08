@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.13.0
+# Filename: main_0.13.1
 
 """
 ======================
@@ -22,13 +22,13 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v0.13.0)
+RBC City Map Application (v0.13.1)
 =================================
 
 This application provides an interactive mapping and character management tool for the browser-based vampire RPG
 **Vampires! The Dark Alleyway**, set in the fictional RavenBlack City.
 
-Version 0.13.0 represents a significant internal refinement of the monolithic architecture used in earlier releases.
+Version 0.13.1 represents a significant internal refinement of the monolithic architecture used in earlier releases.
 While the application is still packaged as a single file, major upgrades include improved nickname normalization,
 external API integration, enhanced minimap accuracy, and multiple dialog updates to improve usability and maintainability.
 
@@ -50,7 +50,7 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v0.13.0:
+Updated in v0.13.1:
 -------------------
 - Fully replaces legacy web scraping logic with Discord API sync (`locations.json`).
 - Countdown timers displayed for next shop/guild rotation in SetDestination and Powers dialogs.
@@ -114,7 +114,7 @@ def get_logging_level_from_db(default=logging.INFO) -> int:
         print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
-VERSION_NUMBER = "0.13.0"
+VERSION_NUMBER = "0.13.1"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
