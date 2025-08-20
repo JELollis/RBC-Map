@@ -129,6 +129,20 @@ DEFAULT_KEYBINDS = {
 # Required Directories
 REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
 
+# Buildings
+BUILDING_CLASS_MAP = {
+    "bank":    {"table": "banks",            "name_col": "Name"},
+    "pub":     {"table": "taverns",          "name_col": "Name"},
+    "shop":    {"table": "shops",            "name_col": "Name"},
+    "transit": {"table": "transits",         "name_col": "Name"},
+    "arena":   {"table": "placesofinterest", "name_col": "Name"},
+    "grave":   {"table": "placesofinterest", "name_col": "Name"},
+    "lair":    {"table": "userbuildings",    "name_col": "Name"},
+    "alchemy": {"table": "placesofinterest", "name_col": "Name"},
+    # intentionally exclude: pk, human variants, object, sever, bind, intersect
+}
+
+
 # -----------------------
 # Imports Handling
 # -----------------------
@@ -213,6 +227,7 @@ import math
 import os
 import re
 import sqlite3
+import threading
 import webbrowser
 from collections.abc import KeysView
 from datetime import datetime, timedelta, timezone
@@ -225,7 +240,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtCore import (
     QByteArray, QDateTime, QEasingCurve, QEvent, QMimeData,
     QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
-    Slot as pyqtSlot
+    Slot as pyqtSlot, QObject, QThread, Signal, QThreadPool
 )
 
 # PySide6 GUI
@@ -672,7 +687,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
              (35,'Emerald','19th','OmniBank'),
              (36,'Emerald','90th','OmniBank'),
              (37,'Emerald','99th','OmniBank'),
-             (38,'Ennui','20th','OmniBank'),
+            (38, 'Ennui', '20th', 'OmniBank'),
              (39,'Ennui','78th','OmniBank'),
              (40,'Fear','15th','OmniBank'),
              (41,'Ferret','32nd','OmniBank'),
@@ -2196,6 +2211,49 @@ elif sys.platform == "darwin":
     os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
 
 # -----------------------
+# Startup Data Fetch
+# -----------------------
+
+class StartupUpdateWorker(QObject):
+    started = Signal()
+    finished = Signal(bool, str)  # (ok, message)
+
+    def __init__(self, app_ref):
+        super().__init__()
+        self.app = app_ref  # reference to RBCCommunityMap
+
+    @pyqtSlot()
+    def run(self):
+        self.started.emit()
+        try:
+            # This is your current synchronous logic, extracted from _init_map_data
+            logging.info("[Startup] Requesting secure token...")
+            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response.raise_for_status()
+            token = token_response.text.strip()
+
+            logging.info(f"[Startup] Token received: {token}")
+            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
+            trigger_response.raise_for_status()
+
+            logging.info("[Startup] Bot scrape triggered. Waiting 10 seconds...")
+            time.sleep(10)
+
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
+            json_response.raise_for_status()
+            data = json_response.json()
+
+            # Call your existing updater (DB only; no direct widget touches)
+            self.app.update_database_with_json(data)
+            logging.info("[Startup] Database updated with fresh bot data.")
+            self.finished.emit(True, "Initial data update completed")
+        except Exception as e:
+            logging.warning(f"[Startup] Silent update failed: {e}")
+            self.finished.emit(False, f"Startup update failed: {e}")
+
+# -----------------------
 # RBC Community Map Main Class
 # -----------------------
 
@@ -2235,9 +2293,6 @@ class RBCCommunityMap(QMainWindow):
         self._init_window_properties()
         self._init_web_profile()
 
-        # Update map data from scraper bot
-        self._init_map_data()
-
         # UI and character setup
         self._init_ui_state()
         self._init_characters()
@@ -2245,6 +2300,9 @@ class RBCCommunityMap(QMainWindow):
 
         # Final setup steps
         self._finalize_setup()
+
+        #Self-learning Building Cache
+        self._seen_buildings: set[tuple[str, str, str]] = set()  # (cls, name, "Col|Row")
 
     @splash_message(lambda self: self.splash)
     def _init_window_properties(self) -> None:
@@ -2277,30 +2335,22 @@ class RBCCommunityMap(QMainWindow):
 
     @splash_message(lambda self: self.splash)
     def _init_map_data(self) -> None:
-        """Silently trigger the Discord bot scrape and update the map database."""
+        """Kick off Discord-bot scrape + locations.json pull in the background."""
         try:
-            logging.info("[Startup] Requesting secure token...")
-            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
-            token_response.raise_for_status()
-            token = token_response.text.strip()
+            self._startup_thread = QThread(self)
+            self._startup_worker = StartupUpdateWorker(self)
+            self._startup_worker.moveToThread(self._startup_thread)
 
-            logging.info(f"[Startup] Token received: {token}")
-            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
-            trigger_response = requests.get(trigger_url)
-            trigger_response.raise_for_status()
+            self._startup_thread.started.connect(self._startup_worker.run)
+            self._startup_worker.started.connect(lambda: self._set_status("Updating map data in background…"))
+            self._startup_worker.finished.connect(self._on_startup_update_finished)
+            self._startup_worker.finished.connect(self._startup_thread.quit)
+            self._startup_worker.finished.connect(self._startup_worker.deleteLater)
+            self._startup_thread.finished.connect(self._startup_thread.deleteLater)
 
-            logging.info("[Startup] Bot scrape triggered. Waiting 10 seconds...")
-            time.sleep(10)
-
-            json_url = "https://lollis-home.ddns.net/api/locations.json"
-            json_response = requests.get(json_url)
-            json_response.raise_for_status()
-            data = json_response.json()
-
-            self.update_database_with_json(data)
-            logging.info("[Startup] Database updated with fresh bot data.")
+            self._startup_thread.start()
         except Exception as e:
-            logging.warning(f"[Startup] Silent update failed: {e}")
+            logging.warning(f"[Startup] Failed to start background update: {e}")
 
     @splash_message(lambda self: self.splash)
     def _init_data(self) -> None:
@@ -2379,6 +2429,29 @@ class RBCCommunityMap(QMainWindow):
             logging.warning("website_frame not initialized before focus setup")
         css = self.load_current_css()
         self.apply_custom_css(css)
+
+        # Kick off the background update after the window is up
+        QTimer.singleShot(0, self._init_map_data)
+
+    def _on_startup_update_finished(self, ok: bool, msg: str):
+        # Refresh any UI that depends on DB state (no heavy work here)
+        try:
+            if hasattr(self, "refresh_all_dropdowns"):
+                self.refresh_all_dropdowns()
+            if ok and self.selected_character and self.destination:
+                # Optional: if new data affects routes, refresh minimap
+                self.update_minimap()
+        except Exception as e:
+            logging.warning(f"Post-startup refresh error: {e}")
+        self._set_status(("✅ " if ok else "❌ ") + msg)
+
+    def _set_status(self, text: str):
+        if hasattr(self, "statusBar") and callable(getattr(self, "statusBar")) and self.statusBar():
+            self.statusBar().showMessage(text, 5000)
+        elif hasattr(self, "infobar_label"):
+            self.infobar_label.setText(text)
+        else:
+            print(text)
 
     def load_current_css(self) -> str:
         """Load CSS for the current profile from the database."""
@@ -3970,11 +4043,6 @@ class RBCCommunityMap(QMainWindow):
     def process_html(self, html):
         """
         Process the HTML content of the webview to extract coordinates and coin information.
-
-        Args:
-            html (str): The HTML content of the page as a string.
-
-        This method calls both the extract_coordinates_from_html and extract_coins_from_html methods.
         """
         try:
             # Extract coordinates for the minimap
@@ -3993,6 +4061,13 @@ class RBCCommunityMap(QMainWindow):
             # Update coin info
             self.extract_coins_from_html(html)
             logging.debug("HTML processed successfully for coordinates and coin count.")
+
+            # --- NEW: passive building learner (non-blocking) ---
+            try:
+                self.learn_buildings_from_html(html)
+            except Exception as e:
+                # Never break the page flow if learning fails
+                logging.warning(f"Auto-learn skipped due to error: {e}")
 
         except Exception as e:
             logging.error(f"Unexpected error in process_html: {e}")
@@ -4290,7 +4365,146 @@ class RBCCommunityMap(QMainWindow):
         self.apply_custom_css()
         logging.info(f"Switched to profile: {profile_name} and applied CSS")
 
-# -----------------------
+    def learn_buildings_from_html(self, html: str) -> None:
+        soup = BeautifulSoup(html, "html.parser")
+        selector = ",".join(f"span.{cls}" for cls in BUILDING_CLASS_MAP.keys())
+        if not selector:
+            return
+
+        items = []
+        for el in soup.select(selector):
+            classes = [c for c in (el.get("class") or []) if c in BUILDING_CLASS_MAP]
+            if not classes:
+                continue
+            cls = classes[0]
+
+            raw = el.get_text(" ", strip=True) or (el.get("title") or "")
+            name = self.normalize_building_name(raw)
+            if not name:
+                continue
+
+            col, row = self._infer_col_row_from_dom(el)
+            if not col or not row:
+                continue
+
+            sig = (cls, name, f"{col}|{row}")
+            if sig in self._seen_buildings:
+                continue
+            self._seen_buildings.add(sig)
+
+            items.append({"cls": cls, "name": name, "col": col, "row": row})
+
+        if not items:
+            return
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cur = conn.cursor()
+                for it in items:
+                    inserted = self._upsert_building(cur, it["cls"], it["name"], it["col"], it["row"])
+                    if inserted and it["cls"] in ("shop", "guild"):
+                        self._report_discovered_location(it["cls"], it["name"], it["col"], it["row"])
+                conn.commit()
+            logging.debug(f"Auto-learned {len(items)} building(s) from page.")
+        except Exception as e:
+            logging.warning(f"Auto-learn DB step failed: {e}")
+
+    def _infer_col_row_from_dom(self, el) -> tuple[str | None, str | None]:
+        """
+        Read a nearby 'Column & Row' label like 'Kraken & 45th' or 'Ivy & NCL'
+        without touching minimap math.
+        """
+        node = el
+        blob = ""
+        tries = 0
+        while getattr(node, "parent", None) is not None and tries < 5:
+            try:
+                title = node.get("title") or ""
+                text = node.get_text(" ", strip=True) if hasattr(node, "get_text") else ""
+                if title or text:
+                    blob += " " + title + " " + text
+            except Exception:
+                pass
+            node = node.parent
+            tries += 1
+
+        m = re.search(r"([A-Z][A-Za-z\- ]+)\s*[,&]\s*(\d{1,3}(?:st|nd|rd|th)|NCL|WCL)", blob)
+        if m:
+            return m.group(1).strip(), m.group(2).strip()
+        return None, None
+
+    def normalize_building_name(self, s: str) -> str:
+        s = (s or "").strip()
+        s = re.sub(r"\s+", " ", s)
+        s = s.replace("’", "'").replace("`", "'")
+        # If you already have nickname→canon mapping, use it:
+        if hasattr(self, "_nickname_to_canon"):
+            try:
+                return self._nickname_to_canon(s)
+            except Exception:
+                pass
+        return s
+
+    def _upsert_building(self, cur: sqlite3.Cursor, cls: str, name: str, col: str, row: str) -> bool:
+        """
+        Returns True if a brand‑new record was inserted (useful for reporting hooks).
+        """
+        mapping = BUILDING_CLASS_MAP[cls]
+        table = mapping["table"]
+        name_col = mapping["name_col"]
+
+        if table in ("banks", "taverns", "transits", "placesofinterest", "userbuildings"):
+            cur.execute(f"SELECT 1 FROM {table} WHERE `Column`=? AND Row=? AND {name_col}=?", (col, row, name))
+            if cur.fetchone():
+                return False
+            cur.execute(
+                f"INSERT INTO {table} (`Column`, Row, {name_col}) VALUES (?, ?, ?)",
+                (col, row, name)
+            )
+            logging.debug(f"Inserted {table}: {name} @ {col} & {row}")
+            return True
+
+        if table == "shops":
+            cur.execute("SELECT `Column`, Row FROM shops WHERE Name=?", (name,))
+            row0 = cur.fetchone()
+            if row0:
+                existing_col, existing_row = row0
+                if (existing_col in (None, "", "NA")) or (existing_row in (None, "", "NA")):
+                    cur.execute("UPDATE shops SET `Column`=?, Row=? WHERE Name=?", (col, row, name))
+                    logging.debug(f"Updated shop coords: {name} -> {col} & {row}")
+                return False
+            cur.execute("INSERT INTO shops (Name, `Column`, Row) VALUES (?, ?, ?)", (name, col, row))
+            logging.debug(f"Inserted shop: {name} @ {col} & {row}")
+            return True
+
+        if table == "guilds":
+            cur.execute("SELECT `Column`, Row FROM guilds WHERE Name=?", (name,))
+            row0 = cur.fetchone()
+            if row0:
+                existing_col, existing_row = row0
+                if (existing_col in (None, "", "NA")) or (existing_row in (None, "", "NA")):
+                    cur.execute("UPDATE guilds SET `Column`=?, Row=? WHERE Name=?", (col, row, name))
+                    logging.debug(f"Updated guild coords: {name} -> {col} & {row}")
+                return False
+            cur.execute("INSERT INTO guilds (Name, `Column`, Row) VALUES (?, ?, ?)", (name, col, row))
+            logging.debug(f"Inserted guild: {name} @ {col} & {row}")
+            return True
+
+        return False
+
+    def _report_discovered_location(self, cls: str, name: str, col: str, row: str) -> None:
+        """
+        Placeholder for your Discord/AVITD reporting (only called on brand‑new shops/guilds).
+        Safe to leave as no‑op until your API endpoint exists.
+        """
+        # Example (when ready):
+        # try:
+        #     requests.post(BOT_URL, json={"kind": cls, "name": name, "col": col, "row": row}, timeout=3)
+        # except Exception as e:
+        #     logging.info(f"Report skipped: {e}")
+        pass
+
+    # -----------------------
 # Minimap Drawing and Update
 # -----------------------
 
