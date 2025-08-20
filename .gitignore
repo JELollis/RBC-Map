@@ -52,3 +52,4 @@ qodana.yaml
 /Helper Module Dev/API/wsgi/.idea
 Helper Module Dev/.env
 Helper Module Dev/tmp.py
+testing/scratch.py
