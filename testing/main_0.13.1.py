@@ -4963,35 +4963,65 @@ class RBCCommunityMap(QMainWindow):
         """
         return self.find_nearest_location(x, y, list(self.taverns_coordinates.values()))
 
-    def find_nearest_bank(self, current_x, current_y):
+    def _resolve_xy_from_labels(self, col_name, row_name):
+        """
+        Convert street labels to numeric coords using self.columns/self.rows.
+        Returns (x, y) where 0 is valid; None means missing.
+        """
+        x = self.columns.get(col_name) if col_name is not None else None
+        y = self.rows.get(row_name) if row_name is not None else None
+        return x, y
+
+    def _nearest_from_mapping(self, current_x, current_y, mapping):
+        """
+        Shared nearest logic for any mapping like:
+          { "A & 1": ("A","1"), ... } or { key: (col_label,row_label), ... }
+        Only skips when a coordinate is None; allows 0.
+        """
         min_distance = float("inf")
-        nearest_bank = None
+        nearest = None
 
-        for bank_key, (col_name, row_name) in self.banks_coordinates.items():
-            if isinstance(bank_key, str):  # Convert from street name format if necessary
-                col_name, row_name = bank_key.split(" & ")
+        for key, pair in mapping.items():
+            # Support either ("A","1") values or keys like "A & 1"
+            if isinstance(pair, (tuple, list)) and len(pair) == 2:
+                col_label, row_label = pair
+            elif isinstance(key, str) and " & " in key:
+                # Fallback: derive labels from key
+                col_label, row_label = [p.strip() for p in key.split(" & ", 1)]
+            else:
+                # Unrecognized entry; skip
+                continue
 
-            col = self.columns.get(col_name, 0)
-            row = self.rows.get(row_name, 0)
+            x, y = self._resolve_xy_from_labels(col_label, row_label)
 
-            if col and row:
-                distance = abs(col - current_x) + abs(row - current_y)
-                if distance < min_distance:
-                    min_distance = distance
-                    nearest_bank = (col, row)  # Return actual coordinates
+            # IMPORTANT: 0 is valid; only skip if truly missing
+            if x is None or y is None:
+                continue
 
-        return nearest_bank  # Returns (x, y) tuple
+            d = abs(x - current_x) + abs(y - current_y)
+            if d < min_distance:
+                min_distance = d
+                nearest = (x, y)
+
+        return nearest  # (x, y) or None
+
+    def find_nearest_bank(self, current_x, current_y):
+        """
+        0-safe nearest bank: treats x=0 or y=0 as valid.
+        """
+        return self._nearest_from_mapping(current_x, current_y, self.banks_coordinates)
+
+    def find_nearest_tavern(self, current_x, current_y):
+        """
+        0-safe nearest tavern: same logic applied to taverns.
+        """
+        return self._nearest_from_mapping(current_x, current_y, self.taverns_coordinates)
 
     def find_nearest_transit(self, x, y):
         """
-        Find the nearest transit station to the given coordinates.
-
-        Args:
-            x (int): X coordinate.
-            y (int): Y coordinate.
-
-        Returns:
-            list: List of distances and corresponding coordinates.
+        If your transits data is already numeric (x,y), your existing
+        find_nearest_location likely works. If not, ensure it doesn't
+        filter out 0. Otherwise you can unify it like banks/taverns:
         """
         return self.find_nearest_location(x, y, list(self.transits_coordinates.values()))
 

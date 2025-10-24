@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.12.1
+# Filename: main_0.13.1
 
 """
 ======================
@@ -19,140 +19,82 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-"""
-import platform
 
-"""
+
 =================================
-RBC City Map Application (v0.12.1)
+RBC City Map Application (v0.13.1)
 =================================
-This application provides an interactive mapping tool for the text-based vampire game **Vampires! The Dark Alleyway**
-(set in RavenBlack City). The map allows players to track locations, navigate using the minimap, manage characters,
-set destinations, and interact with dynamically updated data scraped from "A View in the Dark."
+
+This application provides an interactive mapping and character management tool for the browser-based vampire RPG
+**Vampires! The Dark Alleyway**, set in the fictional RavenBlack City.
+
+Version 0.13.1 represents a significant internal refinement of the monolithic architecture used in earlier releases.
+While the application is still packaged as a single file, major upgrades include improved nickname normalization,
+external API integration, enhanced minimap accuracy, and multiple dialog updates to improve usability and maintainability.
 
 Key Features:
-- **WASD Keyboard Navigation**: Move seamlessly through the minimap.
-- **Character Management**: Store and switch between multiple game accounts with encrypted credentials.
-- **Minimap System**: View **nearest banks, taverns, and transit stations** dynamically.
-- **SQLite Database Support**: Fast and lightweight storage with improved query performance.
-- **Theme Customization**: Fully customizable interface with **CSS styling** options.
-- **Web Scraper Integration**: Auto-fetch **guild/shop locations** from 'A View in the Dark'.
-- **Shopping List Tool**: Plan in-game purchases with cost breakdowns.
-- **Damage Calculator**: Calculate combat interactions and weapon damage efficiently.
+-------------
+- **WASD Minimap Navigation**: Move across the city grid using familiar keyboard controls.
+- **Character Management**: Add and switch between characters with saved login credentials.
+- **Minimap Visualization**: Display current location, nearby banks, taverns, transit stops, and AP-based destinations.
+- **Discord API Integration**: All guild/shop location data now pulled from a live Discord bot (`locations.json`)—
+  replaces in-app scraping and adds support for next move countdowns.
+- **Nickname Mapping**: Internal names are now fully normalized across dropdowns (e.g., "Ace Porn" → "Ace Pawn").
+- **Set Destination Dialog Enhancements**:
+  - Dropdowns show nicknames, sorted and searchable.
+  - Countdown overlays show remaining time to next guild/shop movement.
+  - "Update Data" triggers the Discord bot API for a fresh scrape.
+- **Theming Tools**: Customize UI colors and webview appearance using dedicated dialogs.
+- **Log Viewer**: Live filterable log output with optional debug visibility.
+- **Damage Calculator**: Plan combat attacks and see total required weapon damage.
+- **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
+- **Power Reference Dialog**: Browse powers and set guild destinations for training.
+
+Updated in v0.13.1:
+-------------------
+- Fully replaces legacy web scraping logic with Discord API sync (`locations.json`).
+- Countdown timers displayed for next shop/guild rotation in SetDestination and Powers dialogs.
+- Minimap draw method updated for stability and consistent label rendering.
+- Dropdowns across dialogs now use canonical nickname mapping and normalized sorting.
+- Logging system now uses debug level persistence and improved visibility control.
+- Miscellaneous performance improvements and logic consolidation throughout.
 
 Modules Used:
-- **sys**: Provides system-specific parameters and functions.
-- **os**: Used for interacting with the operating system (e.g., file and directory management).
-- **requests**: Handles HTTP requests for web scraping operations.
-- **re**: Regular expression operations for parsing HTML and text.
-- **datetime**: Used in timestamps, logs, and database operations.
-- **bs4 (BeautifulSoup)**: Parses HTML and extracts meaningful data (used in Scraper).
-- **PySide6**: Provides a **Qt-based GUI framework**, handling UI elements, WebEngine, and event management.
-- **sqlite3**: Database engine for persistent storage of map data, character info, and settings.
-- **webbrowser**: Enables external browser interactions (e.g., opening the RBC website or Discord).
-- **math**: Used in **damage calculations** and navigation logic.
-- **logging**: Captures logs, errors, and system events.
+-------------
+- **sys, os**: Core system integration and path handling.
+- **requests**: API fetches from external JSON (locations.json).
+- **re**: Regex for parsing and name normalization.
+- **datetime**: Countdown and timestamp calculations.
+- **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
+- **PySide6**: Provides the full Qt GUI, dialogs, embedded webview, and event system.
+- **sqlite3**: Local data storage for characters, locations, settings, and logs.
+- **logging**: Captures logs for display and debugging.
+- **math**: AP cost and damage calculations.
 
-================================
-Classes and Methods (v0.12.1)
-================================
-
-#### RBCCommunityMap (Core Application)
-Handles the main UI, character management, minimap rendering, and keyboard navigation.
-
-- **__init__**: Initializes the main window, UI, and database connections.
-- **load_keybind_config**: Loads user-defined keybindings from the database.
-- **setup_keybindings**: Assigns keyboard controls for movement (WASD).
-- **move_character**: Moves the character in the desired direction.
-- **setup_ui_components**: Builds the main UI layout.
-- **refresh_page**: Reloads the webview content.
-- **apply_theme**: Applies custom themes to the UI.
-- **load_cookies**: Loads saved cookies into the embedded web browser.
-- **extract_coordinates_from_html**: Parses player coordinates from the web page.
-- **draw_minimap**: Renders the minimap based on extracted coordinates.
-- **zoom_in/zoom_out**: Controls the minimap zoom level.
-- **set_destination**: Marks a location on the minimap.
-- **calculate_ap_cost**: Computes movement costs between locations.
-- **mousePressEvent**: Captures mouse clicks to interact with the minimap.
-
-#### DatabaseViewer (Database Management)
-A utility to view and inspect data stored in the SQLite database.
-
-- **__init__**: Initializes the database viewer UI.
-- **get_table_data**: Fetches data from a selected table.
-- **add_table_tab**: Displays a new tab for a table's content.
-- **closeEvent**: Handles viewer closure and cleanup.
-
-#### CharacterDialog (Character Management UI)
-A dialog for adding and editing game characters.
-
-- **__init__**: Initializes the character creation/modification dialog.
-
-#### ThemeCustomizationDialog (Theme Settings)
-A UI tool to adjust the app’s theme colors.
-
-- **__init__**: Loads theme customization options.
-- **setup_ui_tab**: Configures the main UI color settings.
-- **setup_minimap_tab**: Configures minimap color customization.
-- **change_color**: Opens a color picker to adjust UI elements.
-- **apply_theme**: Saves and applies theme changes.
-
-#### CSSCustomizationDialog (Webview Customization)
-Allows users to modify webview styles using custom CSS.
-
-- **__init__**: Initializes CSS customization.
-- **add_tab**: Adds a category tab for CSS elements.
-- **save_and_apply_changes**: Saves and injects custom CSS into the webview.
-
-#### Scraper (Web Scraping Engine)
-Fetches guild and shop location data from multiple locations.
-
-- **__init__**: Sets up scraper parameters.
-- **scrape_guilds_and_shops**: Collects shop and guild locations.
-- **update_database**: Updates SQLite with fresh location data.
-
-#### SetDestinationDialog (Destination Selection UI)
-Allows users to select a travel destination within the city.
-
-- **__init__**: Loads the UI components.
-- **populate_recent_destinations**: Displays recently visited locations.
-- **set_destination**: Saves a new destination in the database.
-
-#### ShoppingListTool (In-Game Purchase Planning)
-A tool for calculating costs of items from different shops.
-
-- **__init__**: Initializes the shopping list interface.
-- **add_item**: Adds an item to the list.
-- **update_total**: Calculates total cost including charisma-based discounts.
-
-#### DamageCalculator (Combat Assistance Tool)
-Helps players estimate weapon damage needed to defeat opponents.
-
-- **__init__**: Loads calculator settings.
-- **calculate_damage**: Computes weapon-based damage outputs.
-
-#### PowersDialog (Powers Reference UI)
-Displays information about in-game powers and related locations.
-
-- **__init__**: Initializes the powers UI.
-- **load_powers**: Loads power descriptions.
-- **set_destination**: Sets a guild as the destination for training.
-
-================================
+=================================
 Installation Instructions
-================================
-
-To install dependencies, run:
-```sh
+=================================
+To install required dependencies:
+```bash
 pip install requests bs4 PySide6 PySide6-WebEngine
+```
+
+This version is distributed as a monolithic .py file or a compiled .exe via Nuitka.
+
+Join the community:
+
+Discord: https://discord.gg/rKamEZvK6X
+
 """
+
+import platform
+import time
 import logging
 import logging.handlers
 
 # -----------------------
 # Global Constants
 # -----------------------
-
 # Database Path
 DB_PATH = 'sessions/rbc_map_data.db'
 
@@ -160,8 +102,6 @@ DB_PATH = 'sessions/rbc_map_data.db'
 LOG_DIR = 'logs'
 DEFAULT_LOG_LEVEL = logging.DEBUG
 LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
-
-
 def get_logging_level_from_db(default=logging.INFO) -> int:
     try:
         with sqlite3.connect(DB_PATH) as conn:
@@ -174,8 +114,7 @@ def get_logging_level_from_db(default=logging.INFO) -> int:
         print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
-
-VERSION_NUMBER = "0.12.1"
+VERSION_NUMBER = "0.13.1"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
@@ -189,6 +128,20 @@ DEFAULT_KEYBINDS = {
 
 # Required Directories
 REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
+
+# Buildings
+BUILDING_CLASS_MAP = {
+    "bank":    {"table": "banks",            "name_col": "Name"},
+    "pub":     {"table": "taverns",          "name_col": "Name"},
+    "shop":    {"table": "shops",            "name_col": "Name"},
+    "transit": {"table": "transits",         "name_col": "Name"},
+    "arena":   {"table": "placesofinterest", "name_col": "Name"},
+    "grave":   {"table": "placesofinterest", "name_col": "Name"},
+    "lair":    {"table": "userbuildings",    "name_col": "Name"},
+    "alchemy": {"table": "placesofinterest", "name_col": "Name"},
+    # intentionally exclude: pk, human variants, object, sever, bind, intersect
+}
+
 
 # -----------------------
 # Imports Handling
@@ -206,14 +159,13 @@ required_modules = {
     'PySide6.QtWebEngineWidgets': 'PySide6',
     'PySide6.QtWidgets': 'PySide6',
     'bs4': 'beautifulsoup4',
-    'datetime': 'datetime',  # Built-in
-    're': 're',  # Built-in
+    'datetime': 'datetime',        # Built-in
+    're': 're',                    # Built-in
     'requests': 'requests',
-    'sqlite3': 'sqlite3',  # Built-in
-    'time': 'time',  # Built-in
-    'webbrowser': 'webbrowser'  # Built-in
+    'sqlite3': 'sqlite3',          # Built-in
+    'time': 'time',                # Built-in
+    'webbrowser': 'webbrowser'     # Built-in
 }
-
 
 def check_and_install_modules(modules: dict[str, str]) -> bool:
     missing_modules = []
@@ -249,8 +201,7 @@ def check_and_install_modules(modules: dict[str, str]) -> bool:
         if response != QMessageBox.Yes:
             return False
     except ImportError:
-        response = input(
-            f"\nInstall missing modules ({', '.join(set(pip_installable))}) with pip? (y/n): ").strip().lower()
+        response = input(f"\nInstall missing modules ({', '.join(set(pip_installable))}) with pip? (y/n): ").strip().lower()
         if response != 'y':
             return False
 
@@ -276,6 +227,7 @@ import math
 import os
 import re
 import sqlite3
+import threading
 import webbrowser
 from collections.abc import KeysView
 from datetime import datetime, timedelta, timezone
@@ -288,7 +240,7 @@ from bs4 import BeautifulSoup
 from PySide6.QtCore import (
     QByteArray, QDateTime, QEasingCurve, QEvent, QMimeData,
     QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
-    Slot as pyqtSlot
+    Slot as pyqtSlot, QObject, QThread, Signal, QThreadPool
 )
 
 # PySide6 GUI
@@ -322,7 +274,6 @@ from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar, cast
 if TYPE_CHECKING:
     class Scraper:
         def scrape_guilds_and_shops(self) -> None: ...
-
         def close_connection(self) -> None: ...
 
 
@@ -332,9 +283,7 @@ if TYPE_CHECKING:
         destination: tuple[int, int] | None
         website_frame: QWebEngineView
         scraper: Scraper
-
         def apply_custom_css(self, css: str) -> None: ...
-
         def update_minimap(self) -> None: ...
 
         columns: dict[str, int]
@@ -352,7 +301,6 @@ if TYPE_CHECKING:
 # -----------------------
 
 APP_ICON = PySide6.QtGui.QIcon()
-
 
 # -----------------------
 # Theme Application
@@ -415,7 +363,6 @@ def apply_theme_to_widget(widget: QWidget, color_mappings: dict) -> None:
         logging.error(f"Failed to apply theme to {widget.__class__.__name__}: {e}")
         widget.setStyleSheet("")
 
-
 # -----------------------
 # Startup Splash
 # -----------------------
@@ -450,7 +397,6 @@ class SplashScreen(QSplashScreen):
         self.showMessage(f"Startup script: {message} loading...", Qt.AlignBottom | Qt.AlignHCenter, Qt.white)
         QApplication.processEvents()
 
-
 # -----------------------
 # Directory Setup
 # -----------------------
@@ -475,11 +421,9 @@ def ensure_directories_exist(directories: list[str] = None) -> bool:
             success = False
     return success
 
-
 # Example usage at startup (optional, depending on your flow)
 if not ensure_directories_exist():
     logging.warning("Some directories could not be created. Application may encounter issues.")
-
 
 # -----------------------
 # Logging Setup
@@ -514,7 +458,6 @@ def setup_logging(log_dir: str = LOG_DIR, log_level: int = DEFAULT_LOG_LEVEL, lo
         print(f"Unexpected error during logging setup: {e}", file=sys.stderr)
         return False
 
-
 # Initialize logging at startup
 if not setup_logging(log_level=get_logging_level_from_db()):
     print("Logging setup failed. Continuing without file logging.", file=sys.stderr)
@@ -522,7 +465,6 @@ if not setup_logging(log_level=get_logging_level_from_db()):
 
 # Log app version
 logging.info(f"Launching app version {VERSION_NUMBER}")
-
 
 def save_logging_level_to_db(level: int) -> bool:
     try:
@@ -539,7 +481,6 @@ def save_logging_level_to_db(level: int) -> bool:
     except Exception as e:
         logging.error(f"Failed to save log level: {e}")
         return False
-
 
 # -----------------------
 # SQLite Setup
@@ -698,7 +639,6 @@ def create_tables(conn: sqlite3.Connection) -> None:
             raise
     conn.commit()
 
-
 def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
     cursor = conn.cursor()
@@ -710,206 +650,206 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
         ]),
 
         ("REPLACE INTO banks (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
-            (1, 'Aardvark', '82nd', 'OmniBank'),
-            (2, 'Alder', '40th', 'OmniBank'),
-            (3, 'Alder', '80th', 'OmniBank'),
-            (4, 'Amethyst', '16th', 'OmniBank'),
-            (5, 'Amethyst', '37th', 'OmniBank'),
-            (6, 'Amethyst', '99th', 'OmniBank'),
-            (7, 'Anguish', '30th', 'OmniBank'),
-            (8, 'Anguish', '73rd', 'OmniBank'),
-            (9, 'Anguish', '91st', 'OmniBank'),
-            (10, 'Beech', '26th', 'OmniBank'),
-            (11, 'Beech', '39th', 'OmniBank'),
-            (12, 'Beryl', '28th', 'OmniBank'),
-            (13, 'Beryl', '40th', 'OmniBank'),
-            (14, 'Beryl', '65th', 'OmniBank'),
-            (15, 'Beryl', '72nd', 'OmniBank'),
-            (16, 'Bleak', '14th', 'OmniBank'),
-            (17, 'Buzzard', '13th', 'OmniBank'),
-            (18, 'Cedar', '1st', 'OmniBank'),
-            (19, 'Cedar', '52nd', 'OmniBank'),
-            (20, 'Cedar', '80th', 'OmniBank'),
-            (21, 'Chagrin', '23rd', 'OmniBank'),
-            (22, 'Chagrin', '39th', 'OmniBank'),
-            (23, 'Cobalt', '46th', 'OmniBank'),
-            (24, 'Cobalt', '81st', 'OmniBank'),
-            (25, 'Cobalt', '88th', 'OmniBank'),
-            (26, 'Cormorant', '93rd', 'OmniBank'),
-            (27, 'Despair', '1st', 'OmniBank'),
-            (28, 'Despair', '75th', 'OmniBank'),
-            (29, 'Dogwood', '4th', 'OmniBank'),
-            (30, 'Duck', '37th', 'OmniBank'),
-            (31, 'Duck', '77th', 'OmniBank'),
-            (32, 'Eagle', '64th', 'OmniBank'),
-            (33, 'Eagle', '89th', 'OmniBank'),
-            (34, 'Elm', '98th', 'OmniBank'),
-            (35, 'Emerald', '19th', 'OmniBank'),
-            (36, 'Emerald', '90th', 'OmniBank'),
-            (37, 'Emerald', '99th', 'OmniBank'),
-            (38, 'Ennui', '20th', 'OmniBank'),
-            (39, 'Ennui', '78th', 'OmniBank'),
-            (40, 'Fear', '15th', 'OmniBank'),
-            (41, 'Ferret', '32nd', 'OmniBank'),
-            (42, 'Ferret', '90th', 'OmniBank'),
-            (43, 'Fir', '2nd', 'OmniBank'),
-            (44, 'Flint', '37th', 'OmniBank'),
-            (45, 'Flint', '45th', 'OmniBank'),
-            (46, 'Flint', '47th', 'OmniBank'),
-            (47, 'Flint', '5th', 'OmniBank'),
-            (48, 'Gloom', '34th', 'OmniBank'),
-            (49, 'Gloom', '71st', 'OmniBank'),
-            (50, 'Gloom', '89th', 'OmniBank'),
-            (51, 'Gloom', '90th', 'OmniBank'),
-            (52, 'Haddock', '46th', 'OmniBank'),
-            (53, 'Haddock', '52nd', 'OmniBank'),
-            (54, 'Haddock', '67th', 'OmniBank'),
-            (55, 'Haddock', '74th', 'OmniBank'),
-            (56, 'Haddock', '88th', 'OmniBank'),
-            (57, 'Hessite', '39th', 'OmniBank'),
-            (58, 'Hessite', '76th', 'OmniBank'),
-            (59, 'Holly', '96th', 'OmniBank'),
-            (60, 'Horror', '49th', 'OmniBank'),
-            (61, 'Horror', '59th', 'OmniBank'),
-            (62, 'Ire', '31st', 'OmniBank'),
-            (63, 'Ire', '42nd', 'OmniBank'),
-            (64, 'Ire', '53rd', 'OmniBank'),
-            (65, 'Ire', '97th', 'OmniBank'),
-            (66, 'Ivory', '5th', 'OmniBank'),
-            (67, 'Ivory', '71st', 'OmniBank'),
-            (68, 'Ivy', '70th', 'OmniBank'),
-            (69, 'Ivy', '79th', 'OmniBank'),
-            (70, 'Ivy', 'NCL', 'OmniBank'),
-            (71, 'Jackal', '43rd', 'OmniBank'),
-            (72, 'Jaded', '25th', 'OmniBank'),
-            (73, 'Jaded', '48th', 'OmniBank'),
-            (74, 'Jaded', '71st', 'OmniBank'),
-            (75, 'Juniper', '16th', 'OmniBank'),
-            (76, 'Juniper', '20th', 'OmniBank'),
-            (77, 'Juniper', '98th', 'OmniBank'),
-            (78, 'Knotweed', '15th', 'OmniBank'),
-            (79, 'Knotweed', '29th', 'OmniBank'),
-            (80, 'Kraken', '13th', 'OmniBank'),
-            (81, 'Kraken', '18th', 'OmniBank'),
-            (82, 'Kraken', '34th', 'OmniBank'),
-            (83, 'Kraken', '3rd', 'OmniBank'),
-            (84, 'Kraken', '45th', 'OmniBank'),
-            (85, 'Kraken', '48th', 'OmniBank'),
-            (86, 'Kraken', '7th', 'OmniBank'),
-            (87, 'Kyanite', '40th', 'OmniBank'),
-            (88, 'Kyanite', '6th', 'OmniBank'),
-            (89, 'Larch', '33rd', 'OmniBank'),
-            (90, 'Larch', '7th', 'OmniBank'),
-            (91, 'Larch', '91st', 'OmniBank'),
-            (92, 'Lead', '11th', 'OmniBank'),
-            (93, 'Lead', '21st', 'OmniBank'),
-            (94, 'Lead', '88th', 'OmniBank'),
-            (95, 'Lion', '80th', 'OmniBank'),
-            (96, 'Lonely', '93rd', 'OmniBank'),
-            (97, 'Malachite', '11th', 'OmniBank'),
-            (98, 'Malachite', '32nd', 'OmniBank'),
-            (99, 'Malachite', '87th', 'OmniBank'),
-            (100, 'Malaise', '36th', 'OmniBank'),
-            (101, 'Malaise', '4th', 'OmniBank'),
-            (102, 'Malaise', '50th', 'OmniBank'),
-            (103, 'Maple', '34th', 'OmniBank'),
-            (104, 'Maple', '84th', 'OmniBank'),
-            (105, 'Maple', '85th', 'OmniBank'),
-            (106, 'Mongoose', '78th', 'OmniBank'),
-            (107, 'Mongoose', '79th', 'OmniBank'),
-            (108, 'Mongoose', '91st', 'OmniBank'),
-            (109, 'Nervous', '10th', 'OmniBank'),
-            (110, 'Nettle', '37th', 'OmniBank'),
-            (111, 'Nettle', '67th', 'OmniBank'),
-            (112, 'Nickel', '93rd', 'OmniBank'),
-            (113, 'Obsidian', '36th', 'OmniBank'),
-            (114, 'Obsidian', '79th', 'OmniBank'),
-            (115, 'Octopus', '27th', 'OmniBank'),
-            (116, 'Octopus', '71st', 'OmniBank'),
-            (117, 'Octopus', '77th', 'OmniBank'),
-            (118, 'Olive', '99th', 'OmniBank'),
-            (119, 'Olive', '9th', 'OmniBank'),
-            (120, 'Oppression', '2nd', 'OmniBank'),
-            (121, 'Oppression', '89th', 'OmniBank'),
-            (122, 'Pessimism', '19th', 'OmniBank'),
-            (123, 'Pessimism', '44th', 'OmniBank'),
-            (124, 'Pessimism', '87th', 'OmniBank'),
-            (125, 'Pilchard', '44th', 'OmniBank'),
-            (126, 'Pilchard', '60th', 'OmniBank'),
-            (127, 'Pine', '42nd', 'OmniBank'),
-            (128, 'Pine', '44th', 'OmniBank'),
-            (129, 'Pyrites', '11th', 'OmniBank'),
-            (130, 'Pyrites', '24th', 'OmniBank'),
-            (131, 'Pyrites', '90th', 'OmniBank'),
-            (132, 'Quail', '10th', 'OmniBank'),
-            (133, 'Quail', '12th', 'OmniBank'),
-            (134, 'Quail', '18th', 'OmniBank'),
-            (135, 'Quail', '26th', 'OmniBank'),
-            (136, 'Quail', '36th', 'OmniBank'),
-            (137, 'Quail', '41st', 'OmniBank'),
-            (138, 'Quail', '58th', 'OmniBank'),
-            (139, 'Quail', '74th', 'OmniBank'),
-            (140, 'Qualms', '28th', 'OmniBank'),
-            (141, 'Qualms', '57th', 'OmniBank'),
-            (142, 'Qualms', '75th', 'OmniBank'),
-            (143, 'Quartz', '75th', 'OmniBank'),
-            (144, 'Quince', '48th', 'OmniBank'),
-            (145, 'Quince', '61st', 'OmniBank'),
-            (146, 'Ragweed', '31st', 'OmniBank'),
-            (147, 'Ragweed', '56th', 'OmniBank'),
-            (148, 'Raven', '11th', 'OmniBank'),
-            (149, 'Raven', '15th', 'OmniBank'),
-            (150, 'Raven', '79th', 'OmniBank'),
-            (151, 'Raven', '98th', 'OmniBank'),
-            (152, 'Regret', '70th', 'OmniBank'),
-            (153, 'Ruby', '18th', 'OmniBank'),
-            (154, 'Ruby', '45th', 'OmniBank'),
-            (155, 'Sorrow', '48th', 'OmniBank'),
-            (156, 'Sorrow', '9th', 'OmniBank'),
-            (157, 'Squid', '10th', 'OmniBank'),
-            (158, 'Squid', '24th', 'OmniBank'),
-            (159, 'Steel', '31st', 'OmniBank'),
-            (160, 'Steel', '64th', 'OmniBank'),
-            (161, 'Steel', '7th', 'OmniBank'),
-            (162, 'Sycamore', '16th', 'OmniBank'),
-            (163, 'Tapir', '11th', 'OmniBank'),
-            (164, 'Tapir', '41st', 'OmniBank'),
-            (165, 'Tapir', 'NCL', 'OmniBank'),
-            (166, 'Teasel', '60th', 'OmniBank'),
-            (167, 'Teasel', '66th', 'OmniBank'),
-            (168, 'Teasel', '92nd', 'OmniBank'),
-            (169, 'Torment', '23rd', 'OmniBank'),
-            (170, 'Torment', '28th', 'OmniBank'),
-            (171, 'Torment', '31st', 'OmniBank'),
-            (172, 'Umbrella', '20th', 'OmniBank'),
-            (173, 'Umbrella', '80th', 'OmniBank'),
-            (174, 'Unctuous', '23rd', 'OmniBank'),
-            (175, 'Unctuous', '43rd', 'OmniBank'),
-            (176, 'Unicorn', '11th', 'OmniBank'),
-            (177, 'Unicorn', '78th', 'OmniBank'),
-            (178, 'Uranium', '1st', 'OmniBank'),
-            (179, 'Uranium', '48th', 'OmniBank'),
-            (180, 'Uranium', '93rd', 'OmniBank'),
-            (181, 'Uranium', '97th', 'OmniBank'),
-            (182, 'Vauxite', '68th', 'OmniBank'),
-            (183, 'Vauxite', '91st', 'OmniBank'),
-            (184, 'Vexation', '24th', 'OmniBank'),
-            (185, 'Vulture', '43rd', 'OmniBank'),
-            (186, 'Vulture', '82nd', 'OmniBank'),
-            (187, 'WCL', '77th', 'OmniBank'),
-            (188, 'Willow', '84th', 'OmniBank'),
-            (189, 'Woe', '44th', 'OmniBank'),
-            (190, 'Woe', '85th', 'OmniBank'),
-            (191, 'Yak', '45th', 'OmniBank'),
-            (192, 'Yak', '82nd', 'OmniBank'),
-            (193, 'Yak', '94th', 'OmniBank'),
-            (194, 'Yearning', '75th', 'OmniBank'),
-            (195, 'Yearning', '93rd', 'OmniBank'),
-            (196, 'Yew', '4th', 'OmniBank'),
-            (197, 'Zebra', '61st', 'OmniBank'),
-            (198, 'Zelkova', '23rd', 'OmniBank'),
-            (199, 'Zelkova', '73rd', 'OmniBank'),
-            (200, 'Zinc', '74th', 'OmniBank')
+            (1,'Aardvark','82nd','OmniBank'),
+            (2,'Alder','40th','OmniBank'),
+             (3,'Alder','80th','OmniBank'),
+             (4,'Amethyst','16th','OmniBank'),
+             (5,'Amethyst','37th','OmniBank'),
+             (6,'Amethyst','99th','OmniBank'),
+             (7,'Anguish','30th','OmniBank'),
+             (8,'Anguish','73rd','OmniBank'),
+             (9,'Anguish','91st','OmniBank'),
+             (10,'Beech','26th','OmniBank'),
+             (11,'Beech','39th','OmniBank'),
+             (12,'Beryl','28th','OmniBank'),
+             (13,'Beryl','40th','OmniBank'),
+             (14,'Beryl','65th','OmniBank'),
+             (15,'Beryl','72nd','OmniBank'),
+             (16,'Bleak','14th','OmniBank'),
+             (17,'Buzzard','13th','OmniBank'),
+             (18,'Cedar','1st','OmniBank'),
+             (19,'Cedar','52nd','OmniBank'),
+             (20,'Cedar','80th','OmniBank'),
+             (21,'Chagrin','23rd','OmniBank'),
+             (22,'Chagrin','39th','OmniBank'),
+             (23,'Cobalt','46th','OmniBank'),
+             (24,'Cobalt','81st','OmniBank'),
+             (25,'Cobalt','88th','OmniBank'),
+             (26,'Cormorant','93rd','OmniBank'),
+             (27,'Despair','1st','OmniBank'),
+             (28,'Despair','75th','OmniBank'),
+             (29,'Dogwood','4th','OmniBank'),
+             (30,'Duck','37th','OmniBank'),
+             (31,'Duck','77th','OmniBank'),
+             (32,'Eagle','64th','OmniBank'),
+             (33,'Eagle','89th','OmniBank'),
+             (34,'Elm','98th','OmniBank'),
+             (35,'Emerald','19th','OmniBank'),
+             (36,'Emerald','90th','OmniBank'),
+             (37,'Emerald','99th','OmniBank'),
+             (38,'Ennui','20th','OmniBank'),
+             (39,'Ennui','78th','OmniBank'),
+             (40,'Fear','15th','OmniBank'),
+             (41,'Ferret','32nd','OmniBank'),
+             (42,'Ferret','90th','OmniBank'),
+             (43,'Fir','2nd','OmniBank'),
+             (44,'Flint','37th','OmniBank'),
+             (45,'Flint','45th','OmniBank'),
+             (46,'Flint','47th','OmniBank'),
+             (47,'Flint','5th','OmniBank'),
+             (48,'Gloom','34th','OmniBank'),
+             (49,'Gloom','71st','OmniBank'),
+             (50,'Gloom','89th','OmniBank'),
+             (51,'Gloom','90th','OmniBank'),
+             (52,'Haddock','46th','OmniBank'),
+             (53,'Haddock','52nd','OmniBank'),
+             (54,'Haddock','67th','OmniBank'),
+             (55,'Haddock','74th','OmniBank'),
+             (56,'Haddock','88th','OmniBank'),
+             (57,'Hessite','39th','OmniBank'),
+             (58,'Hessite','76th','OmniBank'),
+             (59,'Holly','96th','OmniBank'),
+             (60,'Horror','49th','OmniBank'),
+             (61,'Horror','59th','OmniBank'),
+             (62,'Ire','31st','OmniBank'),
+             (63,'Ire','42nd','OmniBank'),
+             (64,'Ire','53rd','OmniBank'),
+             (65,'Ire','97th','OmniBank'),
+             (66,'Ivory','5th','OmniBank'),
+             (67,'Ivory','71st','OmniBank'),
+             (68,'Ivy','70th','OmniBank'),
+             (69,'Ivy','79th','OmniBank'),
+             (70,'Ivy','NCL','OmniBank'),
+             (71,'Jackal','43rd','OmniBank'),
+             (72,'Jaded','25th','OmniBank'),
+             (73,'Jaded','48th','OmniBank'),
+             (74,'Jaded','71st','OmniBank'),
+             (75,'Juniper','16th','OmniBank'),
+             (76,'Juniper','20th','OmniBank'),
+             (77,'Juniper','98th','OmniBank'),
+             (78,'Knotweed','15th','OmniBank'),
+             (79,'Knotweed','29th','OmniBank'),
+             (80,'Kraken','13th','OmniBank'),
+             (81,'Kraken','18th','OmniBank'),
+             (82,'Kraken','34th','OmniBank'),
+             (83,'Kraken','3rd','OmniBank'),
+             (84,'Kraken','45th','OmniBank'),
+             (85,'Kraken','48th','OmniBank'),
+             (86,'Kraken','7th','OmniBank'),
+             (87,'Kyanite','40th','OmniBank'),
+             (88,'Kyanite','6th','OmniBank'),
+             (89,'Larch','33rd','OmniBank'),
+             (90,'Larch','7th','OmniBank'),
+             (91,'Larch','91st','OmniBank'),
+             (92,'Lead','11th','OmniBank'),
+             (93,'Lead','21st','OmniBank'),
+             (94,'Lead','88th','OmniBank'),
+             (95,'Lion','80th','OmniBank'),
+             (96,'Lonely','93rd','OmniBank'),
+             (97,'Malachite','11th','OmniBank'),
+             (98,'Malachite','32nd','OmniBank'),
+             (99,'Malachite','87th','OmniBank'),
+             (100,'Malaise','36th','OmniBank'),
+             (101,'Malaise','4th','OmniBank'),
+             (102,'Malaise','50th','OmniBank'),
+             (103,'Maple','34th','OmniBank'),
+             (104,'Maple','84th','OmniBank'),
+             (105,'Maple','85th','OmniBank'),
+             (106,'Mongoose','78th','OmniBank'),
+             (107,'Mongoose','79th','OmniBank'),
+             (108,'Mongoose','91st','OmniBank'),
+             (109,'Nervous','10th','OmniBank'),
+             (110,'Nettle','37th','OmniBank'),
+             (111,'Nettle','67th','OmniBank'),
+             (112,'Nickel','93rd','OmniBank'),
+             (113,'Obsidian','36th','OmniBank'),
+             (114,'Obsidian','79th','OmniBank'),
+             (115,'Octopus','27th','OmniBank'),
+             (116,'Octopus','71st','OmniBank'),
+             (117,'Octopus','77th','OmniBank'),
+             (118,'Olive','99th','OmniBank'),
+             (119,'Olive','9th','OmniBank'),
+             (120,'Oppression','2nd','OmniBank'),
+             (121,'Oppression','89th','OmniBank'),
+             (122,'Pessimism','19th','OmniBank'),
+             (123,'Pessimism','44th','OmniBank'),
+             (124,'Pessimism','87th','OmniBank'),
+             (125,'Pilchard','44th','OmniBank'),
+             (126,'Pilchard','60th','OmniBank'),
+             (127,'Pine','42nd','OmniBank'),
+             (128,'Pine','44th','OmniBank'),
+             (129,'Pyrites','11th','OmniBank'),
+             (130,'Pyrites','24th','OmniBank'),
+             (131,'Pyrites','90th','OmniBank'),
+             (132,'Quail','10th','OmniBank'),
+             (133,'Quail','12th','OmniBank'),
+             (134,'Quail','18th','OmniBank'),
+             (135,'Quail','26th','OmniBank'),
+             (136,'Quail','36th','OmniBank'),
+             (137,'Quail','41st','OmniBank'),
+             (138,'Quail','58th','OmniBank'),
+             (139,'Quail','74th','OmniBank'),
+             (140,'Qualms','28th','OmniBank'),
+             (141,'Qualms','57th','OmniBank'),
+             (142,'Qualms','75th','OmniBank'),
+             (143,'Quartz','75th','OmniBank'),
+             (144,'Quince','48th','OmniBank'),
+             (145,'Quince','61st','OmniBank'),
+             (146,'Ragweed','31st','OmniBank'),
+             (147,'Ragweed','56th','OmniBank'),
+             (148,'Raven','11th','OmniBank'),
+             (149,'Raven','15th','OmniBank'),
+             (150,'Raven','79th','OmniBank'),
+             (151,'Raven','98th','OmniBank'),
+             (152,'Regret','70th','OmniBank'),
+             (153,'Ruby','18th','OmniBank'),
+             (154,'Ruby','45th','OmniBank'),
+             (155,'Sorrow','48th','OmniBank'),
+             (156,'Sorrow','9th','OmniBank'),
+             (157,'Squid','10th','OmniBank'),
+             (158,'Squid','24th','OmniBank'),
+             (159,'Steel','31st','OmniBank'),
+             (160,'Steel','64th','OmniBank'),
+             (161,'Steel','7th','OmniBank'),
+             (162,'Sycamore','16th','OmniBank'),
+             (163,'Tapir','11th','OmniBank'),
+             (164,'Tapir','41st','OmniBank'),
+             (165,'Tapir','NCL','OmniBank'),
+             (166,'Teasel','60th','OmniBank'),
+             (167,'Teasel','66th','OmniBank'),
+             (168,'Teasel','92nd','OmniBank'),
+             (169,'Torment','23rd','OmniBank'),
+             (170,'Torment','28th','OmniBank'),
+             (171,'Torment','31st','OmniBank'),
+             (172,'Umbrella','20th','OmniBank'),
+             (173,'Umbrella','80th','OmniBank'),
+             (174,'Unctuous','23rd','OmniBank'),
+             (175,'Unctuous','43rd','OmniBank'),
+             (176,'Unicorn','11th','OmniBank'),
+             (177,'Unicorn','78th','OmniBank'),
+             (178,'Uranium','1st','OmniBank'),
+             (179,'Uranium','48th','OmniBank'),
+             (180,'Uranium','93rd','OmniBank'),
+             (181,'Uranium','97th','OmniBank'),
+             (182,'Vauxite','68th','OmniBank'),
+             (183,'Vauxite','91st','OmniBank'),
+             (184,'Vexation','24th','OmniBank'),
+             (185,'Vulture','43rd','OmniBank'),
+             (186,'Vulture','82nd','OmniBank'),
+             (187,'WCL','77th','OmniBank'),
+             (188,'Willow','84th','OmniBank'),
+             (189,'Woe','44th','OmniBank'),
+             (190,'Woe','85th','OmniBank'),
+             (191,'Yak','45th','OmniBank'),
+             (192,'Yak','82nd','OmniBank'),
+             (193,'Yak','94th','OmniBank'),
+             (194,'Yearning','75th','OmniBank'),
+             (195,'Yearning','93rd','OmniBank'),
+             (196,'Yew','4th','OmniBank'),
+             (197,'Zebra','61st','OmniBank'),
+             (198,'Zelkova','23rd','OmniBank'),
+             (199,'Zelkova','73rd','OmniBank'),
+             (200,'Zinc','74th','OmniBank')
         ]),
         ("REPLACE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
             (1, 'bank', '#0000ff'),
@@ -1056,31 +996,25 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ("Default", "DIV.spacey", "text-align:center; width:450px; padding-top:10px;"),
             ("Default", ".head", "text-align:center; font-weight:bold;"),
             ("Default", "TD.cityblock", "text-align:center; background-color:#0000dd;"),
-            ("Default", "TD.intersect",
-             "text-align:center; background-color:#444444; width:150px; height:100px; position:relative;"),
-            ("Default", "TD.street",
-             "text-align:center; background-color:#444444; width:150px; height:100px; position:relative;"),
-            ("Default", "TD.city",
-             "text-align:center; border:solid white 1px; width:150px; height:100px; position:relative;"),
+            ("Default", "TD.intersect","text-align:center; background-color:#444444; width:150px; height:100px; position:relative;"),
+            ("Default", "TD.street","text-align:center; background-color:#444444; width:150px; height:100px; position:relative;"),
+            ("Default", "TD.city","text-align:center; border:solid white 1px; width:150px; height:100px; position:relative;"),
             ("Default", "SPAN.intersect", "background-color:#008800; border:solid white 1px; padding:2px;"),
             ("Default", "SPAN.transit", "background-color:#880000; border:solid white 1px; padding:2px;"),
-            ("Default", "SPAN.arena",
-             "background-color:#ff0000; border:solid white 1px; padding:2px; font-weight:bold; color:white;"),
+            ("Default", "SPAN.arena","background-color:#ff0000; border:solid white 1px; padding:2px; font-weight:bold; color:white;"),
             ("Default", "SPAN.pub", "background-color:#887700; border:solid white 1px; padding:2px;"),
             ("Default", "SPAN.bank", "background-color:#0000ff; border:solid white 1px; padding:2px;"),
             ("Default", "SPAN.shop", "background-color:#004488; border:solid white 1px; padding:2px;"),
             ("Default", "SPAN.grave", "background-color:#888888; border:solid white 1px; color:#222222; padding:2px;"),
             ("Default", "SPAN.pk", "background-color:#000066; border:solid white 1px; color:#ffff00; padding:2px;"),
-            ("Default", "SPAN.lair,SPAN.alchemy",
-             "background-color:#660022; border:solid white 1px; color:#cccccc; padding:2px;"),
+            ("Default", "SPAN.lair,SPAN.alchemy","background-color:#660022; border:solid white 1px; color:#cccccc; padding:2px;"),
             ("Default", "SPAN.sever,SPAN.bind", "border:solid red 1px; color:red; padding:2px;"),
             ("Default", "SPAN.vhuman", "color:green; background-color:black;"),
             ("Default", "SPAN.phuman", "color:cyan; background-color:black; font-weight:bold;"),
             ("Default", "SPAN.whuman", "color:brown; background-color:black; font-weight:bold;"),
             ("Default", "SPAN.object", "color:yellow;"),
             ("Default", "UL.possessions", "margin-top:0px; margin-bottom:3px; font-size:small;"),
-            ("Default", "#mo",
-             "display:none; position:absolute; left:0; top:0; width:300; padding:2px; font:x-small Verdana,Sans-serif; color:black; background-color:yellow; border: solid black 1px;"),
+            ("Default", "#mo","display:none; position:absolute; left:0; top:0; width:300; padding:2px; font:x-small Verdana,Sans-serif; color:black; background-color:yellow; border: solid black 1px;"),
             ("Default", "TABLE.textad", "background-color:#002211; border:solid #668877 1px;"),
             ("Default", "TABLE.hiscore", "border:solid #668877 1px;"),
             ("Default", "TABLE.hiscore tr:first-child", "background-color: #004400;"),
@@ -1089,8 +1023,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ("Default", "TD.text", "font-size:7pt; text-align:center; padding:0px 8px 0px 8px;"),
             ("Default", "TD.link", "font-size:6pt; text-align:right; color:#999999; padding:0px 2px 0px 1px;"),
             ("Default", "TABLE.at", "padding:5px; width:100%;"),
-            ("Default", "TABLE.at TD",
-             "background-color:#333333; border:solid white 1px; padding:3px; padding-left:5px;"),
+            ("Default", "TABLE.at TD","background-color:#333333; border:solid white 1px; padding:3px; padding-left:5px;"),
             ("Default", "TABLE.at TD.ahead", "font-weight:bold; padding-left:2px;"),
             ("Default", "DIV.asubhead", "font-weight:normal; font-size:80%;"),
             ("Default", "DIV.sb", "overflow:auto; height:80px; border:solid #bbbbbb 1px; background-color:#555533;"),
@@ -1102,113 +1035,72 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ("Default", ".pansy", "color:#ff8888;"),
             ("Default", ".cloak", "color:#00ffff;"),
             ("Default", ".rich", "color:#ffff44;"),
-            ("Default", ".mh",
-             "border:none; background-color:transparent; text-decoration:underline; color:white; padding:0px; cursor:hand;")
+            ("Default", ".mh","border:none; background-color:transparent; text-decoration:underline; color:white; padding:0px; cursor:hand;")
         ]),
         ("INSERT OR IGNORE INTO guilds (ID, Name, `Column`, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
-            (1, 'Allurists Guild 1', 'NA', 'NA', ''),
-            (2, 'Allurists Guild 2', 'NA', 'NA', ''),
-            (3, 'Allurists Guild 3', 'NA', 'NA', ''),
-            (4, 'Empaths Guild 1', 'NA', 'NA', ''),
-            (5, 'Empaths Guild 2', 'NA', 'NA', ''),
-            (6, 'Empaths Guild 3', 'NA', 'NA', ''),
-            (7, 'Immolators Guild 1', 'NA', 'NA', ''),
-            (8, 'Immolators Guild 2', 'NA', 'NA', ''),
-            (9, 'Immolators Guild 3', 'NA', 'NA', ''),
-            (10, 'Thieves Guild 1', 'NA', 'NA', ''),
-            (11, 'Thieves Guild 2', 'NA', 'NA', ''),
-            (12, 'Thieves Guild 3', 'NA', 'NA', ''),
-            (13, 'Travellers Guild 1', 'NA', 'NA', ''),
-            (14, 'Travellers Guild 2', 'NA', 'NA', ''),
-            (15, 'Travellers Guild 3', 'NA', 'NA', ''),
-            (16, 'Peacekeepers Mission 1', 'Emerald', '67th', ''),
-            (17, 'Peacekeepers Mission 2', 'Unicorn', '33rd', ''),
-            (18, 'Peacekeepers Mission 3', 'Emerald', '33rd', '')
+            (1,'Allurists Guild 1','NA','NA',''),
+            (2,'Allurists Guild 2','NA','NA',''),
+            (3,'Allurists Guild 3','NA','NA',''),
+            (4,'Empaths Guild 1','NA','NA',''),
+            (5,'Empaths Guild 2','NA','NA',''),
+            (6,'Empaths Guild 3','NA','NA',''),
+            (7,'Immolators Guild 1','NA','NA',''),
+            (8,'Immolators Guild 2','NA','NA',''),
+            (9,'Immolators Guild 3','NA','NA',''),
+            (10,'Thieves Guild 1','NA','NA',''),
+            (11,'Thieves Guild 2','NA','NA',''),
+            (12,'Thieves Guild 3','NA','NA',''),
+            (13,'Travellers Guild 1','NA','NA',''),
+            (14,'Travellers Guild 2','NA','NA',''),
+            (15,'Travellers Guild 3','NA','NA',''),
+            (16,'Peacekeepers Mission 1','Emerald','67th',''),
+            (17,'Peacekeepers Mission 2','Unicorn','33rd',''),
+            (18,'Peacekeepers Mission 3','Emerald','33rd','')
         ]),
         ("REPLACE INTO placesofinterest (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
-            (1, 'Battle Arena', 'Zelkova', '52nd'),
-            (2, 'Hall of Binding', 'Vervain', '40th'),
-            (3, 'Hall of Severance', 'Walrus', '40th'),
-            (4, 'Graveyard', 'Larch', '50th'),
-            (5, 'Cloister of Secrets', 'Gloom', '1st'),
-            (6, 'Eternal Aubade of Mystical Treasures', 'Zelkova', '47th'),
-            (7, 'Kindred Hospital', 'Woe', '13th')
+            (1,'Battle Arena','Zelkova','52nd'),
+            (2,'Hall of Binding','Vervain','40th'),
+            (3,'Hall of Severance','Walrus','40th'),
+            (4,'Graveyard','Larch','50th'),
+            (5,'Cloister of Secrets','Gloom','1st'),
+            (6,'Eternal Aubade of Mystical Treasures','Zelkova','47th'),
+            (7,'Kindred Hospital','Woe','13th')
         ]),
         ("REPLACE INTO powers (power_id, name, guild, cost, quest_info, skill_info) VALUES (?, ?, ?, ?, ?, ?)", [
-            (1, 'Battle Cloak', 'Any Peacekeeper''s Mission', 2000, 'None',
-             'Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
-            (2, 'Celerity 1', 'Travellers Guild 1', 4000, 'Bring items to 3 pubs, no transits but you can teleport.',
-             'AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
-            (3, 'Celerity 2', 'Travellers Guild 2', 8000, 'Bring items to 6 pubs, no transits but you can teleport.',
-             'AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
-            (4, 'Celerity 3', 'Travellers Guild 3', 17500, 'Bring items to 12 pubs, no transits but you can teleport.',
-             'AP regeneration time reduced by 5 minutes per AP (15 minutes/AP).'),
-            (5, 'Charisma 1', 'Allurists Guild 1', 1000,
-             'Convince 3 vampires to visit a specific pub and say "VampName sent me".', 'Shop prices reduced by 3%.'),
-            (6, 'Charisma 2', 'Allurists Guild 2', 3000,
-             'Convince 6 vampires to visit a specific pub and say "VampName sent me".', 'Shop prices reduced by 7%.'),
-            (7, 'Charisma 3', 'Allurists Guild 3', 5000,
-             'Convince 9 vampires to visit a specific pub and say "VampName sent me".',
-             'Shop prices reduced by 10%, with an additional coin discount on each item.'),
-            (8, 'Locate 1', 'Empaths Guild 1', 1500,
-             'Visit specific locations, say "Check-Point", and drain 10 BP per location.',
-             'You can now determine the distance to a specific vampire.'),
-            (9, 'Locate 2', 'Empaths Guild 2', 4000,
-             'Visit specific locations, say "Check-Point", and drain 15 BP per location.',
-             'Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
-            (10, 'Locate 3', 'Empaths Guild 3', 15000,
-             'Visit specific locations, say "Check-Point", and drain 25 BP per location.',
-             'Locate 3 reveals the exact street intersection of the vampire.'),
-            (11, 'Neutrality 1', 'Peacekeeper''s Mission 1', 10000, 'None',
-             'Neutrality designates a vampire as "non-violent", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
-            (12, 'Neutrality 2', 'Peacekeeper''s Mission 2', 10000, 'Additional 500 BP cost at this level.',
-             'Continues non-violent status with Peacekeeper protection.'),
-            (13, 'Neutrality 3', 'Peacekeeper''s Mission 3', 10000, 'Additional 1000 BP cost at this level.',
-             'Non-violent status continues, and Vial of Holy Water causes only 1 BP of damage.'),
-            (14, 'Perception 1', 'Allurists Guild', 7500, 'Hunt and kill 1 Vampire Hunter within 10 days.',
-             'Allows detection of hunters and potentially coin sounds in vampire pockets.'),
-            (15, 'Perception 2', 'Allurists Guild', 15000, 'Hunt and kill 3 Vampire Hunters within 10 days.',
-             'Detects Paladins and nearby hunters with concentration.'),
-            (16, 'Second Sight', 'Donation Required', '$5', 'Visit donation page for $5 or find a sponsor.',
-             'Grants a bonus power of choice from a list, including Celerity-1, Stamina-1, Thievery-1, Shadows-1, Telepathy-1, Charisma-1, or Locate-1.'),
-            (17, 'Shadows 1', 'Thieves Guild 1', 1000, 'None',
-             'Allows you to fall into shadows after 3 days of inactivity.'),
-            (18, 'Shadows 2', 'Thieves Guild 2', 2000, 'None',
-             'Allows you to fall into shadows after 2 days of inactivity.'),
-            (19, 'Shadows 3', 'Thieves Guild 3', 4000, 'None',
-             'Allows you to fall into shadows after 1 day of inactivity.'),
-            (20, 'Stamina 1', 'Immolators Guild 1', 1000, 'Walk to a specified location, say code word, lose 500 BP.',
-             'Increases max AP by 10 and adds resistance to scrolls of turning (25% chance).'),
-            (21, 'Stamina 2', 'Immolators Guild 2', 2500, 'Walk to a specified location, say code word, lose 1000 BP.',
-             'Increases max AP by 10 and adds resistance to scrolls of turning (50% chance).'),
-            (22, 'Stamina 3', 'Immolators Guild 3', 5000, 'Walk to a specified location, say code word, lose 1500 BP.',
-             'Increases max AP by 10 and adds resistance to scrolls of turning (75% chance).'),
-            (23, 'Suction 1', 'Immolators Guild (ALL)', 7500,
-             'Bite 20 vampires with higher BP, spit blood into wineskin.',
-             'Gain ability to drink 2 pints from vampires and up to 4 from humans.'),
-            (24, 'Suction 2', 'Immolators Guild (ALL)', 15000,
-             'Bite 20 vampires with higher BP, spit blood into wineskin.',
-             'Gain ability to drink 4 pints from vampires and up to 10 from humans.'),
-            (25, 'Surprise', 'Empaths Guild (ALL)', 20000, 'None',
-             'Allows access to overcrowded squares (blue squares), but entry may still be limited if it''s too full.'),
-            (26, 'Telepathy 1', 'Travellers Guild 1', 2500, 'None',
-             'Allows sending messages to vampires from a distance with an AP cost of 10 for unrelated vampires and 5 for sire or childer.'),
-            (27, 'Telepathy 2', 'Travellers Guild 2', 5000, 'None',
-             'Allows sending messages to vampires from a distance with an AP cost of 6 for unrelated vampires and 3 for sire or childer.'),
-            (28, 'Telepathy 3', 'Travellers Guild 3', 10000, 'None',
-             'Allows sending messages to vampires from a distance with an AP cost of 2 for unrelated vampires and 1 for sire or childer.'),
-            (29, 'Thievery 1', 'Thievery Guild 1', 2000, 'None',
-             'Adds a (rob) option to vampires, allowing you to rob up to 25% of their coins.'),
-            (30, 'Thievery 2', 'Thievery Guild 2', 5000, 'None',
-             'Improves the (rob) option, allowing you to rob up to 50% of a vampire''s coins.'),
-            (31, 'Thievery 3', 'Thievery Guild 3', 10000, 'None',
-             'Improves the (rob) option further, allowing you to rob up to 75% of a vampire''s coins.'),
-            (32, 'Thrift 1', 'Allurists Guild 1', 1000, 'Buy 1 Perfect Red Rose from a specified shop.',
-             '5% chance to keep a used item/scroll instead of it burning up.'),
-            (33, 'Thrift 2', 'Allurists Guild 2', 3000, 'Buy 1 Perfect Red Rose from 3 specified shops.',
-             '10% chance to keep a used item/scroll instead of it burning up.'),
-            (34, 'Thrift 3', 'Allurists Guild 3', 10000, 'Buy 1 Perfect Red Rose from 6 specified shops.',
-             '15% chance to keep a used item/scroll instead of it burning up.')
+            (1,'Battle Cloak','Any Peacekeeper''s Mission',2000,'None','Buying a cloak from one of the peace missions will prevent you from attacking or being attacked by non-cloaked vampires. The cloak enforces a resting rule which limits you to bite only humans after being zeroed until you reach 250 BP. Vampires cannot bite or attack you during this time. You may still bite and rob non-cloaked vampires, as they can do the same to you. Cloaked vampires appear blue, and if zeroed, they turn pink.'),
+            (2,'Celerity 1','Travellers Guild 1',4000,'Bring items to 3 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (25 minutes/AP).'),
+            (3,'Celerity 2','Travellers Guild 2',8000,'Bring items to 6 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (20 minutes/AP).'),
+            (4,'Celerity 3','Travellers Guild 3',17500,'Bring items to 12 pubs, no transits but you can teleport.','AP regeneration time reduced by 5 minutes per AP (15 minutes/AP).'),
+            (5,'Charisma 1','Allurists Guild 1',1000,'Convince 3 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 3%.'),
+            (6,'Charisma 2','Allurists Guild 2',3000,'Convince 6 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 7%.'),
+            (7,'Charisma 3','Allurists Guild 3',5000,'Convince 9 vampires to visit a specific pub and say "VampName sent me".','Shop prices reduced by 10%, with an additional coin discount on each item.'),
+            (8,'Locate 1','Empaths Guild 1',1500,'Visit specific locations, say "Check-Point", and drain 10 BP per location.','You can now determine the distance to a specific vampire.'),
+            (9,'Locate 2','Empaths Guild 2',4000,'Visit specific locations, say "Check-Point", and drain 15 BP per location.','Locate 2 adds directional tracking and some advantages for locating close vampires in the shadows.'),
+            (10,'Locate 3','Empaths Guild 3',15000,'Visit specific locations, say "Check-Point", and drain 25 BP per location.','Locate 3 reveals the exact street intersection of the vampire.'),
+            (11,'Neutrality 1','Peacekeeper''s Mission 1',10000,'None','Neutrality designates a vampire as "non-violent", restricting weapon use but granting Peacekeeper protection. Can be removed at the same place and cost.'),
+            (12,'Neutrality 2','Peacekeeper''s Mission 2',10000,'Additional 500 BP cost at this level.','Continues non-violent status with Peacekeeper protection.'),
+            (13,'Neutrality 3','Peacekeeper''s Mission 3',10000,'Additional 1000 BP cost at this level.','Non-violent status continues, and Vial of Holy Water causes only 1 BP of damage.'),
+            (14,'Perception 1','Allurists Guild',7500,'Hunt and kill 1 Vampire Hunter within 10 days.','Allows detection of hunters and potentially coin sounds in vampire pockets.'),
+            (15,'Perception 2','Allurists Guild',15000,'Hunt and kill 3 Vampire Hunters within 10 days.','Detects Paladins and nearby hunters with concentration.'),
+            (16,'Second Sight','Donation Required','$5','Visit donation page for $5 or find a sponsor.','Grants a bonus power of choice from a list, including Celerity-1, Stamina-1, Thievery-1, Shadows-1, Telepathy-1, Charisma-1, or Locate-1.'),
+            (17,'Shadows 1','Thieves Guild 1',1000,'None','Allows you to fall into shadows after 3 days of inactivity.'),
+            (18,'Shadows 2','Thieves Guild 2',2000,'None','Allows you to fall into shadows after 2 days of inactivity.'),
+            (19,'Shadows 3','Thieves Guild 3',4000,'None','Allows you to fall into shadows after 1 day of inactivity.'),
+            (20,'Stamina 1','Immolators Guild 1',1000,'Walk to a specified location, say code word, lose 500 BP.','Increases max AP by 10 and adds resistance to scrolls of turning (25% chance).'),
+            (21,'Stamina 2','Immolators Guild 2',2500,'Walk to a specified location, say code word, lose 1000 BP.','Increases max AP by 10 and adds resistance to scrolls of turning (50% chance).'),
+            (22,'Stamina 3','Immolators Guild 3',5000,'Walk to a specified location, say code word, lose 1500 BP.','Increases max AP by 10 and adds resistance to scrolls of turning (75% chance).'),
+            (23,'Suction 1','Immolators Guild (ALL)',7500,'Bite 20 vampires with higher BP, spit blood into wineskin.','Gain ability to drink 2 pints from vampires and up to 4 from humans.'),
+            (24,'Suction 2','Immolators Guild (ALL)',15000,'Bite 20 vampires with higher BP, spit blood into wineskin.','Gain ability to drink 4 pints from vampires and up to 10 from humans.'),
+            (25,'Surprise','Empaths Guild (ALL)',20000,'None','Allows access to overcrowded squares (blue squares), but entry may still be limited if it''s too full.'),
+            (26,'Telepathy 1','Travellers Guild 1',2500,'None','Allows sending messages to vampires from a distance with an AP cost of 10 for unrelated vampires and 5 for sire or childer.'),
+            (27,'Telepathy 2','Travellers Guild 2',5000,'None','Allows sending messages to vampires from a distance with an AP cost of 6 for unrelated vampires and 3 for sire or childer.'),
+            (28,'Telepathy 3','Travellers Guild 3',10000,'None','Allows sending messages to vampires from a distance with an AP cost of 2 for unrelated vampires and 1 for sire or childer.'),
+            (29,'Thievery 1','Thievery Guild 1',2000,'None','Adds a (rob) option to vampires, allowing you to rob up to 25% of their coins.'),
+            (30,'Thievery 2','Thievery Guild 2',5000,'None','Improves the (rob) option, allowing you to rob up to 50% of a vampire''s coins.'),
+            (31,'Thievery 3','Thievery Guild 3',10000,'None','Improves the (rob) option further, allowing you to rob up to 75% of a vampire''s coins.'),
+            (32,'Thrift 1','Allurists Guild 1',1000,'Buy 1 Perfect Red Rose from a specified shop.','5% chance to keep a used item/scroll instead of it burning up.'),
+            (33,'Thrift 2','Allurists Guild 2',3000,'Buy 1 Perfect Red Rose from 3 specified shops.','10% chance to keep a used item/scroll instead of it burning up.'),
+            (34,'Thrift 3','Allurists Guild 3',10000,'Buy 1 Perfect Red Rose from 6 specified shops.','15% chance to keep a used item/scroll instead of it burning up.')
         ]),
         ("REPLACE INTO `rows` (ID, Name, Coordinate) VALUES (?, ?, ?)", [
             ('1', 'NCL', '0'),
@@ -1314,384 +1206,383 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             ('101', '99th', '198'),
             ('102', '100th', '200')
         ]),
-        ("REPLACE INTO shop_items (id, shop_name, item_name, base_price, charisma_level_1, charisma_level_2, charisma_level_3) VALUES (?, ?, ?, ?, ?, ?, ?)",
-         [
-             (1, 'Discount Magic', 'Perfect Dandelion', 35, 33, 32, 31),
-             (2, 'Discount Magic', 'Sprint Potion', 105, 101, 97, 94),
-             (3, 'Discount Magic', 'Perfect Red Rose', 350, 339, 325, 315),
-             (4, 'Discount Magic', 'Scroll of Turning', 350, 339, 325, 315),
-             (5, 'Discount Magic', 'Scroll of Succour', 525, 509, 488, 472),
-             (6, 'Discount Magic', 'Scroll of Bondage', 637, 617, 592, 573),
-             (7, 'Discount Magic', 'Garlic Spray', 700, 678, 651, 630),
-             (8, 'Discount Magic', 'Scroll of Displacement', 700, 678, 651, 630),
-             (9, 'Discount Magic', 'Perfect Black Orchid', 795, 772, 740, 716),
-             (10, 'Discount Magic', 'Scroll of Summoning', 1050, 1018, 976, 945),
-             (11, 'Discount Magic', 'Vial of Holy Water', 1400, 1357, 1302, 1260),
-             (12, 'Discount Magic', 'Wooden Stake', 2800, 2715, 2604, 2520),
-             (13, 'Discount Magic', 'Scroll of Accounting', 3500, 3394, 3255, 3150),
-             (14, 'Discount Magic', 'Scroll of Teleportation', 3500, 3394, 3255, 3150),
-             (15, 'Discount Magic', 'UV Grenade', 3500, 3394, 3255, 3150),
-             (16, 'Discount Magic', 'Ring of Resistance', 14000, 13579, 13020, 12600),
-             (17, 'Discount Magic', 'Diamond Ring', 70000, 67900, 65100, 63000),
-             (18, 'Discount Potions', 'Sprint Potion', 105, 101, 97, 94),
-             (19, 'Discount Potions', 'Garlic Spray', 700, 678, 651, 630),
-             (20, 'Discount Potions', 'Vial of Holy Water', 1400, 1357, 1302, 1260),
-             (21, 'Discount Potions', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (22, 'Discount Potions', 'Necromancer', 25, 25, 25, 25),
-             (23, 'Discount Scrolls', 'Scroll of Turning', 350, 339, 325, 315),
-             (24, 'Discount Scrolls', 'Scroll of Succour', 525, 509, 488, 472),
-             (25, 'Discount Scrolls', 'Scroll of Displacement', 700, 678, 651, 630),
-             (26, 'Discount Scrolls', 'Scroll of Summoning', 1050, 1018, 976, 945),
-             (27, 'Discount Scrolls', 'Scroll of Accounting', 3500, 3394, 3255, 3150),
-             (28, 'Discount Scrolls', 'Scroll of Teleportation', 3500, 3394, 3255, 3150),
-             (29, 'Dark Desires', 'Perfect Dandelion', 50, 48, 46, 45),
-             (30, 'Dark Desires', 'Sprint Potion', 150, 145, 139, 135),
-             (31, 'Dark Desires', 'Perfect Red Rose', 500, 485, 465, 450),
-             (32, 'Dark Desires', 'Scroll of Turning', 500, 485, 465, 450),
-             (33, 'Dark Desires', 'Scroll of Succour', 750, 727, 697, 675),
-             (34, 'Dark Desires', 'Scroll of Bondage', 910, 882, 846, 819),
-             (35, 'Dark Desires', 'Garlic Spray', 1000, 970, 930, 900),
-             (36, 'Dark Desires', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (37, 'Dark Desires', 'Perfect Black Orchid', 1137, 1102, 1057, 1023),
-             (38, 'Dark Desires', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (39, 'Dark Desires', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (40, 'Dark Desires', 'Wooden Stake', 4000, 3880, 3720, 3600),
-             (41, 'Dark Desires', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (42, 'Dark Desires', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (43, 'Dark Desires', 'UV Grenade', 5000, 4850, 4650, 4500),
-             (44, 'Dark Desires', 'Ring of Resistance', 20000, 19400, 18600, 18000),
-             (45, 'Dark Desires', 'Diamond Ring', 100000, 97000, 93000, 90000),
-             (46, 'Interesting Times', 'Perfect Dandelion', 50, 48, 46, 45),
-             (47, 'Interesting Times', 'Sprint Potion', 150, 145, 139, 135),
-             (48, 'Interesting Times', 'Perfect Red Rose', 500, 485, 465, 450),
-             (49, 'Interesting Times', 'Scroll of Turning', 500, 485, 465, 450),
-             (50, 'Interesting Times', 'Scroll of Succour', 750, 727, 697, 675),
-             (51, 'Interesting Times', 'Scroll of Bondage', 910, 882, 846, 819),
-             (52, 'Interesting Times', 'Garlic Spray', 1000, 970, 930, 900),
-             (53, 'Interesting Times', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (54, 'Interesting Times', 'Perfect Black Orchid', 1137, 1102, 1057, 1023),
-             (55, 'Interesting Times', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (56, 'Interesting Times', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (57, 'Interesting Times', 'Wooden Stake', 4000, 3880, 3720, 3600),
-             (58, 'Interesting Times', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (59, 'Interesting Times', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (60, 'Interesting Times', 'UV Grenade', 5000, 4850, 4650, 4500),
-             (61, 'Interesting Times', 'Ring of Resistance', 20000, 19400, 18600, 18000),
-             (62, 'Interesting Times', 'Diamond Ring', 100000, 97000, 93000, 90000),
-             (63, 'Sparks', 'Perfect Dandelion', 50, 48, 46, 45),
-             (64, 'Sparks', 'Sprint Potion', 150, 145, 139, 135),
-             (65, 'Sparks', 'Perfect Red Rose', 500, 485, 465, 450),
-             (66, 'Sparks', 'Scroll of Turning', 500, 485, 465, 450),
-             (67, 'Sparks', 'Scroll of Succour', 750, 727, 697, 675),
-             (68, 'Sparks', 'Scroll of Bondage', 910, 882, 846, 819),
-             (69, 'Sparks', 'Garlic Spray', 1000, 970, 930, 900),
-             (70, 'Sparks', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (71, 'Sparks', 'Perfect Black Orchid', 1137, 1102, 1057, 1023),
-             (72, 'Sparks', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (73, 'Sparks', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (74, 'Sparks', 'Wooden Stake', 4000, 3880, 3720, 3600),
-             (75, 'Sparks', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (76, 'Sparks', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (77, 'Sparks', 'UV Grenade', 5000, 4850, 4650, 4500),
-             (78, 'Sparks', 'Ring of Resistance', 20000, 19400, 18600, 18000),
-             (79, 'Sparks', 'Diamond Ring', 100000, 97000, 93000, 90000),
-             (80, 'The Magic Box', 'Perfect Dandelion', 50, 48, 46, 45),
-             (81, 'The Magic Box', 'Sprint Potion', 150, 145, 139, 135),
-             (82, 'The Magic Box', 'Perfect Red Rose', 500, 485, 465, 450),
-             (83, 'The Magic Box', 'Scroll of Turning', 500, 485, 465, 450),
-             (84, 'The Magic Box', 'Scroll of Succour', 750, 727, 697, 675),
-             (85, 'The Magic Box', 'Scroll of Bondage', 910, 882, 846, 819),
-             (86, 'The Magic Box', 'Garlic Spray', 1000, 970, 930, 900),
-             (87, 'The Magic Box', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (88, 'The Magic Box', 'Perfect Black Orchid', 1137, 1102, 1057, 1023),
-             (89, 'The Magic Box', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (90, 'The Magic Box', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (91, 'The Magic Box', 'Wooden Stake', 4000, 3880, 3720, 3600),
-             (92, 'The Magic Box', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (93, 'The Magic Box', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (94, 'The Magic Box', 'UV Grenade', 5000, 4850, 4650, 4500),
-             (95, 'The Magic Box', 'Ring of Resistance', 20000, 19400, 18600, 18000),
-             (96, 'The Magic Box', 'Diamond Ring', 100000, 97000, 93000, 90000),
-             (97, 'White Light', 'Perfect Dandelion', 50, 48, 46, 45),
-             (98, 'White Light', 'Sprint Potion', 150, 145, 139, 135),
-             (99, 'White Light', 'Perfect Red Rose', 500, 485, 465, 450),
-             (100, 'White Light', 'Scroll of Turning', 500, 485, 465, 450),
-             (101, 'White Light', 'Scroll of Succour', 750, 727, 697, 675),
-             (102, 'White Light', 'Scroll of Bondage', 910, 882, 846, 819),
-             (103, 'White Light', 'Garlic Spray', 1000, 970, 930, 900),
-             (104, 'White Light', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (105, 'White Light', 'Perfect Black Orchid', 1137, 1102, 1057, 1023),
-             (106, 'White Light', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (107, 'White Light', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (108, 'White Light', 'Wooden Stake', 4000, 3880, 3720, 3600),
-             (109, 'White Light', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (110, 'White Light', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (111, 'White Light', 'UV Grenade', 5000, 4850, 4650, 4500),
-             (112, 'White Light', 'Ring of Resistance', 20000, 19400, 18600, 18000),
-             (113, 'White Light', 'Diamond Ring', 100000, 97000, 93000, 90000),
-             (114, 'McPotions', 'Sprint Potion', 150, 145, 139, 135),
-             (115, 'McPotions', 'Garlic Spray', 1000, 970, 930, 900),
-             (116, 'McPotions', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (117, 'McPotions', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (118, 'McPotions', 'Necromancer', 25, 25, 25, 25),
-             (119, 'Potable Potions', 'Sprint Potion', 150, 145, 139, 135),
-             (120, 'Potable Potions', 'Garlic Spray', 1000, 970, 930, 900),
-             (121, 'Potable Potions', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (122, 'Potable Potions', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (123, 'Potable Potions', 'Necromancer', 25, 25, 25, 25),
-             (124, 'Potion Distillery', 'Sprint Potion', 150, 145, 139, 135),
-             (125, 'Potion Distillery', 'Garlic Spray', 1000, 970, 930, 900),
-             (126, 'Potion Distillery', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (127, 'Potion Distillery', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (128, 'Potion Distillery', 'Necromancer', 25, 25, 25, 25),
-             (129, 'Potionworks', 'Sprint Potion', 150, 145, 139, 135),
-             (130, 'Potionworks', 'Garlic Spray', 1000, 970, 930, 900),
-             (131, 'Potionworks', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (132, 'Potionworks', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (133, 'Potionworks', 'Necromancer', 25, 25, 25, 25),
-             (134, 'Silver Apothecary', 'Sprint Potion', 150, 145, 139, 135),
-             (135, 'Silver Apothecary', 'Garlic Spray', 1000, 970, 930, 900),
-             (136, 'Silver Apothecary', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (137, 'Silver Apothecary', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (138, 'Silver Apothecary', 'Perfect Dandelion', 50, 48, 46, 45),
-             (139, 'Silver Apothecary', 'Perfect Red Rose', 500, 485, 465, 450),
-             (140, 'Silver Apothecary', 'Perfect Black Orchid', 1137, 1102, 1057, 1023),
-             (141, 'Silver Apothecary', 'Diamond Ring', 100000, 97000, 93000, 90000),
-             (142, 'Silver Apothecary', 'Necromancer', 25, 25, 25, 25),
-             (143, 'The Potion Shoppe', 'Sprint Potion', 150, 145, 139, 135),
-             (144, 'The Potion Shoppe', 'Garlic Spray', 1000, 970, 930, 900),
-             (145, 'The Potion Shoppe', 'Vial of Holy Water', 2000, 1940, 1860, 1800),
-             (146, 'The Potion Shoppe', 'Blood Potion', 30000, 30000, 30000, 30000),
-             (147, 'The Potion Shoppe', 'Necromancer', 25, 25, 25, 25),
-             (148, 'Herman''s Scrolls', 'Scroll of Turning', 500, 485, 465, 450),
-             (149, 'Herman''s Scrolls', 'Scroll of Succour', 750, 727, 697, 675),
-             (150, 'Herman''s Scrolls', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (151, 'Herman''s Scrolls', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (152, 'Herman''s Scrolls', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (153, 'Herman''s Scrolls', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (154, 'Paper and Scrolls', 'Scroll of Turning', 500, 485, 465, 450),
-             (155, 'Paper and Scrolls', 'Scroll of Succour', 750, 727, 697, 675),
-             (156, 'Paper and Scrolls', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (157, 'Paper and Scrolls', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (158, 'Paper and Scrolls', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (159, 'Paper and Scrolls', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (160, 'Scrollmania', 'Scroll of Turning', 500, 485, 465, 450),
-             (161, 'Scrollmania', 'Scroll of Succour', 750, 727, 697, 675),
-             (162, 'Scrollmania', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (163, 'Scrollmania', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (164, 'Scrollmania', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (165, 'Scrollmania', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (166, 'Scrolls ''n'' Stuff', 'Scroll of Turning', 500, 485, 465, 450),
-             (167, 'Scrolls ''n'' Stuff', 'Scroll of Succour', 750, 727, 697, 675),
-             (168, 'Scrolls ''n'' Stuff', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (169, 'Scrolls ''n'' Stuff', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (170, 'Scrolls ''n'' Stuff', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (171, 'Scrolls ''n'' Stuff', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (172, 'Scrolls R Us', 'Scroll of Turning', 500, 485, 465, 450),
-             (173, 'Scrolls R Us', 'Scroll of Succour', 750, 727, 697, 675),
-             (174, 'Scrolls R Us', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (175, 'Scrolls R Us', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (176, 'Scrolls R Us', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (177, 'Scrolls R Us', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (178, 'Scrollworks', 'Scroll of Turning', 500, 485, 465, 450),
-             (179, 'Scrollworks', 'Scroll of Succour', 750, 727, 697, 675),
-             (180, 'Scrollworks', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (181, 'Scrollworks', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (182, 'Scrollworks', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (183, 'Scrollworks', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (184, 'Ye Olde Scrolles', 'Scroll of Turning', 500, 485, 465, 450),
-             (185, 'Ye Olde Scrolles', 'Scroll of Succour', 750, 727, 697, 675),
-             (186, 'Ye Olde Scrolles', 'Scroll of Displacement', 1000, 970, 930, 900),
-             (187, 'Ye Olde Scrolles', 'Scroll of Summoning', 1500, 1455, 1395, 1350),
-             (188, 'Ye Olde Scrolles', 'Scroll of Accounting', 5000, 4850, 4650, 4500),
-             (189, 'Ye Olde Scrolles', 'Scroll of Teleportation', 5000, 4850, 4650, 4500),
-             (190, 'Eternal Aubade of Mystical Treasures', 'Perfect Dandelion', 55, 55, 55, 55),
-             (191, 'Eternal Aubade of Mystical Treasures', 'Sprint Potion', 165, 165, 165, 165),
-             (192, 'Eternal Aubade of Mystical Treasures', 'Perfect Red Rose', 550, 550, 550, 550),
-             (193, 'Eternal Aubade of Mystical Treasures', 'Scroll of Succour', 825, 25, 25, 25),
-             (194, 'Eternal Aubade of Mystical Treasures', 'Scroll of Bondage', 1001, 1001, 1001, 1001),
-             (195, 'Eternal Aubade of Mystical Treasures', 'Perfect Black Orchid', 1250, 1250, 1250, 1250),
-             (196, 'Eternal Aubade of Mystical Treasures', 'Gold Dawn to Dusk Tulip', 1500, 1500, 1500, 1500),
-             (197, 'Eternal Aubade of Mystical Treasures', 'Wooden Stake', 4400, 4400, 4400, 4400),
-             (198, 'Eternal Aubade of Mystical Treasures', 'Kitten', 10000, 10000, 10000, 10000),
-             (199, 'Eternal Aubade of Mystical Treasures', 'Wolf Pup', 12500, 12500, 12500, 12500),
-             (200, 'Eternal Aubade of Mystical Treasures', 'Dragon''s Egg', 17499, 17499, 17499, 17499),
-             (201, 'Eternal Aubade of Mystical Treasures', 'Silver Pocket Watch', 20000, 20000, 20000, 20000),
-             (202, 'Eternal Aubade of Mystical Treasures', 'Crystal Music Box', 25000, 25000, 25000, 25000),
-             (203, 'Eternal Aubade of Mystical Treasures', 'Blood Potion', 33000, 33000, 33000, 33000),
-             (204, 'Eternal Aubade of Mystical Treasures', 'Hand Mirror of Truth', 35000, 35000, 35000, 35000),
-             (205, 'Eternal Aubade of Mystical Treasures', 'Book of Spells', 44999, 44999, 44999, 44999),
-             (206, 'Eternal Aubade of Mystical Treasures', 'Ritual Gown', 55000, 55000, 55000, 55000),
-             (207, 'Eternal Aubade of Mystical Treasures', 'Silver Ruby Dagger', 65000, 65000, 65000, 65000),
-             (208, 'Eternal Aubade of Mystical Treasures', 'Onyx Coffin', 75000, 75000, 75000, 75000),
-             (209, 'Eternal Aubade of Mystical Treasures', 'Platinum Puzzle Rings', 115000, 115000, 115000, 115000),
-             (210, 'Eternal Aubade of Mystical Treasures', 'Diamond Succubus Earrings', 125000, 125000, 125000, 125000),
-             (211, 'The Cloister of Secrets', 'Perfect Dandelion', 55, 55, 55, 55),
-             (212, 'The Cloister of Secrets', 'Perfect Red Rose', 550, 550, 550, 550),
-             (213, 'The Cloister of Secrets', 'Perfect Black Orchid', 1250, 1250, 1250, 1250),
-             (214, 'The Cloister of Secrets', 'Safety Deposit Box Key', 11000, 11000, 11000, 11000),
-             (215, 'The Cloister of Secrets', 'Necklace with Locket', 55000, 55000, 55000, 55000),
-             (216, 'The Cloister of Secrets', 'Flask of Heinous Deceptions', 77000, 77000, 77000, 77000),
-             (217, 'The Cloister of Secrets', 'Amulet of Insidious Illusions', 88000, 88000, 88000, 88000),
-             (218, 'The Cloister of Secrets', 'Golden Ring', 99000, 99000, 99000, 99000),
-             (219, 'The Cloister of Secrets', 'Diamond Ring', 110000, 110000, 110000, 110000),
-             (220, 'The Cloister of Secrets', 'Titanium-Platinum Ring', 110000, 110000, 110000, 110000),
-             (221, 'Grotto of Deceptions', 'Scroll of Turning', 550, 550, 550, 550),
-             (222, 'Grotto of Deceptions', 'Scroll of Teleportation', 5500, 5500, 5500, 5500),
-             (223, 'Grotto of Deceptions', 'Scroll of Displacement', 1100, 1100, 1100, 1100),
-             (224, 'Grotto of Deceptions', 'Scroll of Succour', 825, 825, 825, 825),
-             (225, 'Grotto of Deceptions', 'Vial of Holy Water', 2200, 2200, 2200, 2200),
-             (226, 'Grotto of Deceptions', 'Garlic Spray', 1100, 1100, 1100, 1100),
-             (227, 'Grotto of Deceptions', 'Sprint Potion', 165, 165, 165, 165),
-             (228, 'Grotto of Deceptions', 'Perfect Dandelion', 55, 55, 55, 55),
-             (229, 'Grotto of Deceptions', 'Perfect Red Rose', 550, 550, 550, 550),
-             (230, 'Grotto of Deceptions', 'Perfect Black Orchid', 1100, 1100, 1100, 1100),
-             (231, 'NightWatch Headquarters', 'Memorial Candle', 200, 200, 200, 200),
-             (232, 'NightWatch Headquarters', 'Perfect Red Rose', 550, 550, 550, 550),
-             (233, 'The Ixora Estate', 'Perfect Ixora Cluster', 550, 550, 550, 550),
-             (234, 'The Ixora Estate', 'Perfect Dandelion', 55, 55, 55, 55),
-             (235, 'The Ixora Estate', 'Perfect Black Orchid', 1100, 1100, 1100, 1100),
-             (236, 'The Ixora Estate', 'Perfect Red Rose', 550, 550, 550, 550),
-             (237, 'The White House', 'Perfect Red Rose', 550, 550, 550, 550),
-             (238, 'The White House', 'Perfect Black Orchid', 1250, 1250, 1250, 1250),
-             (239, 'The White House', 'Pewter Celtic Cross', 10000, 10000, 10000, 10000),
-             (240, 'The White House', 'Compass', 11999, 11999, 11999, 11999),
-             (241, 'The White House', 'Pewter Tankard', 15000, 15000, 15000, 15000)
-         ]),
+        ("REPLACE INTO shop_items (id, shop_name, item_name, base_price, charisma_level_1, charisma_level_2, charisma_level_3) VALUES (?, ?, ?, ?, ?, ?, ?)", [
+            (1,'Discount Magic','Perfect Dandelion',35,33,32,31),
+            (2,'Discount Magic','Sprint Potion',105,101,97,94),
+            (3,'Discount Magic','Perfect Red Rose',350,339,325,315),
+            (4,'Discount Magic','Scroll of Turning',350,339,325,315),
+            (5,'Discount Magic','Scroll of Succour',525,509,488,472),
+            (6,'Discount Magic','Scroll of Bondage',637,617,592,573),
+            (7,'Discount Magic','Garlic Spray',700,678,651,630),
+            (8,'Discount Magic','Scroll of Displacement',700,678,651,630),
+            (9,'Discount Magic','Perfect Black Orchid',795,772,740,716),
+            (10,'Discount Magic','Scroll of Summoning',1050,1018,976,945),
+            (11,'Discount Magic','Vial of Holy Water',1400,1357,1302,1260),
+            (12,'Discount Magic','Wooden Stake',2800,2715,2604,2520),
+            (13,'Discount Magic','Scroll of Accounting',3500,3394,3255,3150),
+            (14,'Discount Magic','Scroll of Teleportation',3500,3394,3255,3150),
+            (15,'Discount Magic','UV Grenade',3500,3394,3255,3150),
+            (16,'Discount Magic','Ring of Resistance',14000,13579,13020,12600),
+            (17,'Discount Magic','Diamond Ring',70000,67900,65100,63000),
+            (18,'Discount Potions','Sprint Potion',105,101,97,94),
+            (19,'Discount Potions','Garlic Spray',700,678,651,630),
+            (20,'Discount Potions','Vial of Holy Water',1400,1357,1302,1260),
+            (21,'Discount Potions','Blood Potion',30000,30000,30000,30000),
+            (22,'Discount Potions','Necromancer',25,25,25,25),
+            (23,'Discount Scrolls','Scroll of Turning',350,339,325,315),
+            (24,'Discount Scrolls','Scroll of Succour',525,509,488,472),
+            (25,'Discount Scrolls','Scroll of Displacement',700,678,651,630),
+            (26,'Discount Scrolls','Scroll of Summoning',1050,1018,976,945),
+            (27,'Discount Scrolls','Scroll of Accounting',3500,3394,3255,3150),
+            (28,'Discount Scrolls','Scroll of Teleportation',3500,3394,3255,3150),
+            (29,'Dark Desires','Perfect Dandelion',50,48,46,45),
+            (30,'Dark Desires','Sprint Potion',150,145,139,135),
+            (31,'Dark Desires','Perfect Red Rose',500,485,465,450),
+            (32,'Dark Desires','Scroll of Turning',500,485,465,450),
+            (33,'Dark Desires','Scroll of Succour',750,727,697,675),
+            (34,'Dark Desires','Scroll of Bondage',910,882,846,819),
+            (35,'Dark Desires','Garlic Spray',1000,970,930,900),
+            (36,'Dark Desires','Scroll of Displacement',1000,970,930,900),
+            (37,'Dark Desires','Perfect Black Orchid',1137,1102,1057,1023),
+            (38,'Dark Desires','Scroll of Summoning',1500,1455,1395,1350),
+            (39,'Dark Desires','Vial of Holy Water',2000,1940,1860,1800),
+            (40,'Dark Desires','Wooden Stake',4000,3880,3720,3600),
+            (41,'Dark Desires','Scroll of Accounting',5000,4850,4650,4500),
+            (42,'Dark Desires','Scroll of Teleportation',5000,4850,4650,4500),
+            (43,'Dark Desires','UV Grenade',5000,4850,4650,4500),
+            (44,'Dark Desires','Ring of Resistance',20000,19400,18600,18000),
+            (45,'Dark Desires','Diamond Ring',100000,97000,93000,90000),
+            (46,'Interesting Times','Perfect Dandelion',50,48,46,45),
+            (47,'Interesting Times','Sprint Potion',150,145,139,135),
+            (48,'Interesting Times','Perfect Red Rose',500,485,465,450),
+            (49,'Interesting Times','Scroll of Turning',500,485,465,450),
+            (50,'Interesting Times','Scroll of Succour',750,727,697,675),
+            (51,'Interesting Times','Scroll of Bondage',910,882,846,819),
+            (52,'Interesting Times','Garlic Spray',1000,970,930,900),
+            (53,'Interesting Times','Scroll of Displacement',1000,970,930,900),
+            (54,'Interesting Times','Perfect Black Orchid',1137,1102,1057,1023),
+            (55,'Interesting Times','Scroll of Summoning',1500,1455,1395,1350),
+            (56,'Interesting Times','Vial of Holy Water',2000,1940,1860,1800),
+            (57,'Interesting Times','Wooden Stake',4000,3880,3720,3600),
+            (58,'Interesting Times','Scroll of Accounting',5000,4850,4650,4500),
+            (59,'Interesting Times','Scroll of Teleportation',5000,4850,4650,4500),
+            (60,'Interesting Times','UV Grenade',5000,4850,4650,4500),
+            (61,'Interesting Times','Ring of Resistance',20000,19400,18600,18000),
+            (62,'Interesting Times','Diamond Ring',100000,97000,93000,90000),
+            (63,'Sparks','Perfect Dandelion',50,48,46,45),
+            (64,'Sparks','Sprint Potion',150,145,139,135),
+            (65,'Sparks','Perfect Red Rose',500,485,465,450),
+            (66,'Sparks','Scroll of Turning',500,485,465,450),
+            (67,'Sparks','Scroll of Succour',750,727,697,675),
+            (68,'Sparks','Scroll of Bondage',910,882,846,819),
+            (69,'Sparks','Garlic Spray',1000,970,930,900),
+            (70,'Sparks','Scroll of Displacement',1000,970,930,900),
+            (71,'Sparks','Perfect Black Orchid',1137,1102,1057,1023),
+            (72,'Sparks','Scroll of Summoning',1500,1455,1395,1350),
+            (73,'Sparks','Vial of Holy Water',2000,1940,1860,1800),
+            (74,'Sparks','Wooden Stake',4000,3880,3720,3600),
+            (75,'Sparks','Scroll of Accounting',5000,4850,4650,4500),
+            (76,'Sparks','Scroll of Teleportation',5000,4850,4650,4500),
+            (77,'Sparks','UV Grenade',5000,4850,4650,4500),
+            (78,'Sparks','Ring of Resistance',20000,19400,18600,18000),
+            (79,'Sparks','Diamond Ring',100000,97000,93000,90000),
+            (80,'The Magic Box','Perfect Dandelion',50,48,46,45),
+            (81,'The Magic Box','Sprint Potion',150,145,139,135),
+            (82,'The Magic Box','Perfect Red Rose',500,485,465,450),
+            (83,'The Magic Box','Scroll of Turning',500,485,465,450),
+            (84,'The Magic Box','Scroll of Succour',750,727,697,675),
+            (85,'The Magic Box','Scroll of Bondage',910,882,846,819),
+            (86,'The Magic Box','Garlic Spray',1000,970,930,900),
+            (87,'The Magic Box','Scroll of Displacement',1000,970,930,900),
+            (88,'The Magic Box','Perfect Black Orchid',1137,1102,1057,1023),
+            (89,'The Magic Box','Scroll of Summoning',1500,1455,1395,1350),
+            (90,'The Magic Box','Vial of Holy Water',2000,1940,1860,1800),
+            (91,'The Magic Box','Wooden Stake',4000,3880,3720,3600),
+            (92,'The Magic Box','Scroll of Accounting',5000,4850,4650,4500),
+            (93,'The Magic Box','Scroll of Teleportation',5000,4850,4650,4500),
+            (94,'The Magic Box','UV Grenade',5000,4850,4650,4500),
+            (95,'The Magic Box','Ring of Resistance',20000,19400,18600,18000),
+            (96,'The Magic Box','Diamond Ring',100000,97000,93000,90000),
+            (97,'White Light','Perfect Dandelion',50,48,46,45),
+            (98,'White Light','Sprint Potion',150,145,139,135),
+            (99,'White Light','Perfect Red Rose',500,485,465,450),
+            (100,'White Light','Scroll of Turning',500,485,465,450),
+            (101,'White Light','Scroll of Succour',750,727,697,675),
+            (102,'White Light','Scroll of Bondage',910,882,846,819),
+            (103,'White Light','Garlic Spray',1000,970,930,900),
+            (104,'White Light','Scroll of Displacement',1000,970,930,900),
+            (105,'White Light','Perfect Black Orchid',1137,1102,1057,1023),
+            (106,'White Light','Scroll of Summoning',1500,1455,1395,1350),
+            (107,'White Light','Vial of Holy Water',2000,1940,1860,1800),
+            (108,'White Light','Wooden Stake',4000,3880,3720,3600),
+            (109,'White Light','Scroll of Accounting',5000,4850,4650,4500),
+            (110,'White Light','Scroll of Teleportation',5000,4850,4650,4500),
+            (111,'White Light','UV Grenade',5000,4850,4650,4500),
+            (112,'White Light','Ring of Resistance',20000,19400,18600,18000),
+            (113,'White Light','Diamond Ring',100000,97000,93000,90000),
+            (114,'McPotions','Sprint Potion',150,145,139,135),
+            (115,'McPotions','Garlic Spray',1000,970,930,900),
+            (116,'McPotions','Vial of Holy Water',2000,1940,1860,1800),
+            (117,'McPotions','Blood Potion',30000,30000,30000,30000),
+            (118,'McPotions','Necromancer',25,25,25,25),
+            (119,'Potable Potions','Sprint Potion',150,145,139,135),
+            (120,'Potable Potions','Garlic Spray',1000,970,930,900),
+            (121,'Potable Potions','Vial of Holy Water',2000,1940,1860,1800),
+            (122,'Potable Potions','Blood Potion',30000,30000,30000,30000),
+            (123,'Potable Potions','Necromancer',25,25,25,25),
+            (124,'Potion Distillery','Sprint Potion',150,145,139,135),
+            (125,'Potion Distillery','Garlic Spray',1000,970,930,900),
+            (126,'Potion Distillery','Vial of Holy Water',2000,1940,1860,1800),
+            (127,'Potion Distillery','Blood Potion',30000,30000,30000,30000),
+            (128,'Potion Distillery','Necromancer',25,25,25,25),
+            (129,'Potionworks','Sprint Potion',150,145,139,135),
+            (130,'Potionworks','Garlic Spray',1000,970,930,900),
+            (131,'Potionworks','Vial of Holy Water',2000,1940,1860,1800),
+            (132,'Potionworks','Blood Potion',30000,30000,30000,30000),
+            (133,'Potionworks','Necromancer',25,25,25,25),
+            (134,'Silver Apothecary','Sprint Potion',150,145,139,135),
+            (135,'Silver Apothecary','Garlic Spray',1000,970,930,900),
+            (136,'Silver Apothecary','Vial of Holy Water',2000,1940,1860,1800),
+            (137,'Silver Apothecary','Blood Potion',30000,30000,30000,30000),
+            (138,'Silver Apothecary','Perfect Dandelion',50,48,46,45),
+            (139,'Silver Apothecary','Perfect Red Rose',500,485,465,450),
+            (140,'Silver Apothecary','Perfect Black Orchid',1137,1102,1057,1023),
+            (141,'Silver Apothecary','Diamond Ring',100000,97000,93000,90000),
+            (142,'Silver Apothecary','Necromancer',25,25,25,25),
+            (143,'The Potion Shoppe','Sprint Potion',150,145,139,135),
+            (144,'The Potion Shoppe','Garlic Spray',1000,970,930,900),
+            (145,'The Potion Shoppe','Vial of Holy Water',2000,1940,1860,1800),
+            (146,'The Potion Shoppe','Blood Potion',30000,30000,30000,30000),
+            (147,'The Potion Shoppe','Necromancer',25,25,25,25),
+            (148,'Herman''s Scrolls','Scroll of Turning',500,485,465,450),
+            (149,'Herman''s Scrolls','Scroll of Succour',750,727,697,675),
+            (150,'Herman''s Scrolls','Scroll of Displacement',1000,970,930,900),
+            (151,'Herman''s Scrolls','Scroll of Summoning',1500,1455,1395,1350),
+            (152,'Herman''s Scrolls','Scroll of Accounting',5000,4850,4650,4500),
+            (153,'Herman''s Scrolls','Scroll of Teleportation',5000,4850,4650,4500),
+            (154,'Paper and Scrolls','Scroll of Turning',500,485,465,450),
+            (155,'Paper and Scrolls','Scroll of Succour',750,727,697,675),
+            (156,'Paper and Scrolls','Scroll of Displacement',1000,970,930,900),
+            (157,'Paper and Scrolls','Scroll of Summoning',1500,1455,1395,1350),
+            (158,'Paper and Scrolls','Scroll of Accounting',5000,4850,4650,4500),
+            (159,'Paper and Scrolls','Scroll of Teleportation',5000,4850,4650,4500),
+            (160,'Scrollmania','Scroll of Turning',500,485,465,450),
+            (161,'Scrollmania','Scroll of Succour',750,727,697,675),
+            (162,'Scrollmania','Scroll of Displacement',1000,970,930,900),
+            (163,'Scrollmania','Scroll of Summoning',1500,1455,1395,1350),
+            (164,'Scrollmania','Scroll of Accounting',5000,4850,4650,4500),
+            (165,'Scrollmania','Scroll of Teleportation',5000,4850,4650,4500),
+            (166,'Scrolls ''n'' Stuff','Scroll of Turning',500,485,465,450),
+            (167,'Scrolls ''n'' Stuff','Scroll of Succour',750,727,697,675),
+            (168,'Scrolls ''n'' Stuff','Scroll of Displacement',1000,970,930,900),
+            (169,'Scrolls ''n'' Stuff','Scroll of Summoning',1500,1455,1395,1350),
+            (170,'Scrolls ''n'' Stuff','Scroll of Accounting',5000,4850,4650,4500),
+            (171,'Scrolls ''n'' Stuff','Scroll of Teleportation',5000,4850,4650,4500),
+            (172,'Scrolls R Us','Scroll of Turning',500,485,465,450),
+            (173,'Scrolls R Us','Scroll of Succour',750,727,697,675),
+            (174,'Scrolls R Us','Scroll of Displacement',1000,970,930,900),
+            (175,'Scrolls R Us','Scroll of Summoning',1500,1455,1395,1350),
+            (176,'Scrolls R Us','Scroll of Accounting',5000,4850,4650,4500),
+            (177,'Scrolls R Us','Scroll of Teleportation',5000,4850,4650,4500),
+            (178,'Scrollworks','Scroll of Turning',500,485,465,450),
+            (179,'Scrollworks','Scroll of Succour',750,727,697,675),
+            (180,'Scrollworks','Scroll of Displacement',1000,970,930,900),
+            (181,'Scrollworks','Scroll of Summoning',1500,1455,1395,1350),
+            (182,'Scrollworks','Scroll of Accounting',5000,4850,4650,4500),
+            (183,'Scrollworks','Scroll of Teleportation',5000,4850,4650,4500),
+            (184,'Ye Olde Scrolles','Scroll of Turning',500,485,465,450),
+            (185,'Ye Olde Scrolles','Scroll of Succour',750,727,697,675),
+            (186,'Ye Olde Scrolles','Scroll of Displacement',1000,970,930,900),
+            (187,'Ye Olde Scrolles','Scroll of Summoning',1500,1455,1395,1350),
+            (188,'Ye Olde Scrolles','Scroll of Accounting',5000,4850,4650,4500),
+            (189,'Ye Olde Scrolles','Scroll of Teleportation',5000,4850,4650,4500),
+            (190,'Eternal Aubade of Mystical Treasures','Perfect Dandelion',55,55,55,55),
+            (191,'Eternal Aubade of Mystical Treasures','Sprint Potion',165,165,165,165),
+            (192,'Eternal Aubade of Mystical Treasures','Perfect Red Rose',550,550,550,550),
+            (193,'Eternal Aubade of Mystical Treasures','Scroll of Succour',825,25,25,25),
+            (194,'Eternal Aubade of Mystical Treasures','Scroll of Bondage',1001,1001,1001,1001),
+            (195,'Eternal Aubade of Mystical Treasures','Perfect Black Orchid',1250,1250,1250,1250),
+            (196,'Eternal Aubade of Mystical Treasures','Gold Dawn to Dusk Tulip',1500,1500,1500,1500),
+            (197,'Eternal Aubade of Mystical Treasures','Wooden Stake',4400,4400,4400,4400),
+            (198,'Eternal Aubade of Mystical Treasures','Kitten',10000,10000,10000,10000),
+            (199,'Eternal Aubade of Mystical Treasures','Wolf Pup',12500,12500,12500,12500),
+            (200,'Eternal Aubade of Mystical Treasures','Dragon''s Egg',17499,17499,17499,17499),
+            (201,'Eternal Aubade of Mystical Treasures','Silver Pocket Watch',20000,20000,20000,20000),
+            (202,'Eternal Aubade of Mystical Treasures','Crystal Music Box',25000,25000,25000,25000),
+            (203,'Eternal Aubade of Mystical Treasures','Blood Potion',33000,33000,33000,33000),
+            (204,'Eternal Aubade of Mystical Treasures','Hand Mirror of Truth',35000,35000,35000,35000),
+            (205,'Eternal Aubade of Mystical Treasures','Book of Spells',44999,44999,44999,44999),
+            (206,'Eternal Aubade of Mystical Treasures','Ritual Gown',55000,55000,55000,55000),
+            (207,'Eternal Aubade of Mystical Treasures','Silver Ruby Dagger',65000,65000,65000,65000),
+            (208,'Eternal Aubade of Mystical Treasures','Onyx Coffin',75000,75000,75000,75000),
+            (209,'Eternal Aubade of Mystical Treasures','Platinum Puzzle Rings',115000,115000,115000,115000),
+            (210,'Eternal Aubade of Mystical Treasures','Diamond Succubus Earrings',125000,125000,125000,125000),
+            (211,'The Cloister of Secrets','Perfect Dandelion',55,55,55,55),
+            (212,'The Cloister of Secrets','Perfect Red Rose',550,550,550,550),
+            (213,'The Cloister of Secrets','Perfect Black Orchid',1250,1250,1250,1250),
+            (214,'The Cloister of Secrets','Safety Deposit Box Key',11000,11000,11000,11000),
+            (215,'The Cloister of Secrets','Necklace with Locket',55000,55000,55000,55000),
+            (216,'The Cloister of Secrets','Flask of Heinous Deceptions',77000,77000,77000,77000),
+            (217,'The Cloister of Secrets','Amulet of Insidious Illusions',88000,88000,88000,88000),
+            (218,'The Cloister of Secrets','Golden Ring',99000,99000,99000,99000),
+            (219,'The Cloister of Secrets','Diamond Ring',110000,110000,110000,110000),
+            (220,'The Cloister of Secrets','Titanium-Platinum Ring',110000,110000,110000,110000),
+            (221,'Grotto of Deceptions','Scroll of Turning',550,550,550,550),
+            (222,'Grotto of Deceptions','Scroll of Teleportation',5500,5500,5500,5500),
+            (223,'Grotto of Deceptions','Scroll of Displacement',1100,1100,1100,1100),
+            (224,'Grotto of Deceptions','Scroll of Succour',825,825,825,825),
+            (225,'Grotto of Deceptions','Vial of Holy Water',2200,2200,2200,2200),
+            (226,'Grotto of Deceptions','Garlic Spray',1100,1100,1100,1100),
+            (227,'Grotto of Deceptions','Sprint Potion',165,165,165,165),
+            (228,'Grotto of Deceptions','Perfect Dandelion',55,55,55,55),
+            (229,'Grotto of Deceptions','Perfect Red Rose',550,550,550,550),
+            (230,'Grotto of Deceptions','Perfect Black Orchid',1100,1100,1100,1100),
+            (231,'NightWatch Headquarters','Memorial Candle',200,200,200,200),
+            (232,'NightWatch Headquarters','Perfect Red Rose',550,550,550,550),
+            (233,'The Ixora Estate','Perfect Ixora Cluster',550,550,550,550),
+            (234,'The Ixora Estate','Perfect Dandelion',55,55,55,55),
+            (235,'The Ixora Estate','Perfect Black Orchid',1100,1100,1100,1100),
+            (236,'The Ixora Estate','Perfect Red Rose',550,550,550,550),
+            (237,'The White House','Perfect Red Rose',550,550,550,550),
+            (238,'The White House','Perfect Black Orchid',1250,1250,1250,1250),
+            (239,'The White House','Pewter Celtic Cross',10000,10000,10000,10000),
+            (240,'The White House','Compass',11999,11999,11999,11999),
+            (241,'The White House','Pewter Tankard',15000,15000,15000,15000)
+        ]),
         ("INSERT OR IGNORE INTO shops (ID, Name, `Column`, Row, next_update) VALUES (?, ?, ?, ?, ?)", [
-            (1, 'Ace Porn', 'NA', 'NA', ''),
-            (2, 'Checkers Porn Shop', 'NA', 'NA', ''),
-            (3, 'Dark Desires', 'NA', 'NA', ''),
-            (4, 'Discount Magic', 'NA', 'NA', ''),
-            (5, 'Discount Potions', 'NA', 'NA', ''),
-            (6, 'Discount Scrolls', 'NA', 'NA', ''),
-            (7, 'Herman''s Scrolls', 'NA', 'NA', ''),
-            (8, 'Interesting Times', 'NA', 'NA', ''),
-            (9, 'McPotions', 'NA', 'NA', ''),
-            (10, 'Paper and Scrolls', 'NA', 'NA', ''),
-            (11, 'Potable Potions', 'NA', 'NA', ''),
-            (12, 'Potion Distillery', 'NA', 'NA', ''),
-            (13, 'Potionworks', 'NA', 'NA', ''),
-            (14, 'Reversi Porn', 'NA', 'NA', ''),
-            (15, 'Scrollmania', 'NA', 'NA', ''),
-            (16, 'Scrolls ''n'' Stuff', 'NA', 'NA', ''),
-            (17, 'Scrolls R Us', 'NA', 'NA', ''),
-            (18, 'Scrollworks', 'NA', 'NA', ''),
-            (19, 'Silver Apothecary', 'NA', 'NA', ''),
-            (20, 'Sparks', 'NA', 'NA', ''),
-            (21, 'Spinners Porn', 'NA', 'NA', ''),
-            (22, 'The Magic Box', 'NA', 'NA', ''),
-            (23, 'The Potion Shoppe', 'NA', 'NA', ''),
-            (24, 'White Light', 'NA', 'NA', ''),
-            (25, 'Ye Olde Scrolles', 'NA', 'NA', '')
+            (1,'Ace Porn','NA','NA',''),
+            (2,'Checkers Porn Shop','NA','NA',''),
+            (3,'Dark Desires','NA','NA',''),
+            (4,'Discount Magic','NA','NA',''),
+            (5,'Discount Potions','NA','NA',''),
+            (6,'Discount Scrolls','NA','NA',''),
+            (7,'Herman''s Scrolls','NA','NA',''),
+            (8,'Interesting Times','NA','NA',''),
+            (9,'McPotions','NA','NA',''),
+            (10,'Paper and Scrolls','NA','NA',''),
+            (11,'Potable Potions','NA','NA',''),
+            (12,'Potion Distillery','NA','NA',''),
+            (13,'Potionworks','NA','NA',''),
+            (14,'Reversi Porn','NA','NA',''),
+            (15,'Scrollmania','NA','NA',''),
+            (16,'Scrolls ''n'' Stuff','NA','NA',''),
+            (17,'Scrolls R Us','NA','NA',''),
+            (18,'Scrollworks','NA','NA',''),
+            (19,'Silver Apothecary','NA','NA',''),
+            (20,'Sparks','NA','NA',''),
+            (21,'Spinners Porn','NA','NA',''),
+            (22,'The Magic Box','NA','NA',''),
+            (23,'The Potion Shoppe','NA','NA',''),
+            (24,'White Light','NA','NA',''),
+            (25,'Ye Olde Scrolles','NA','NA','')
         ]),
         ("REPLACE INTO taverns (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
-            (1, 'Gum', '33rd', 'Abbot''s Tavern'),
-            (2, 'Knotweed', '11th', 'Archer''s Tavern'),
-            (3, 'Torment', '16th', 'Baker''s Tavern'),
-            (4, 'Fir', '13th', 'Balmer''s Tavern'),
-            (5, 'Nettle', '3rd', 'Barker''s Tavern'),
-            (6, 'Duck', '7th', 'Bloodwood Canopy Cafe'),
-            (7, 'Haddock', '64th', 'Bowyer''s Tavern'),
-            (8, 'Qualms', '61st', 'Butler''s Tavern'),
-            (9, 'Yew', '78th', 'Carter''s Tavern'),
-            (10, 'Raven', '71st', 'Chandler''s Tavern'),
-            (11, 'Bleak', '64th', 'Club Xendom'),
-            (12, 'Pilchard', '48th', 'Draper''s Tavern'),
-            (13, 'Yak', '90th', 'Falconer''s Tavern'),
-            (14, 'Ruby', '20th', 'Fiddler''s Tavern'),
-            (15, 'Ferret', '84th', 'Fisherman''s Tavern'),
-            (16, 'Pine', '68th', 'Five French Hens'),
-            (17, 'Steel', '26th', 'Freeman''s Tavern'),
-            (18, 'Gibbon', '98th', 'Harper''s Tavern'),
-            (19, 'Ire', '63rd', 'Hawker''s Tavern'),
-            (20, 'Hessite', '55th', 'Hell''s Angels Clubhouse'),
-            (21, 'Fir', '72nd', 'Hunter''s Tavern'),
-            (22, 'Lion', '1st', 'Leacher''s Tavern'),
-            (23, 'Malachite', '76th', 'Lovers at Dawn Inn'),
-            (24, 'Ragweed', '78th', 'Marbler''s Tavern'),
-            (25, 'Ferret', '44th', 'Miller''s Tavern'),
-            (26, 'Steel', '3rd', 'Oyler''s Tavern'),
-            (27, 'Diamond', '92nd', 'Painter''s Tavern'),
-            (28, 'Walrus', '83rd', 'Peace De Résistance'),
-            (29, 'Fear', '34th', 'Pub Forty-Two'),
-            (30, 'Qualms', '61st', 'Ratskeller'),
-            (31, 'Beryl', '98th', 'Rider''s Tavern'),
-            (32, 'Qualms', '5th', 'Rogue''s Tavern'),
-            (33, 'Eagle', '67th', 'Shooter''s Tavern'),
-            (34, 'Bleak', 'NCL', 'Smuggler''s Cove'),
-            (35, 'Anguish', '98th', 'Ten Turtle Doves'),
-            (36, 'Oppression', '45th', 'The Angel''s Wing'),
-            (37, 'Oppression', '70th', 'The Axeman and Guillotine'),
-            (38, 'Ivory', '99th', 'The Blinking Pixie'),
-            (39, 'Pessimism', '37th', 'The Book and Beggar'),
-            (40, 'Malachite', '70th', 'The Booze Hall'),
-            (41, 'Pyrites', '41st', 'The Brain and Hatchling'),
-            (42, 'Lonely', '87th', 'The Brimming Brew'),
-            (43, 'Qualms', '43rd', 'The Broken Lover'),
-            (44, 'Ruby', '90th', 'The Burning Brand'),
-            (45, 'Walrus', '68th', 'The Cart and Castle'),
-            (46, 'Lion', '1st', 'The Celtic Moonligh'),
-            (47, 'Beech', '19th', 'The Clam and Champion'),
-            (48, 'Nightingale', '32nd', 'The Cosy Walrus'),
-            (49, 'Sorrow', '70th', 'The Crossed Swords Tavern'),
-            (50, 'Gum', '10th', 'The Crouching Tiger'),
-            (51, 'Killjoy', '46th', 'The Crow''s Nest Tavern'),
-            (52, 'Pine', '51st', 'The Dead of Night'),
-            (53, 'Lonely', '78th', 'The Demon''s Heart'),
-            (54, 'Ragweed', '6th', 'The Dog House'),
-            (55, 'Zinc', '94th', 'The Drunk Cup'),
-            (56, 'Yak', '30th', 'The Ferryman''s Arms'),
-            (57, 'Nervous', '2nd', 'The Flirty Angel'),
-            (58, 'Sorrow', '91st', 'The Freudian Slip'),
-            (59, 'Walrus', '62nd', 'The Ghastly Flabber'),
-            (60, 'Lion', '95th', 'The Golden Partridge'),
-            (61, 'Zebra', '50th', 'The Guardian Outpost'),
-            (62, 'Obsidian', '54th', 'The Gunny''s Shack'),
-            (63, 'Vexation', '2nd', 'The Hearth and Sabre'),
-            (64, 'Dogwood', '54th', 'The Kestrel'),
-            (65, 'Mongoose', '15th', 'The Last Days'),
-            (66, 'Unicorn', '92nd', 'The Lazy Sunflower'),
-            (67, 'Nervous', '42nd', 'The Lightbringer'),
-            (68, 'Kyanite', '19th', 'The Lounge'),
-            (69, 'Yearning', '48th', 'The Marsupial'),
-            (70, 'Hessite', '97th', 'The McAllister Tavern'),
-            (71, 'Dogwood', '78th', 'The Moon over Orion'),
-            (72, 'Gibbon', '44th', 'The Ox and Bow'),
-            (73, 'Jackal', '53rd', 'The Palm and Parson'),
-            (74, 'Quail', '85th', 'The Poltroon'),
-            (75, 'Ruby', '21st', 'The Round Room'),
-            (76, 'Diamond', '1st', 'The Scupper and Forage'),
-            (77, 'Pine', '91st', 'The Shattered Platter'),
-            (78, 'Nickel', '57th', 'The Shining Devil'),
-            (79, 'Alder', '57th', 'The Sign of the Times'),
-            (80, 'Ennui', '80th', 'The Stick and Stag'),
-            (81, 'Oppression', '70th', 'The Stick in the Mud'),
-            (82, 'Malaise', '87th', 'The Sun'),
-            (83, 'Eagle', '34th', 'The Sunken Sofa'),
-            (84, 'Turquoise', '71st', 'The Swords at Dawn'),
-            (85, 'Elm', '93rd', 'The Teapot and Toxin'),
-            (86, 'Mongoose', '92nd', 'The Thief of Hearts'),
-            (87, 'Despair', '38th', 'The Thorn''s Pride'),
-            (88, 'Zebra', '36th', 'The Two Sisters'),
-            (89, 'Nettle', '86th', 'The Wart and Whisk'),
-            (90, 'Sycamore', '89th', 'The Whirling Dervish'),
-            (91, 'Vulture', '11th', 'The Wild Hunt'),
-            (92, 'Steel', '23rd', 'Treehouse'),
-            (93, 'Yew', '5th', 'Vagabond''s Tavern'),
-            (94, 'Anguish', '68th', 'Xendom Tavern'),
-            (95, 'Pyrites', '70th', 'Ye Olde Gallows Ale House')
+            (1,'Gum','33rd','Abbot''s Tavern'),
+            (2,'Knotweed','11th','Archer''s Tavern'),
+            (3,'Torment','16th','Baker''s Tavern'),
+            (4,'Fir','13th','Balmer''s Tavern'),
+            (5,'Nettle','3rd','Barker''s Tavern'),
+            (6,'Duck','7th','Bloodwood Canopy Cafe'),
+            (7,'Haddock','64th','Bowyer''s Tavern'),
+            (8,'Qualms','61st','Butler''s Tavern'),
+            (9,'Yew','78th','Carter''s Tavern'),
+            (10,'Raven','71st','Chandler''s Tavern'),
+            (11,'Bleak','64th','Club Xendom'),
+            (12,'Pilchard','48th','Draper''s Tavern'),
+            (13,'Yak','90th','Falconer''s Tavern'),
+            (14,'Ruby','20th','Fiddler''s Tavern'),
+            (15,'Ferret','84th','Fisherman''s Tavern'),
+            (16,'Pine','68th','Five French Hens'),
+            (17,'Steel','26th','Freeman''s Tavern'),
+            (18,'Gibbon','98th','Harper''s Tavern'),
+            (19,'Ire','63rd','Hawker''s Tavern'),
+            (20,'Hessite','55th','Hell''s Angels Clubhouse'),
+            (21,'Fir','72nd','Hunter''s Tavern'),
+            (22,'Lion','1st','Leacher''s Tavern'),
+            (23,'Malachite','76th','Lovers at Dawn Inn'),
+            (24,'Ragweed','78th','Marbler''s Tavern'),
+            (25,'Ferret','44th','Miller''s Tavern'),
+            (26,'Steel','3rd','Oyler''s Tavern'),
+            (27,'Diamond','92nd','Painter''s Tavern'),
+            (28,'Walrus','83rd','Peace De Résistance'),
+            (29,'Fear','34th','Pub Forty-Two'),
+            (30,'Qualms','61st','Ratskeller'),
+            (31,'Beryl','98th','Rider''s Tavern'),
+            (32,'Qualms','5th','Rogue''s Tavern'),
+            (33,'Eagle','67th','Shooter''s Tavern'),
+            (34,'Bleak','NCL','Smuggler''s Cove'),
+            (35,'Anguish','98th','Ten Turtle Doves'),
+            (36,'Oppression','45th','The Angel''s Wing'),
+            (37,'Oppression','70th','The Axeman and Guillotine'),
+            (38,'Ivory','99th','The Blinking Pixie'),
+            (39,'Pessimism','37th','The Book and Beggar'),
+            (40,'Malachite','70th','The Booze Hall'),
+            (41,'Pyrites','41st','The Brain and Hatchling'),
+            (42,'Lonely','87th','The Brimming Brew'),
+            (43,'Qualms','43rd','The Broken Lover'),
+            (44,'Ruby','90th','The Burning Brand'),
+            (45,'Walrus','68th','The Cart and Castle'),
+            (46,'Lion','1st','The Celtic Moonligh'),
+            (47,'Beech','19th','The Clam and Champion'),
+            (48,'Nightingale','32nd','The Cosy Walrus'),
+            (49,'Sorrow','70th','The Crossed Swords Tavern'),
+            (50,'Gum','10th','The Crouching Tiger'),
+            (51,'Killjoy','46th','The Crow''s Nest Tavern'),
+            (52,'Pine','51st','The Dead of Night'),
+            (53,'Lonely','78th','The Demon''s Heart'),
+            (54,'Ragweed','6th','The Dog House'),
+            (55,'Zinc','94th','The Drunk Cup'),
+            (56,'Yak','30th','The Ferryman''s Arms'),
+            (57,'Nervous','2nd','The Flirty Angel'),
+            (58,'Sorrow','91st','The Freudian Slip'),
+            (59,'Walrus','62nd','The Ghastly Flabber'),
+            (60,'Lion','95th','The Golden Partridge'),
+            (61,'Zebra','50th','The Guardian Outpost'),
+            (62,'Obsidian','54th','The Gunny''s Shack'),
+            (63,'Vexation','2nd','The Hearth and Sabre'),
+            (64,'Dogwood','54th','The Kestrel'),
+            (65,'Mongoose','15th','The Last Days'),
+            (66,'Unicorn','92nd','The Lazy Sunflower'),
+            (67,'Nervous','42nd','The Lightbringer'),
+            (68,'Kyanite','19th','The Lounge'),
+            (69,'Yearning','48th','The Marsupial'),
+            (70,'Hessite','97th','The McAllister Tavern'),
+            (71,'Dogwood','78th','The Moon over Orion'),
+            (72,'Gibbon','44th','The Ox and Bow'),
+            (73,'Jackal','53rd','The Palm and Parson'),
+            (74,'Quail','85th','The Poltroon'),
+            (75,'Ruby','21st','The Round Room'),
+            (76,'Diamond','1st','The Scupper and Forage'),
+            (77,'Pine','91st','The Shattered Platter'),
+            (78,'Nickel','57th','The Shining Devil'),
+            (79,'Alder','57th','The Sign of the Times'),
+            (80,'Ennui','80th','The Stick and Stag'),
+            (81,'Oppression','70th','The Stick in the Mud'),
+            (82,'Malaise','87th','The Sun'),
+            (83,'Eagle','34th','The Sunken Sofa'),
+            (84,'Turquoise','71st','The Swords at Dawn'),
+            (85,'Elm','93rd','The Teapot and Toxin'),
+            (86,'Mongoose','92nd','The Thief of Hearts'),
+            (87,'Despair','38th','The Thorn''s Pride'),
+            (88,'Zebra','36th','The Two Sisters'),
+            (89,'Nettle','86th','The Wart and Whisk'),
+            (90,'Sycamore','89th','The Whirling Dervish'),
+            (91,'Vulture','11th','The Wild Hunt'),
+            (92,'Steel','23rd','Treehouse'),
+            (93,'Yew','5th','Vagabond''s Tavern'),
+            (94,'Anguish','68th','Xendom Tavern'),
+            (95,'Pyrites','70th','Ye Olde Gallows Ale House')
         ]),
         ("REPLACE INTO transits (ID, `Column`, Row, Name) VALUES (?, ?, ?, ?)", [
-            (1, 'Mongoose', '25th', 'Calliope'),
-            (2, 'Zelkova', '25th', 'Clio'),
-            (3, 'Malachite', '25th', 'Erato'),
-            (4, 'Mongoose', '50th', 'Euterpe'),
-            (5, 'Zelkova', '50th', 'Melpomene'),
-            (6, 'Malachite', '50th', 'Polyhymnia'),
-            (7, 'Mongoose', '75th', 'Terpsichore'),
-            (8, 'Zelkova', '75th', 'Thalia'),
-            (9, 'Malachite', '75th', 'Urania')
+            (1,'Mongoose','25th','Calliope'),
+            (2,'Zelkova','25th','Clio'),
+            (3,'Malachite','25th','Erato'),
+            (4,'Mongoose','50th','Euterpe'),
+            (5,'Zelkova','50th','Melpomene'),
+            (6,'Malachite','50th','Polyhymnia'),
+            (7,'Mongoose','75th','Terpsichore'),
+            (8,'Zelkova','75th','Thalia'),
+            (9,'Malachite','75th','Urania')
         ]),
         ("REPLACE INTO userbuildings (ID, Name, `Column`, Row) VALUES (?, ?, ?, ?)", [
             (1, "Ace's House of Dumont", "Cedar", "99th"),
@@ -1841,17 +1732,17 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (145, "Requiem of Hades", "Walrus", "41st")
         ]),
         ("REPLACE INTO discord_servers (id, name, invite_link) VALUES (?, ?, ?)", [
-            (1, "Ab Antiquo Headquarters", "https://discord.gg/AhPEzkJyA4"),
-            (2, "Hellfire Club", "https://discord.gg/qZCbbKEt3z"),
-            (3, "RB Improvement Group", "https://discord.gg/8ent8jn54u"),
-            (4, "RBCH", "https://discord.gg/ktdG9FZ"),
-            (5, "Raven Black: Boroughs and Barrios", "https://discord.gg/RTSXJ5tC4d"),
-            (6, "RavenBlack Community Center", "https://discord.gg/SVMmGcvNCV"),
-            (7, "The Moon over Orion", "https://discord.gg/EArPr7vqHC"),
-            (8, "The Ravenblack Historical Society", "https://discord.gg/zqPXpw8sMw"),
-            (9, "rêverie", "https://discord.gg/jAVHpGvgCf")
+            (1, "RBC Community Map Hub", "https://discord.gg/rKamEZvK6X"),
+            (2, "Ab Antiquo Headquarters", "https://discord.gg/AhPEzkJyA4"),
+            (3, "Hellfire Club", "https://discord.gg/qZCbbKEt3z"),
+            (4, "RB Improvement Group", "https://discord.gg/8ent8jn54u"),
+            (5, "RBCH", "https://discord.gg/ktdG9FZ"),
+            (6, "Raven Black: Boroughs and Barrios", "https://discord.gg/RTSXJ5tC4d"),
+            (7, "RavenBlack Community Center", "https://discord.gg/SVMmGcvNCV"),
+            (8, "The Moon over Orion", "https://discord.gg/EArPr7vqHC"),
+            (9, "The Ravenblack Historical Society", "https://discord.gg/zqPXpw8sMw"),
+            (10, "rêverie", "https://discord.gg/jAVHpGvgCf")
         ])
-
     ]
     for query, data in initial_data:
         try:
@@ -1861,7 +1752,6 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             logging.error(f"Failed to insert data into {query.split('INTO ')[1].split(' ')[0]}: {e}")
             raise
     conn.commit()
-
 
 def migrate_schema(conn: sqlite3.Connection) -> None:
     """
@@ -2023,7 +1913,6 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
             conn.rollback()
             raise
 
-
 def initialize_database(db_path: str = DB_PATH) -> bool:
     """
     Initialize the SQLite database with the required schema and data.
@@ -2037,22 +1926,20 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
     try:
         with sqlite3.connect(db_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key support
-            create_tables(conn)  # Fist create missing tables
-            migrate_schema(conn)  # Then migrate schema
-            insert_initial_data(conn)  # THEN populate defaults
+            create_tables(conn)                       # Fist create missing tables
+            migrate_schema(conn)                      # Then migrate schema
+            insert_initial_data(conn)                 # THEN populate defaults
             logging.info(f"Database initialized successfully at {db_path}")
             return True
     except sqlite3.Error as e:
         logging.error(f"Failed to initialize database at {db_path}: {e}")
         return False
 
-
 # Call database initialization
 if not ensure_directories_exist():  # Ensure directories exist first
     logging.error("Required directories could not be created. Aborting database initialization.")
 elif not initialize_database(DB_PATH):
     logging.warning("Database initialization failed. Application may encounter issues.")
-
 
 # -----------------------
 # Load Data from Database
@@ -2186,7 +2073,6 @@ def load_data() -> tuple:
         logging.error(f"Failed to load data from database {DB_PATH}: {e}")
         raise
 
-
 # Load data at startup
 try:
     (
@@ -2205,7 +2091,6 @@ except sqlite3.Error:
     current_css_profile = "Default"
     selected_character = None
     last_destination = None
-
 
 # -----------------------
 # Webview Cookie Database
@@ -2246,7 +2131,6 @@ def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
         logging.error(f"Failed to save/update cookie {cookie.name().data()}: {e}")
         return False
 
-
 def load_cookies_from_db() -> List[QNetworkCookie]:
     """
     Load all cookies from the SQLite database.
@@ -2277,7 +2161,6 @@ def load_cookies_from_db() -> List[QNetworkCookie]:
         logging.error(f"Failed to load cookies: {e}")
     return cookies
 
-
 def clear_cookie_db() -> bool:
     """
     Clear all cookies from the SQLite database.
@@ -2296,21 +2179,19 @@ def clear_cookie_db() -> bool:
         logging.error(f"Failed to clear cookies: {e}")
         return False
 
-
 # -----------------------
 # Splash Messages Decorator
 # -----------------------
 
-def splash_message(splash):
+def splash_message(splash_getter):
     def decorator(func):
         def wrapper(self, *args, **kwargs):
+            splash = splash_getter(self) if callable(splash_getter) else splash_getter
             if splash and not splash.isHidden():
-                splash.show_message(func.__name__)  # Show the original method name
+                splash.show_message(func.__name__)
             return func(self, *args, **kwargs)
-
-        wrapper.__name__ = func.__name__  # Preserve the original method name
+        wrapper.__name__ = func.__name__
         return wrapper
-
     return decorator
 
 
@@ -2329,17 +2210,60 @@ elif sys.platform == "darwin":
     os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
     os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
 
+# -----------------------
+# Startup Data Fetch
+# -----------------------
+
+class StartupUpdateWorker(QObject):
+    started = Signal()
+    finished = Signal(bool, str)  # (ok, message)
+
+    def __init__(self, app_ref):
+        super().__init__()
+        self.app = app_ref  # reference to RBCCommunityMap
+
+    @pyqtSlot()
+    def run(self):
+        self.started.emit()
+        try:
+            # This is your current synchronous logic, extracted from _init_map_data
+            logging.info("[Startup] Requesting secure token...")
+            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response.raise_for_status()
+            token = token_response.text.strip()
+
+            logging.info(f"[Startup] Token received: {token}")
+            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
+            trigger_response.raise_for_status()
+
+            logging.info("[Startup] Bot scrape triggered. Waiting 10 seconds...")
+            time.sleep(10)
+
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
+            json_response.raise_for_status()
+            data = json_response.json()
+
+            # Call your existing updater (DB only; no direct widget touches)
+            self.app.update_database_with_json(data)
+            logging.info("[Startup] Database updated with fresh bot data.")
+            self.finished.emit(True, "Initial data update completed")
+        except Exception as e:
+            logging.warning(f"[Startup] Silent update failed: {e}")
+            self.finished.emit(False, f"Startup update failed: {e}")
 
 # -----------------------
 # RBC Community Map Main Class
 # -----------------------
+
 
 class RBCCommunityMap(QMainWindow):
     """
     Main application class for the RBC Community Map.
     """
 
-    def __init__(self):
+    def __init__(self, splash=None):
         """
         Initialize the RBCCommunityMap and its components efficiently.
 
@@ -2352,7 +2276,7 @@ class RBCCommunityMap(QMainWindow):
         self.is_updating_minimap = False
         self.login_needed = True
         self.webview_loaded = False
-        self.splash = None
+        self.splash = splash
 
         # Compass route state
         self.selected_route_label = None  # "Direct Route" or "Transit Route"
@@ -2367,7 +2291,6 @@ class RBCCommunityMap(QMainWindow):
 
         # Initialize essential components early
         self._init_data()
-        self._init_scraper()
         self._init_window_properties()
         self._init_web_profile()
 
@@ -2379,16 +2302,10 @@ class RBCCommunityMap(QMainWindow):
         # Final setup steps
         self._finalize_setup()
 
-    @splash_message(None)
-    def _init_scraper(self) -> None:
-        """Initialize the  scraper and start scraping in a separate thread."""
-        self.scraper = Scraper()
-        # Use QThread for non-blocking scraping (assuming Scraper supports it)
-        from PySide6.QtCore import QThreadPool
-        QThreadPool.globalInstance().start(lambda: self.scraper.scrape_guilds_and_shops())
-        logging.debug("Started scraper in background thread")
+        # Self-learning Building Cache
+        self._seen_buildings: set[tuple[str, str, str]] = set()  # (cls, name, "Col|Row")
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_window_properties(self) -> None:
         """Set up main window properties."""
         try:
@@ -2402,7 +2319,7 @@ class RBCCommunityMap(QMainWindow):
             # Fallback to default icon/title if needed
             self.setWindowTitle('RBC Community Map (Fallback)')
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_web_profile(self) -> None:
         """Set up QWebEngineProfile for cookie handling."""
         self.web_profile = QWebEngineProfile.defaultProfile()
@@ -2417,7 +2334,26 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Failed to set up cookie storage at {cookie_storage_path}: {e}")
             # Continue with in-memory cookies if storage fails
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
+    def _init_map_data(self) -> None:
+        """Kick off Discord-bot scrape + locations.json pull in the background."""
+        try:
+            self._startup_thread = QThread(self)
+            self._startup_worker = StartupUpdateWorker(self)
+            self._startup_worker.moveToThread(self._startup_thread)
+
+            self._startup_thread.started.connect(self._startup_worker.run)
+            self._startup_worker.started.connect(lambda: self._set_status("Updating map data in background…"))
+            self._startup_worker.finished.connect(self._on_startup_update_finished)
+            self._startup_worker.finished.connect(self._startup_thread.quit)
+            self._startup_worker.finished.connect(self._startup_worker.deleteLater)
+            self._startup_thread.finished.connect(self._startup_thread.deleteLater)
+
+            self._startup_thread.start()
+        except Exception as e:
+            logging.warning(f"[Startup] Failed to start background update: {e}")
+
+    @splash_message(lambda self: self.splash)
     def _init_data(self) -> None:
         """Load initial data from the database with fallback."""
         try:
@@ -2428,7 +2364,6 @@ class RBCCommunityMap(QMainWindow):
                 self.keybind_config, self.current_css_profile,
                 self.selected_character, self.destination  # <-- just store, don't update minimap yet
             ) = load_data()
-
         except sqlite3.Error as e:
             logging.critical(f"Failed to load initial data: {e}")
             # Use fallback data
@@ -2441,7 +2376,7 @@ class RBCCommunityMap(QMainWindow):
             self.selected_character = None
             self.destination = None
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_ui_state(self) -> None:
         """Initialize UI-related state variables."""
         self.zoom_level = 3
@@ -2462,7 +2397,7 @@ class RBCCommunityMap(QMainWindow):
             "hall_severance": PySide6.QtGui.QPixmap("images/severance.png"),
         }
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_characters(self) -> None:
         """Initialize character-related data and widgets."""
         self.characters = []
@@ -2472,20 +2407,18 @@ class RBCCommunityMap(QMainWindow):
         if not self.characters:
             self.firstrun_character_creation()
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _init_ui_components(self) -> None:
         """Set up UI components and console logging."""
         self.setup_ui_components()
         self.setup_console_logging()
 
-    @splash_message(None)
+    @splash_message(lambda self: self.splash)
     def _finalize_setup(self) -> None:
         """Complete initialization with UI display and final configurations."""
         self.show()
-
         if self.selected_character and self.destination:
             self.update_minimap()
-
         self.load_last_active_character()
         self.setup_keybindings()
         # noinspection PyUnresolvedReferences
@@ -2497,6 +2430,29 @@ class RBCCommunityMap(QMainWindow):
             logging.warning("website_frame not initialized before focus setup")
         css = self.load_current_css()
         self.apply_custom_css(css)
+
+        # Kick off the background update after the window is up
+        QTimer.singleShot(0, self._init_map_data)
+
+    def _on_startup_update_finished(self, ok: bool, msg: str):
+        # Refresh any UI that depends on DB state (no heavy work here)
+        try:
+            if hasattr(self, "refresh_all_dropdowns"):
+                self.refresh_all_dropdowns()
+            if ok and self.selected_character and self.destination:
+                # Optional: if new data affects routes, refresh minimap
+                self.update_minimap()
+        except Exception as e:
+            logging.warning(f"Post-startup refresh error: {e}")
+        self._set_status(("✅ " if ok else "❌ ") + msg)
+
+    def _set_status(self, text: str):
+        if hasattr(self, "statusBar") and callable(getattr(self, "statusBar")) and self.statusBar():
+            self.statusBar().showMessage(text, 5000)
+        elif hasattr(self, "infobar_label"):
+            self.infobar_label.setText(text)
+        else:
+            print(text)
 
     def load_current_css(self) -> str:
         """Load CSS for the current profile from the database."""
@@ -3702,11 +3658,9 @@ class RBCCommunityMap(QMainWindow):
         self.switch_to_character(character_name)
 
     def switch_to_character(self, character_name: str) -> None:
-        self.login_attempts = getattr(self, 'login_attempts', 0)
-        self.max_login_attempts = 2
-        self.login_attempts = 0
-        self.pending_login = True
-
+        """
+        Switch to the selected character by loading its saved IP cookie into the WebEngine.
+        """
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
@@ -3718,55 +3672,37 @@ class RBCCommunityMap(QMainWindow):
                 """, (character_name,))
                 row = cursor.fetchone()
 
-                if row:
-                    cookie_id, cookie_value = row
-                    ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
-                    ip_cookie.setDomain('quiz.ravenblack.net')
-                    ip_cookie.setPath('/')
-                    ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
+                if not row:
+                    logging.error(f"No saved login cookie found for character '{character_name}'.")
+                    return
 
-                    self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
-                    logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
+                cookie_id, cookie_value = row
 
-                    # ✅ Navigate only AFTER setting the cookie
-                    QTimer.singleShot(250,
-                                      lambda: self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl")))
-                else:
-                    logging.warning(
-                        f"No saved login cookie found for character '{character_name}'. Falling back to JS login.")
-                    self.login_selected_character()
+                ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
+                ip_cookie.setDomain('quiz.ravenblack.net')
+                ip_cookie.setPath('/')
+                ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
+
+                self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
+                logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
+
+                # Reload page after injecting cookie
+                self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
 
         except sqlite3.Error as e:
             logging.error(f"Failed to switch character '{character_name}': {e}")
-            QMessageBox.critical(self, "Error", f"Failed to switch character: {e}")
-            self.login_attempts = self.max_login_attempts
 
     def login_selected_character(self):
-        """
-        Inject JavaScript to auto-fill and submit the login form.
-        Check login status after submission.
-        """
         if not self.selected_character:
             logging.warning("No character selected for login.")
             return
 
-        self.login_attempts = getattr(self, 'login_attempts', 0)  # Initialize if not exists
-        self.max_login_attempts = getattr(self, 'max_login_attempts', 2)  # Initialize if not exists
-        self.pending_login = True
-
-        if self.login_attempts >= self.max_login_attempts:
-            logging.error("Max login attempts reached. Stopping login process.")
-            QMessageBox.critical(self, "Login Error",
-                                 "Failed to log in after multiple attempts. Please check your credentials or cookie settings.")
-            return
-
-        self.login_attempts += 1
         name = self.selected_character['name']
         password = self.selected_character['password']
         logging.debug(f"Injecting login for character: {name} (ID: {self.selected_character.get('id')})")
 
         login_script = f"""
-            var loginForm = document.querySelector('form[action="/blood.pl"]');
+            var loginForm = document.querySelector('form');
             if (loginForm) {{
                 loginForm.iam.value = '{name}';
                 loginForm.passwd.value = '{password}';
@@ -3776,48 +3712,6 @@ class RBCCommunityMap(QMainWindow):
             }}
         """
         self.website_frame.page().runJavaScript(login_script)
-        self.pending_login = True
-
-    def check_login_status(self):
-        """
-        Check if login was successful by inspecting the page for the error message.
-        If failed, attempt JavaScript login or display error if max attempts reached.
-        """
-        check_script = """
-            var errorMessage = document.querySelector('p[style*="color:red"]');
-            if (errorMessage && errorMessage.textContent.includes("Please check your name and password")) {
-                "login_failed";
-            } else {
-                "login_success";
-            }
-        """
-
-        def handle_result(result):
-            self.login_attempts = getattr(self, 'login_attempts', 0)  # Initialize if not exists
-            self.max_login_attempts = getattr(self, 'max_login_attempts', 2)  # Initialize if not exists
-
-            if result == "login_failed":
-                logging.warning(f"Login attempt {self.login_attempts} failed for {self.selected_character['name']}.")
-                if self.login_attempts < self.max_login_attempts:
-                    # If cookie login failed, try JS login
-                    if self.login_attempts == 1:
-                        logging.info("Cookie login failed, attempting JavaScript login.")
-                        self.login_selected_character()
-                    else:
-                        logging.error("JavaScript login failed.")
-                        QMessageBox.critical(self, "Login Error",
-                                             "Login failed. Please check your credentials or cookie settings.")
-                else:
-                    logging.error("Max login attempts reached.")
-                    QMessageBox.critical(self, "Login Error",
-                                         "Failed to log in after multiple attempts. Please check your credentials or cookie settings.")
-            else:
-                logging.debug(f"Login successful for {self.selected_character['name']}.")
-                self.login_attempts = 0  # Reset on success
-                self.load_last_destination_for_character(self.selected_character['id'])
-                self.update_minimap()
-
-        self.website_frame.page().runJavaScript(check_script, handle_result)
 
     def firstrun_character_creation(self):
         """
@@ -4133,21 +4027,14 @@ class RBCCommunityMap(QMainWindow):
             return
 
         logging.info("Webpage loaded successfully.")
-        self.webview_loaded = True
         self.website_frame.page().toHtml(self.process_html)
         css = self.load_current_css()
         self.apply_custom_css(css)
 
-        if getattr(self, "pending_login", False):
-            self.pending_login = False
-            logging.debug("Page load complete. Checking login status...")
-            self.check_login_status()
-            return
-
-        if getattr(self, "login_needed", False):
-            self.login_needed = False
-            logging.debug("login_needed flag set. Performing JS login.")
+        if self.login_needed:
+            logging.debug("Logging in selected character via JS injection...")
             self.login_selected_character()
+            self.pending_login = False
             return
 
         if self.pending_character_id_for_map:
@@ -4159,11 +4046,6 @@ class RBCCommunityMap(QMainWindow):
     def process_html(self, html):
         """
         Process the HTML content of the webview to extract coordinates and coin information.
-
-        Args:
-            html (str): The HTML content of the page as a string.
-
-        This method calls both the extract_coordinates_from_html and extract_coins_from_html methods.
         """
         try:
             # Extract coordinates for the minimap
@@ -4182,6 +4064,13 @@ class RBCCommunityMap(QMainWindow):
             # Update coin info
             self.extract_coins_from_html(html)
             logging.debug("HTML processed successfully for coordinates and coin count.")
+
+            # --- NEW: passive building learner (non-blocking) ---
+            try:
+                self.learn_buildings_from_html(html)
+            except Exception as e:
+                # Never break the page flow if learning fails
+                logging.warning(f"Auto-learn skipped due to error: {e}")
 
         except Exception as e:
             logging.error(f"Unexpected error in process_html: {e}")
@@ -4482,6 +4371,145 @@ class RBCCommunityMap(QMainWindow):
         self.current_css_profile = profile_name
         self.apply_custom_css()
         logging.info(f"Switched to profile: {profile_name} and applied CSS")
+
+    def learn_buildings_from_html(self, html: str) -> None:
+        soup = BeautifulSoup(html, "html.parser")
+        selector = ",".join(f"span.{cls}" for cls in BUILDING_CLASS_MAP.keys())
+        if not selector:
+            return
+
+        items = []
+        for el in soup.select(selector):
+            classes = [c for c in (el.get("class") or []) if c in BUILDING_CLASS_MAP]
+            if not classes:
+                continue
+            cls = classes[0]
+
+            raw = el.get_text(" ", strip=True) or (el.get("title") or "")
+            name = self.normalize_building_name(raw)
+            if not name:
+                continue
+
+            col, row = self._infer_col_row_from_dom(el)
+            if not col or not row:
+                continue
+
+            sig = (cls, name, f"{col}|{row}")
+            if sig in self._seen_buildings:
+                continue
+            self._seen_buildings.add(sig)
+
+            items.append({"cls": cls, "name": name, "col": col, "row": row})
+
+        if not items:
+            return
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cur = conn.cursor()
+                for it in items:
+                    inserted = self._upsert_building(cur, it["cls"], it["name"], it["col"], it["row"])
+                    if inserted and it["cls"] in ("shop", "guild"):
+                        self._report_discovered_location(it["cls"], it["name"], it["col"], it["row"])
+                conn.commit()
+            logging.debug(f"Auto-learned {len(items)} building(s) from page.")
+        except Exception as e:
+            logging.warning(f"Auto-learn DB step failed: {e}")
+
+    def _infer_col_row_from_dom(self, el) -> tuple[str | None, str | None]:
+        """
+        Read a nearby 'Column & Row' label like 'Kraken & 45th' or 'Ivy & NCL'
+        without touching minimap math.
+        """
+        node = el
+        blob = ""
+        tries = 0
+        while getattr(node, "parent", None) is not None and tries < 5:
+            try:
+                title = node.get("title") or ""
+                text = node.get_text(" ", strip=True) if hasattr(node, "get_text") else ""
+                if title or text:
+                    blob += " " + title + " " + text
+            except Exception:
+                pass
+            node = node.parent
+            tries += 1
+
+        m = re.search(r"([A-Z][A-Za-z\- ]+)\s*[,&]\s*(\d{1,3}(?:st|nd|rd|th)|NCL|WCL)", blob)
+        if m:
+            return m.group(1).strip(), m.group(2).strip()
+        return None, None
+
+    def normalize_building_name(self, s: str) -> str:
+        s = (s or "").strip()
+        s = re.sub(r"\s+", " ", s)
+        s = s.replace("’", "'").replace("`", "'")
+        # If you already have nickname→canon mapping, use it:
+        if hasattr(self, "_nickname_to_canon"):
+            try:
+                return self._nickname_to_canon(s)
+            except Exception:
+                pass
+        return s
+
+    def _upsert_building(self, cur: sqlite3.Cursor, cls: str, name: str, col: str, row: str) -> bool:
+        """
+        Returns True if a brand‑new record was inserted (useful for reporting hooks).
+        """
+        mapping = BUILDING_CLASS_MAP[cls]
+        table = mapping["table"]
+        name_col = mapping["name_col"]
+
+        if table in ("banks", "taverns", "transits", "placesofinterest", "userbuildings"):
+            cur.execute(f"SELECT 1 FROM {table} WHERE `Column`=? AND Row=? AND {name_col}=?", (col, row, name))
+            if cur.fetchone():
+                return False
+            cur.execute(
+                f"INSERT INTO {table} (`Column`, Row, {name_col}) VALUES (?, ?, ?)",
+                (col, row, name)
+            )
+            logging.debug(f"Inserted {table}: {name} @ {col} & {row}")
+            return True
+
+        if table == "shops":
+            cur.execute("SELECT `Column`, Row FROM shops WHERE Name=?", (name,))
+            row0 = cur.fetchone()
+            if row0:
+                existing_col, existing_row = row0
+                if (existing_col in (None, "", "NA")) or (existing_row in (None, "", "NA")):
+                    cur.execute("UPDATE shops SET `Column`=?, Row=? WHERE Name=?", (col, row, name))
+                    logging.debug(f"Updated shop coords: {name} -> {col} & {row}")
+                return False
+            cur.execute("INSERT INTO shops (Name, `Column`, Row) VALUES (?, ?, ?)", (name, col, row))
+            logging.debug(f"Inserted shop: {name} @ {col} & {row}")
+            return True
+
+        if table == "guilds":
+            cur.execute("SELECT `Column`, Row FROM guilds WHERE Name=?", (name,))
+            row0 = cur.fetchone()
+            if row0:
+                existing_col, existing_row = row0
+                if (existing_col in (None, "", "NA")) or (existing_row in (None, "", "NA")):
+                    cur.execute("UPDATE guilds SET `Column`=?, Row=? WHERE Name=?", (col, row, name))
+                    logging.debug(f"Updated guild coords: {name} -> {col} & {row}")
+                return False
+            cur.execute("INSERT INTO guilds (Name, `Column`, Row) VALUES (?, ?, ?)", (name, col, row))
+            logging.debug(f"Inserted guild: {name} @ {col} & {row}")
+            return True
+
+        return False
+
+    def _report_discovered_location(self, cls: str, name: str, col: str, row: str) -> None:
+        """
+        Placeholder for your Discord/AVITD reporting (only called on brand‑new shops/guilds).
+        Safe to leave as no‑op until your API endpoint exists.
+        """
+        # Example (when ready):
+        # try:
+        #     requests.post(BOT_URL, json={"kind": cls, "name": name, "col": col, "row": row}, timeout=3)
+        # except Exception as e:
+        #     logging.info(f"Report skipped: {e}")
+        pass
 
     # -----------------------
     # Minimap Drawing and Update
@@ -5601,2270 +5629,96 @@ class RBCCommunityMap(QMainWindow):
 
         self.update_minimap()
 
-
-# -----------------------
-# Database Viewer Class
-# -----------------------
-
-class DatabaseViewer(QDialog):
-    """
-    Graphical interface for viewing SQLite database tables in grouped tabbed layout.
-    """
-
-    TAB_GROUPS = {
-        "App Info": [
-            "rows", "columns", "settings", "last_active_character",
-            "cookies", "css_profiles", "custom_css", "color_mappings",
-            "discord_servers", "powers", "shop_items"
-        ],
-        "Character Info": [
-            "characters", "coins", "destinations"
-        ],
-        "Building Info": [
-            "banks", "placesofinterest", "taverns", "transits",
-            "userbuildings", "shops", "guilds"
-        ]
-    }
-
-    def __init__(self, db_connection, parent=None, color_mappings: dict | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("SQLite Database Viewer")
-        self.setWindowIcon(APP_ICON)
-        self.setGeometry(100, 100, 800, 600)
-
-        self.db_connection = db_connection
-        self.cursor = db_connection.cursor()
-        self.color_mappings = color_mappings or {}
-
-        main_layout = QVBoxLayout(self)
-        self.parent_tab_widget = QTabWidget()
-        main_layout.addWidget(self.parent_tab_widget)
-
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        try:
-            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            all_tables = [row[0] for row in self.cursor.fetchall()]
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load tables: {e}")
-            QMessageBox.critical(self, "Error", "Failed to load database tables.")
-            return
-
-        # Track added tables
-        added_tables = set()
-
-        for group_name, table_list in self.TAB_GROUPS.items():
-            child_tab_widget = QTabWidget()
-            for table in table_list:
-                if table in all_tables:
-                    column_names, data = self.get_table_data(table)
-                    self.add_table_tab(child_tab_widget, table, column_names, data)
-                    added_tables.add(table)
-            self.parent_tab_widget.addTab(child_tab_widget, group_name)
-
-        # Add remaining tables to 'Other' tab
-        other_tab_widget = QTabWidget()
-        remaining_tables = sorted(set(all_tables) - added_tables)
-        for table in remaining_tables:
-            column_names, data = self.get_table_data(table)
-            self.add_table_tab(other_tab_widget, table, column_names, data)
-        if remaining_tables:
-            self.parent_tab_widget.addTab(other_tab_widget, "Other")
-
-        logging.debug(f"Loaded {len(all_tables)} tables into grouped viewer")
-
-    def get_table_data(self, table_name: str) -> tuple[list[str], list[tuple]]:
-        try:
-            self.cursor.execute(f"PRAGMA table_info(`{table_name}`)")
-            column_names = [col[1] for col in self.cursor.fetchall()]
-            self.cursor.execute(f"SELECT * FROM `{table_name}`")
-            data = self.cursor.fetchall()
-            return column_names, data
-        except sqlite3.Error as e:
-            logging.error(f"Failed to fetch data for table '{table_name}': {e}")
-            return [], []
-
-    def add_table_tab(self, tab_widget: QTabWidget, table_name: str,
-                      column_names: list[str], data: list[tuple]) -> None:
-        table_widget = QTableWidget()
-        table_widget.setRowCount(len(data))
-        table_widget.setColumnCount(len(column_names))
-        table_widget.setHorizontalHeaderLabels(column_names)
-
-        for row_idx, row_data in enumerate(data):
-            for col_idx, value in enumerate(row_data):
-                table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
-
-        table_widget.resizeColumnsToContents()
-        tab_widget.addTab(table_widget, table_name)
-        logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
-
-    def closeEvent(self, event) -> None:
-        try:
-            self.cursor.close()
-            self.db_connection.close()
-            logging.debug("Database connection closed")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to close database connection: {e}")
-        event.accept()
-
-
-# -----------------------
-# Character Dialog Class
-# -----------------------
-
-class CharacterDialog(QDialog):
-    """
-    A dialog for adding or modifying a character, with validation.
-    """
-
-    def __init__(self, parent=None, character=None, color_mappings: dict | None = None):
-        super().__init__(parent)
-        self.setWindowTitle("Character")
-        self.setWindowIcon(APP_ICON)
-        self.color_mappings = color_mappings or {}
-
-        # Input fields
-        self.name_edit = QLineEdit()
-        self.password_edit = QLineEdit()
-        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
-
-        if character:
-            self.name_edit.setText(character['name'])
-            self.password_edit.setText(character['password'])
-
-        # Form layout
-        layout = QFormLayout()
-        layout.addRow("Name:", self.name_edit)
-        layout.addRow("Password:", self.password_edit)
-
-        # OK and Cancel buttons
-        button_box = QHBoxLayout()
-        ok_button = QPushButton("OK")
-        cancel_button = QPushButton("Cancel")
-        button_box.addWidget(ok_button)
-        button_box.addWidget(cancel_button)
-        layout.addRow(button_box)
-        self.setLayout(layout)
-
-        # Apply theme if available
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        # Connect buttons
-        ok_button.clicked.connect(self.validate_and_accept)
-        cancel_button.clicked.connect(self.reject)
-
-    def validate_and_accept(self):
-        """Check if inputs are valid before accepting."""
-        name = self.name_edit.text().strip()
-        password = self.password_edit.text().strip()
-
-        if not name or not password:
-            QMessageBox.warning(self, "Validation Error", "Character name and password cannot be empty.")
-            return  # 🚨 Do NOT call accept(), keep dialog open
-
-        self.accept()  # ✅ Only accept if valid
-
-
-# -----------------------
-# Theme Customization Dialog
-# -----------------------
-
-class ThemeCustomizationDialog(QDialog):
-    """
-    Dialog for customizing application theme colors for UI and minimap elements.
-    """
-
-    def __init__(self, parent=None, color_mappings: dict | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle('Theme Customization')
-        self.setWindowIcon(APP_ICON)
-        self.setMinimumSize(400, 300)
-
-        self.color_mappings = color_mappings.copy() if color_mappings else {}
-
-        # Main layout
-        layout = QVBoxLayout(self)
-        self.tabs = QTabWidget(self)
-        layout.addWidget(self.tabs)
-
-        # Tabs
-        self.ui_tab = QWidget()
-        self.minimap_tab = QWidget()
-        self.tabs.addTab(self.ui_tab, "UI, Buttons, and Text")
-        self.tabs.addTab(self.minimap_tab, "Minimap Content")
-
-        self.setup_ui_tab()
-        self.setup_minimap_tab()
-
-        # Buttons
-        button_layout = QHBoxLayout()
-        save_button = QPushButton('Save', self)
-        cancel_button = QPushButton('Cancel', self)
-        save_button.clicked.connect(self.accept)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(save_button)
-        button_layout.addWidget(cancel_button)
-        layout.addLayout(button_layout)
-
-        apply_theme_to_widget(self, self.color_mappings)
-        logging.debug("Theme customization dialog initialized")
-
-    def setup_ui_tab(self) -> None:
-        layout = QGridLayout(self.ui_tab)
-        ui_elements = [
-            'background',
-            'text_color',
-            'button_color',
-            'button_hover_color',
-            'button_pressed_color',
-            'button_border_color'
-        ]
-
-        for idx, elem in enumerate(ui_elements):
-            color_square = QLabel(self.ui_tab)
-            color_square.setFixedSize(20, 20)
-            color = self.color_mappings.get(elem, PySide6.QtGui.QColor('white'))
-            pixmap = PySide6.QtGui.QPixmap(20, 20)
-            pixmap.fill(color)
-            color_square.setPixmap(pixmap)
-
-            color_button = QPushButton('Change Color', self.ui_tab)
-            color_button.clicked.connect(lambda _, e=elem, sq=color_square: self.change_color(e, sq))
-
-            layout.addWidget(QLabel(f"{elem.replace('_', ' ').capitalize()}:", self.ui_tab), idx, 0)
-            layout.addWidget(color_square, idx, 1)
-            layout.addWidget(color_button, idx, 2)
-
-    def setup_minimap_tab(self) -> None:
-        layout = QGridLayout(self.minimap_tab)
-        minimap_elements = ['bank', 'tavern', 'transit', 'user_building', 'shop', 'guild', 'placesofinterest']
-
-        for idx, elem in enumerate(minimap_elements):
-            color_square = QLabel(self.minimap_tab)
-            color_square.setFixedSize(20, 20)
-            color = self.color_mappings.get(elem, PySide6.QtGui.QColor('white'))
-            pixmap = PySide6.QtGui.QPixmap(20, 20)
-            pixmap.fill(color)
-            color_square.setPixmap(pixmap)
-
-            color_button = QPushButton('Change Color', self.minimap_tab)
-            color_button.clicked.connect(lambda _, e=elem, sq=color_square: self.change_color(e, sq))
-
-            layout.addWidget(QLabel(f"{elem.capitalize()}:", self.minimap_tab), idx, 0)
-            layout.addWidget(color_square, idx, 1)
-            layout.addWidget(color_button, idx, 2)
-
-    def change_color(self, element_name: str, color_square: QLabel) -> None:
-        color = QColorDialog.getColor(self.color_mappings.get(element_name, PySide6.QtGui.QColor('white')), self)
-        if color.isValid():
-            self.color_mappings[element_name] = color
-            pixmap = PySide6.QtGui.QPixmap(20, 20)
-            pixmap.fill(color)
-            color_square.setPixmap(pixmap)
-            logging.debug(f"Changed color for '{element_name}' to {color.name()}")
-
-
-# -----------------------
-# CSS Customization Dialog
-# -----------------------
-
-class CSSCustomizationDialog(QDialog):
-    def __init__(self, parent: QWidget = None, current_profile: str = None, color_mappings: dict | None = None) -> None:
-        super().__init__(parent)
-        self.parent = parent
-        self.color_mappings = color_mappings or {}
-        self.current_profile = current_profile or self.get_current_profile()
-
-        self.setWindowTitle("CSS Customization")
-        self.setWindowIcon(APP_ICON)
-        self.resize(600, 400)
-        self.tabs = {}
-        self.setup_ui()
-        self.load_existing_customizations()
-
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        logging.debug(f"CSSCustomizationDialog initialized with profile '{self.current_profile}'")
-
-    def get_current_profile(self) -> str:
-        """Retrieve the current CSS profile from settings."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'css_profile'")
-                result = cursor.fetchone()
-                return result[0] if result else "Default"
-        except sqlite3.Error as e:
-            logging.error(f"Failed to retrieve current profile: {e}")
-            return "Default"
-
-    def update_current_profile(self, profile: str) -> None:
-        """Update the css_profile setting in the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)",
-                    ("css_profile", profile)
-                )
-                conn.commit()
-            self.current_profile = profile
-            logging.debug(f"Updated css_profile to: {profile}")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to update css_profile: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to update profile: {e}")
-
-    def setup_ui(self) -> None:
-        """Set up the UI for CSS customization."""
-        main_layout = QVBoxLayout(self)
-
-        # Profile selection
-        profile_layout = QHBoxLayout()
-        profile_layout.addWidget(QLabel("Profile:"))
-        self.profile_dropdown = QComboBox()
-        self.load_profiles()
-        self.profile_dropdown.setCurrentText(self.current_profile)
-        self.profile_dropdown.currentTextChanged.connect(self.on_profile_change)
-        profile_layout.addWidget(self.profile_dropdown)
-
-        new_profile_btn = QPushButton("New Profile")
-        new_profile_btn.clicked.connect(self.create_new_profile)
-        profile_layout.addWidget(new_profile_btn)
-
-        delete_profile_btn = QPushButton("Delete Profile")
-        delete_profile_btn.clicked.connect(self.delete_profile)
-        profile_layout.addWidget(delete_profile_btn)
-
-        main_layout.addLayout(profile_layout)
-
-        # Tabs for CSS categories
-        self.tab_widget = QTabWidget()
-        self.add_tab("Background", ["BODY"])
-        self.add_tab("Text", ["H1", "P", "A", "TD", "DIV"])
-        self.add_tab("City Elements", ["TD.cityblock", "TD.intersect", "TD.street", "TD.city"])
-        self.add_tab("Special Elements", [
-            "SPAN.intersect", "SPAN.transit", "SPAN.pub", "SPAN.bank", "SPAN.shop",
-            "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy"
-        ])
-        main_layout.addWidget(self.tab_widget)
-
-        # Buttons
-        button_layout = QHBoxLayout()
-        upload_btn = QPushButton("Upload CSS File")
-        upload_btn.clicked.connect(self.upload_css_file)
-        button_layout.addWidget(upload_btn)
-
-        clear_btn = QPushButton("Clear All")
-        clear_btn.clicked.connect(self.clear_all_customizations)
-        button_layout.addWidget(clear_btn)
-
-        apply_btn = QPushButton("Apply")
-        apply_btn.clicked.connect(self.save_and_apply_changes)
-        button_layout.addWidget(apply_btn)
-
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
-
-        main_layout.addLayout(button_layout)
-        self.setLayout(main_layout)
-
-        # Ensure preview updates even if currentTextChanged isn't triggered
-        self.on_profile_change(self.current_profile)
-
-    def on_profile_change(self, profile: str) -> None:
-        """Handle profile change: update DB, load styles, apply CSS."""
-        if profile != self.current_profile:
-            self.update_current_profile(profile)
-
-        self.current_profile = profile
-        self.load_existing_customizations()
-        css = self.generate_custom_css()
-
-        if css and self.parent:
-            parent = cast("MainWindowType", self.parent)
-            parent.apply_custom_css(css)
-            parent.website_frame.reload()
-
-        logging.info(f"Switched to profile: {profile} and applied CSS")
-
-    def load_profiles(self) -> None:
-        """Load available CSS profiles from the database."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT profile_name FROM css_profiles")
-                profiles = [row[0] for row in cursor.fetchall()]
-            self.profile_dropdown.clear()
-            self.profile_dropdown.addItems(profiles)
-            logging.debug(f"Loaded {len(profiles)} profiles")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load profiles: {e}")
-            QMessageBox.critical(self, "Error", "Failed to load profiles")
-
-    def create_new_profile(self) -> None:
-        """Create a new CSS profile."""
-        profile_name, ok = QInputDialog.getText(self, "New Profile", "Enter profile name:")
-        if ok and profile_name:
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)", (profile_name,))
-                    conn.commit()
-                self.load_profiles()
-                self.profile_dropdown.setCurrentText(profile_name)
-                self.on_profile_change(profile_name)
-                logging.info(f"Created new profile: {profile_name}")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to create profile: {e}")
-                QMessageBox.critical(self, "Error", "Failed to create profile")
-
-    def delete_profile(self) -> None:
-        """Delete the selected CSS profile."""
-        profile = self.profile_dropdown.currentText()
-        if profile == "Default":
-            QMessageBox.warning(self, "Warning", "Cannot delete the Default profile")
-            return
-        # noinspection PyUnresolvedReferences
-        reply = QMessageBox.question(self, "Confirm Delete", f"Delete profile '{profile}'?",
-                                     QMessageBox.Yes | QMessageBox.No)
-        # noinspection PyUnresolvedReferences
-        if reply == QMessageBox.Yes:
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM css_profiles WHERE profile_name = ?", (profile,))
-                    conn.commit()
-                self.load_profiles()
-                self.profile_dropdown.setCurrentText("Default")
-                self.on_profile_change("Default")
-                logging.info(f"Deleted profile: {profile}")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to delete profile: {e}")
-                QMessageBox.critical(self, "Error", "Failed to delete profile")
-
-    def add_tab(self, tab_title: str, elements: list[str]) -> None:
-        """Add a tab for a category of CSS elements."""
-        tab = QWidget()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        container = QWidget()
-        grid = QGridLayout(container)
-
-        grid.addWidget(QLabel("Element"), 0, 0)
-        grid.addWidget(QLabel("Preview"), 0, 1)
-        grid.addWidget(QLabel("Color"), 0, 2)
-        grid.addWidget(QLabel("Image"), 0, 3)
-        grid.addWidget(QLabel("Shadow"), 0, 4)
-        grid.addWidget(QLabel("Reset"), 0, 5)
-
-        for i, element in enumerate(elements, 1):
-            label = QLabel(element)
-            preview = QLabel("Preview")
-            preview.setFixedSize(100, 30)
-            preview.setStyleSheet("border: 1px solid black;")
-            color_btn = QPushButton("Pick Color")
-            color_btn.clicked.connect(lambda _, e=element, p=preview: self.pick_color(e, p))
-            image_btn = QPushButton("Pick Image")
-            image_btn.clicked.connect(lambda _, e=element, p=preview: self.pick_image(e, p))
-            shadow_btn = QPushButton("Add Shadow")
-            shadow_btn.clicked.connect(lambda _, e=element: self.add_shadow(e))
-            reset_btn = QPushButton("Reset")
-            reset_btn.clicked.connect(lambda _, e=element, p=preview: self.reset_css_item(e, p))
-            grid.addWidget(label, i, 0)
-            grid.addWidget(preview, i, 1)
-            grid.addWidget(color_btn, i, 2)
-            grid.addWidget(image_btn, i, 3)
-            grid.addWidget(shadow_btn, i, 4)
-            grid.addWidget(reset_btn, i, 5)
-
-        scroll.setWidget(container)
-        tab.setLayout(QVBoxLayout())
-        tab.layout().addWidget(scroll)
-        self.tab_widget.addTab(tab, tab_title)
-        self.tabs[tab_title] = tab
-        tab.grid = grid
-
-    def pick_color(self, css_item: str, preview: QLabel) -> None:
-        """Open a color picker and apply the selected color."""
-        color = QColorDialog.getColor()
-        if color.isValid():
-            style = f"background-color: {color.name()};"
-            preview.setStyleSheet(style)
-            self.save_css_item(css_item, style)
-            logging.debug(f"Set color for '{css_item}': {color.name()}")
-
-    def pick_image(self, css_item: str, preview: QLabel) -> None:
-        """Open a file dialog to select an image and apply it as a background."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.png *.jpg *.jpeg)")
-        if file_path:
-            style = f"background-image: url({file_path}); background-size: cover;"
-            preview.setStyleSheet(style)
-            self.save_css_item(css_item, style)
-            logging.debug(f"Set image for '{css_item}': {file_path}")
-
-    def add_shadow(self, css_item: str) -> None:
-        """Add a default shadow effect to the element."""
-        style = "box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);"
-        self.save_css_item(css_item, style)
-        self.load_existing_customizations()
-        logging.debug(f"Added shadow to '{css_item}'")
-
-    def save_css_item(self, css_item: str, value: str) -> None:
-        """Save a CSS customization to the database under the current profile."""
-        if not value.strip():
-            return
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)",
-                    (self.current_profile, css_item, value)
-                )
-                conn.commit()
-        except sqlite3.Error as e:
-            logging.error(f"Failed to save CSS for '{css_item}': {e}")
-            QMessageBox.critical(self, "Error", f"Failed to save CSS: {e}")
-
-    def load_existing_customizations(self) -> None:
-        """Load and apply existing CSS customizations for the current profile."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT element, value FROM custom_css WHERE profile_name = ?",
-                    (self.current_profile,)
-                )
-                customizations = dict(cursor.fetchall())
-
-            for tab in self.tabs.values():
-                grid = tab.grid
-                for row in range(1, grid.rowCount()):
-                    label = grid.itemAtPosition(row, 0).widget()
-                    preview = grid.itemAtPosition(row, 1).widget()
-                    preview.setStyleSheet(customizations.get(label.text(), ""))
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load CSS customizations: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load customizations: {e}")
-
-    def save_and_apply_changes(self) -> None:
-        selected_profile = self.profile_dropdown.currentText()
-        self.update_current_profile(selected_profile)
-        self.current_profile = selected_profile
-        css = self.generate_custom_css()
-        if css and self.parent:
-            parent = cast("MainWindowType", self.parent)
-            parent.current_css_profile = self.current_profile
-            parent.apply_custom_css(css)
-            parent.website_frame.reload()
-        self.accept()
-        logging.info("CSS changes saved and applied")
-
-    def generate_custom_css(self) -> str:
-        """Generate CSS string from database customizations for the current profile."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT element, value FROM custom_css WHERE profile_name = ?",
-                    (self.current_profile,)
-                )
-                return "\n".join(f"{elem} {{ {val} }}" for elem, val in cursor.fetchall())
-        except sqlite3.Error as e:
-            logging.error(f"Failed to generate CSS: {e}")
-            return ""
-
-    def upload_css_file(self) -> None:
-        """Upload and apply a CSS file to the current profile."""
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select CSS", "", "CSS Files (*.css)")
-        if file_path:
-            try:
-                with open(file_path, "r") as f, sqlite3.connect(DB_PATH) as conn:
-                    css = f.read()
-                    rules = re.findall(r'([^{]+){([^}]+)}', css, re.DOTALL)
-                    cursor = conn.cursor()
-                    cursor.executemany(
-                        "INSERT OR REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)",
-                        [(self.current_profile, sel.strip(), prop.strip()) for sel, prop in rules]
-                    )
-                    conn.commit()
-                self.load_existing_customizations()
-                if self.parent:
-                    parent = cast("MainWindowType", self.parent)
-                    parent.apply_custom_css(css)
-                    parent.website_frame.reload()
-                logging.info(f"Uploaded CSS file: {file_path} to profile '{self.current_profile}'")
-            except (IOError, sqlite3.Error) as e:
-                logging.error(f"Failed to upload CSS file: {e}")
-                QMessageBox.critical(self, "Error", f"Upload failed: {e}")
-
-    def reset_css_item(self, css_item: str, preview: QLabel) -> None:
-        """Reset a specific CSS item to default for the current profile."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "DELETE FROM custom_css WHERE profile_name = ? AND element = ?",
-                    (self.current_profile, css_item)
-                )
-                conn.commit()
-            preview.setStyleSheet("")
-            logging.debug(f"Reset CSS for '{css_item}' in profile '{self.current_profile}'")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to reset CSS for '{css_item}': {e}")
-            QMessageBox.critical(self, "Error", f"Failed to reset CSS: {e}")
-
-    def clear_all_customizations(self) -> None:
-        """Clear all CSS customizations for the current profile."""
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM custom_css WHERE profile_name = ?", (self.current_profile,))
-                conn.commit()
-            self.load_existing_customizations()
-            if self.parent:
-                parent = cast("MainWindowType", self.parent)
-                parent.apply_custom_css("")
-                parent.website_frame.reload()
-            logging.info(f"Cleared all CSS customizations for profile '{self.current_profile}'")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to clear CSS customizations: {e}")
-            QMessageBox.critical(self, "Error", "Failed to clear customizations")
-
-# -----------------------
-# Scraper Class
-# -----------------------
-
-class Scraper:
-    def __init__(self):
-        self.discord_bot_url = "https://lollis-home.ddns.net/api/locations.json"
-        self.connection = sqlite3.connect(DB_PATH)
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        }
-        logging.info("Scraper initialized.")
-
-        self.nickname_map = {
-            "Ace Pawn": "Ace Porn",
-            "Checkers Pawn Shop": "Checkers Porn Shop",
-            "Reversi Pawn": "Reversi Porn",
-            "Spinners Pawn": "Spinners Porn",
-            "Dark Desires": "Dark Desires",
-            "Discount Magic": "Discount Magic",
-            "Discount Potions": "Discount Potions",
-            "Discount Scrolls": "Discount Scrolls",
-            "Interesting Times": "Interesting Times",
-            "Sparks": "Sparks",
-            "The Magic Box": "The Magic Box",
-            "White Light": "White Light",
-            "Herman's Scrolls": "Herman's Scrolls",
-            "Paper and Scrolls": "Paper and Scrolls",
-            "Scrollmania": "Scrollmania",
-            "Scrolls 'n' Stuff": "Scrolls 'n' Stuff",
-            "Scrolls R Us": "Scrolls R Us",
-            "Scrollworks": "Scrollworks",
-            "Ye Olde Scrolles": "Ye Olde Scrolles",
-            "McPotions": "McPotions",
-            "Potable Potions": "Potable Potions",
-            "Potion Distillery": "Potion Distillery",
-            "Potionworks": "Potionworks",
-            "Silver Apothecary": "Silver Apothecary",
-            "The Potion Shoppe": "The Potion Shoppe",
-        }
-
-    def normalize_name(self, name):
-        name = name.strip()
-        if name.startswith("Peacekkeepers Mission"):
-            name = name.replace("Peacekkeepers", "Peacekeepers", 1)
-        name = name.lstrip("*_~").rstrip("*_~")
-        return self.nickname_map.get(name, name).title()
-
-    def update_database(self, data, table, next_update):
-        scrape_timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-
-                for name, column, row in data:
-                    normalized_name = self.normalize_name(name)
-
-                    if table == "shops" and "Peacekeepers Mission" in normalized_name:
-                        logging.warning(f"Skipping {normalized_name} as it belongs in guilds, not shops.")
-                        continue
-
-                    try:
-                        cursor.execute(f"""
-                            INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                            VALUES (?, ?, ?, ?, ?)
-                            ON CONFLICT(Name) DO UPDATE SET
-                                `Column`=excluded.`Column`,
-                                `Row`=excluded.`Row`,
-                                `next_update`=excluded.`next_update`,
-                                `last_scraped`=excluded.`last_scraped`
-                        """, (normalized_name, column, row, next_update, scrape_timestamp))
-
-                    except sqlite3.Error as e:
-                        logging.error(f"Failed to upsert {table} entry '{normalized_name}': {e}")
-
-                if table == "guilds":
-                    cursor.executemany(f"""
-                        INSERT INTO {table} (Name, `Column`, `Row`, `next_update`, `last_scraped`)
-                        VALUES (?, ?, ?, ?, ?)
-                        ON CONFLICT(Name) DO UPDATE SET
-                            `Column`=excluded.`Column`,
-                            `Row`=excluded.`Row`,
-                            `next_update`=excluded.`next_update`,
-                            `last_scraped`=excluded.`last_scraped`
-                    """, [
-                        ("Peacekeepers Mission 1", "Emerald", "67th", next_update, scrape_timestamp),
-                        ("Peacekeepers Mission 2", "Unicorn", "33rd", next_update, scrape_timestamp),
-                        ("Peacekeepers Mission 3", "Emerald", "33rd", next_update, scrape_timestamp),
-                    ])
-
-                conn.commit()
-                logging.info(f"Database updated for {table}.")
-
-        except sqlite3.Error as e:
-            logging.error(f"Database operation for {table} failed: {e}")
-
-    def scrape_discord_bot(self):
-        timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
-
-        try:
-            response = requests.get(self.discord_bot_url, timeout=10)
-            data = response.json()
-        except Exception as e:
-            logging.error(f"Discord bot API fetch failed: {e}")
-            return [], [], 'NA', 'NA'
-
-        guilds = [
-            (entry["display"], entry["column"], entry["row"])
-            for entry in data.get("guilds", {}).values()
-        ]
-        shops = [
-            (entry["display"], entry["column"], entry["row"])
-            for entry in data.get("shops", {}).values()
-        ]
-        guilds_next = data.get("guilds_next_update", 'NA')
-        shops_next = data.get("shops_next_update", 'NA')
-
-        logging.info(f"Discord bot provided {len(guilds)} guilds and {len(shops)} shops.")
-        return guilds, shops, guilds_next, shops_next
-
-    def scrape(self):
-        guilds, shops, guilds_next, shops_next = self.scrape_discord_bot()
-        self.update_database(guilds, "guilds", guilds_next)
-        self.update_database(shops, "shops", shops_next)
-
-# -----------------------
-# Set Destination Dialog
-# -----------------------
-
-class SetDestinationDialog(QDialog):
-    """Dialog for setting a destination on the map."""
-
-    def __init__(self, parent: QWidget = None, color_mappings: dict | None = None) -> None:
+    def update_data(self):
         """
-        Initialize the Set Destination dialog.
-
-        Args:
-            parent: Reference to RBCCommunityMap.
+        Securely triggers the bot to update locations.json using the token-based API flow,
+        waits for completion, and then updates the local database.
         """
-        super().__init__(parent)
-        self.setWindowTitle("Set Destination")
-        self.setWindowIcon(APP_ICON)
-        self.resize(650, 300)
-        self.parent = parent
-        self.color_mappings = color_mappings or {}
-
-        logging.debug("SetDestinationDialog initialized")
-
-        main_layout = QVBoxLayout(self)
-        dropdown_style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
-
-        # Create all dropdowns
-        self.recent_destinations_dropdown = QComboBox()
-        self.tavern_dropdown = QComboBox()
-        self.bank_dropdown = QComboBox()
-        self.transit_dropdown = QComboBox()
-        self.shop_dropdown = QComboBox()
-        self.guild_dropdown = QComboBox()
-        self.poi_dropdown = QComboBox()
-        self.user_building_dropdown = QComboBox()
-        self.columns_dropdown = QComboBox()
-        self.rows_dropdown = QComboBox()
-        self.directional_dropdown = QComboBox()
-
-        # Apply style and search to all dropdowns
-        all_dropdowns = [
-            self.recent_destinations_dropdown,
-            self.tavern_dropdown, self.bank_dropdown, self.transit_dropdown,
-            self.shop_dropdown, self.guild_dropdown, self.poi_dropdown,
-            self.user_building_dropdown, self.columns_dropdown, self.rows_dropdown,
-            self.directional_dropdown,
-        ]
-
-        for dropdown in all_dropdowns:
-            dropdown.setStyleSheet(dropdown_style)
-            dropdown.setEditable(True)
-            # noinspection PyUnresolvedReferences
-            dropdown.setInsertPolicy(QComboBox.NoInsert)
-            completer = dropdown.completer()
-            # noinspection PyUnresolvedReferences
-            completer.setCompletionMode(QCompleter.PopupCompletion)
-            # noinspection PyUnresolvedReferences
-            completer.setFilterMode(Qt.MatchContains)
-
-        # Populate dropdowns
-        self.populate_recent_destinations()
-        self._populate_initial_dropdowns()
-
-        if self.parent:
-            parent = cast("MainWindowType", self.parent)
-            self.populate_dropdown(self.columns_dropdown, list(parent.columns.keys()))
-            self.populate_dropdown(self.rows_dropdown, list(parent.rows.keys()))
-        else:
-            self.populate_dropdown(self.columns_dropdown, [])
-            self.populate_dropdown(self.rows_dropdown, [])
-
-        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
-
-        # Layout: Dropdowns
-        dropdown_layout = QFormLayout()
-        dropdown_layout.addRow("Recent:", self.recent_destinations_dropdown)
-        dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
-        dropdown_layout.addRow("Bank:", self.bank_dropdown)
-        dropdown_layout.addRow("Transit:", self.transit_dropdown)
-        dropdown_layout.addRow("Shop:", self.shop_dropdown)
-        dropdown_layout.addRow("Guild:", self.guild_dropdown)
-        dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
-        dropdown_layout.addRow("User Building:", self.user_building_dropdown)
-
-        # Layout: XY + Direction
-        custom_layout = QHBoxLayout()
-        custom_layout.addWidget(QLabel("ABC Street:"))
-        custom_layout.addWidget(self.columns_dropdown, 1)
-        custom_layout.addWidget(QLabel("123 Street:"))
-        custom_layout.addWidget(self.rows_dropdown, 1)
-        custom_layout.addWidget(QLabel("Direction:"))
-        custom_layout.addWidget(self.directional_dropdown, 1)
-
-        self.columns_dropdown.setMinimumWidth(120)
-        self.rows_dropdown.setMinimumWidth(120)
-        self.directional_dropdown.setMinimumWidth(120)
-
-        # Layout: Buttons
-        button_layout = QGridLayout()
-        set_btn = QPushButton("Set")
-        clear_btn = QPushButton("Clear")
-        update_btn = QPushButton("Update Data")
-        cancel_btn = QPushButton("Cancel")
-        button_layout.addWidget(set_btn, 0, 0)
-        button_layout.addWidget(clear_btn, 0, 1)
-        button_layout.addWidget(update_btn, 1, 0)
-        button_layout.addWidget(cancel_btn, 1, 1)
-
-        set_btn.clicked.connect(lambda: self.set_destination())
-        clear_btn.clicked.connect(self.clear_destination)
-        update_btn.clicked.connect(self.update_combo_boxes)
-        cancel_btn.clicked.connect(self.reject)
-
-        # Countdown labels
-        self.guildCountdownLabel = QLabel("Guilds move at ...")
-        self.shopCountdownLabel = QLabel("Shops move at ...")
-
-        # Final layout
-        main_layout.addLayout(dropdown_layout)
-        main_layout.addLayout(custom_layout)
-        main_layout.addLayout(button_layout)
-        main_layout.addWidget(self.guildCountdownLabel)
-        main_layout.addWidget(self.shopCountdownLabel)
-        self.setLayout(main_layout)
-
-        # Apply theme
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        # Countdown logic
-        self.load_next_move_times()
-        self.countdown_timer = QTimer(self)
-        self.countdown_timer.timeout.connect(self.update_countdown_labels)
-        self.countdown_timer.start(1000)
-        self.update_combo_boxes()
-
-    def _populate_initial_dropdowns(self) -> None:
-        """Populate predefined destination dropdowns with initial data."""
-        if not self.parent:
-            logging.warning("No parent; skipping dropdown population")
-            return
-
-        parent = cast("MainWindowType", self.parent)
-
-        self.populate_dropdown(self.tavern_dropdown, list(parent.taverns_coordinates.keys()))
-        self.populate_dropdown(self.bank_dropdown,
-                               [f"{col} & {row}" for col, row, *_ in parent.banks_coordinates.values()])
-        self.populate_dropdown(self.transit_dropdown, list(parent.transits_coordinates.keys()))
-        self.populate_dropdown(self.shop_dropdown, list(parent.shops_coordinates.keys()))
-        self.populate_dropdown(self.guild_dropdown, list(parent.guilds_coordinates.keys()))
-        self.populate_dropdown(self.poi_dropdown, list(parent.places_of_interest_coordinates.keys()))
-        self.populate_dropdown(self.user_building_dropdown, list(parent.user_buildings_coordinates.keys()))
-
-        logging.debug("Initial dropdowns populated")
-
-    def populate_recent_destinations(self) -> None:
-        """Populate recent destinations dropdown for the selected character."""
-        self.recent_destinations_dropdown.clear()
-        self.recent_destinations_dropdown.addItem("Select a recent destination")
-
-        if not self.parent:
-            logging.debug("No parent; skipping recent destinations")
-            return
-
-        parent = cast("MainWindowType", self.parent)
-
-        if not parent.selected_character:
-            logging.debug("No character selected; skipping recent destinations")
-            return
-
-        character_id = parent.selected_character.get('id')
+        logging.info("Requesting secure token...")
 
         try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
-                    (character_id,)
-                )
+            # Step 1: Request a one-time token
+            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response.raise_for_status()
+            token = token_response.text.strip()
 
-                # Create inverse mappings (coord → name)
-                inverse_columns = {v: k for k, v in parent.columns.items()}
-                inverse_rows = {v: k for k, v in parent.rows.items()}
+            logging.info(f"Token received: {token}")
 
-                for col, row in cursor.fetchall():
-                    # Round down to nearest even coordinate for label mapping
-                    even_col = col - (col % 2)
-                    even_row = row - (row % 2)
+            # Step 2: Trigger the update using the token
+            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
+            trigger_response.raise_for_status()
 
-                    col_name = inverse_columns.get(even_col, f"Column {even_col}")
-                    row_name = inverse_rows.get(even_row, f"Row {even_row}")
-                    building_name = self._get_building_name(cursor, col_name, row_name)
+            logging.info("Bot scrape triggered. Waiting 5 seconds for update to complete...")
+            time.sleep(5)
 
-                    display = f"{col_name} & {row_name}" + (f" - {building_name}" if building_name else "")
-                    self.recent_destinations_dropdown.addItem(display, (col, row))
+            # Step 3: Fetch the updated JSON
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
+            json_response.raise_for_status()
+            data = json_response.json()
 
-                logging.debug(f"Loaded {self.recent_destinations_dropdown.count() - 1} recent destinations")
+            # Step 4: Update local DB from JSON
+            self.update_database_with_json(data)
 
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load recent destinations: {e}")
-
-    def _get_building_name(self, cursor: sqlite3.Cursor, col: str, row: str) -> str | None:
-        """Get building name at given coordinates."""
-        tables = ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]
-        for table in tables:
-            cursor.execute(f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?", (col, row))
-            if result := cursor.fetchone():
-                return result[0]
-        return None
-
-    def populate_dropdown(self, dropdown: QComboBox, items: list | KeysView) -> None:
-        """Populate a dropdown with sorted items."""
-        dropdown.clear()
-        dropdown.addItem("Select a destination")
-        dropdown.addItems(sorted([str(item) for item in items]))
-        logging.debug(f"Populated dropdown with {len(items)} items (sorted)")
-
-    def update_combo_boxes(self):
-        logging.info("Updating combo boxes.")
-
-        if not self.parent:
-            logging.warning("No parent found; cannot update combo boxes.")
-            return
-
-        parent = cast("MainWindowType", self.parent)
-
-        status_dialog = QDialog(self)
-        status_dialog.setWindowTitle("Updating Data")
-        status_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        layout = QVBoxLayout(status_dialog)
-        status_label = QLabel("Step 1: Initializing update...")
-        layout.addWidget(status_label)
-        status_dialog.setFixedSize(350, 100)
-        status_dialog.show()
-        QApplication.processEvents()
-
-        try:
-            # Step 2: Checking Move Times
-            status_label.setText("Step 2: Checking Move Times...")
-            QApplication.processEvents()
-            self.load_next_move_times()
-
-            # Step 3: Fetching Data from Discord Bot
-            status_label.setText("Step 3: Fetching Data from Discord Bot...")
-            QApplication.processEvents()
-            shops, guilds, shops_next, guilds_next = parent.scraper.scrape_discord_bot()
-
-            # Step 4: Updating Database
-            status_label.setText("Step 4: Updating Database...")
-            QApplication.processEvents()
-            parent.scraper.update_database(guilds, "guilds", guilds_next)
-            parent.scraper.update_database(shops, "shops", shops_next)
-
-            # Step 5: Refreshing Dropdowns
-            status_label.setText("Step 5: Refreshing Dropdowns...")
-            QApplication.processEvents()
-
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-
-                cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
-                columns = {row[0]: row[1] for row in cursor.fetchall()}
-                cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
-                rows = {row[0]: row[1] for row in cursor.fetchall()}
-
-                def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
-                    return (columns.get(col_name, 0) + 1, rows.get(row_name, 0) + 1)
-
-                cursor.execute("SELECT Name, `Column`, `Row` FROM shops")
-                parent.shops_coordinates.clear()
-                parent.shops_coordinates.update({
-                    name: to_coords(col, row)
-                    for name, col, row in cursor.fetchall()
-                    if col != "NA" and row != "NA"
-                })
-
-                cursor.execute("SELECT Name, `Column`, `Row` FROM guilds")
-                parent.guilds_coordinates.clear()
-                parent.guilds_coordinates.update({
-                    name: to_coords(col, row)
-                    for name, col, row in cursor.fetchall()
-                    if col != "NA" and row != "NA"
-                })
-
-            self.populate_dropdown(self.tavern_dropdown, parent.taverns_coordinates.keys())
-            self.populate_dropdown(self.bank_dropdown, parent.banks_coordinates.keys())
-            self.populate_dropdown(self.transit_dropdown, parent.transits_coordinates.keys())
-            self.populate_dropdown(self.shop_dropdown, parent.shops_coordinates.keys())
-            self.populate_dropdown(self.guild_dropdown, parent.guilds_coordinates.keys())
-            self.populate_dropdown(self.poi_dropdown, parent.places_of_interest_coordinates.keys())
-            self.populate_dropdown(self.user_building_dropdown, parent.user_buildings_coordinates.keys())
-
-            parent.update_minimap()
-
-            status_label.setText("✅ Update complete.")
-            QApplication.processEvents()
-            QTimer.singleShot(2000, status_dialog.accept)
-
-            logging.info("Combo boxes updated successfully.")
-
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Update error: {e}")
+            QMessageBox.critical(self, "Network Error", f"An error occurred:\n{e}")
         except Exception as e:
-            logging.exception("Failed to update Combo boxes:")
-            status_label.setText("❌ Update failed.")
-            QApplication.processEvents()
-            QTimer.singleShot(3000, status_dialog.accept)
-            self.show_error_dialog("Update Failed", str(e))
+            logging.error(f"Unexpected error during update: {e}")
+            QMessageBox.critical(self, "Error", str(e))
 
-    def show_notification(self, message: str) -> None:
-        """Show a temporary notification."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Notification")
-        # noinspection PyUnresolvedReferences
-        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel(message, dialog))
-        dialog.setFixedSize(300, 100)
-        QTimer.singleShot(5000, dialog.accept)
-        dialog.exec()
-        logging.debug(f"Notification shown: {message}")
-
-    def clear_destination(self) -> None:
-        """Clear the current destination for the selected character."""
-        if not self.parent:
-            logging.warning("No parent found; cannot clear destination.")
-            return
-
-        parent = cast("MainWindowType", self.parent)
-
-        if not parent.selected_character:
-            logging.warning("No character selected to clear destination")
-            return
-
-        character_id = parent.selected_character['id']
-
+    def update_database_with_json(self, data):
+        """
+        Updates the local shops and guilds tables based on the JSON structure from the bot,
+        while preserving Peacekeeper's Missions.
+        """
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM destinations WHERE character_id = ?", (character_id,))
-                conn.commit()
 
-            parent.destination = None
-            parent.update_minimap()
-            logging.info(f"Cleared destination for character {character_id}")
-            self.accept()
+                scrape_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                guilds_next = data.get("guilds_next_update")
+                shops_next = data.get("shops_next_update")
 
-        except sqlite3.Error as e:
-            logging.error(f"Failed to clear destination: {e}")
-
-    def set_destination(self) -> None:
-        """Set the selected destination for the current character."""
-        if not self.parent:
-            self.show_error_dialog("No Character", "Please select a character first")
-            return
-
-        parent = cast("MainWindowType", self.parent)
-        parent.selected_route_label = None
-
-        if not parent.selected_character:
-            self.show_error_dialog("No Character", "Please select a character first")
-            return
-
-        coords = self.get_selected_destination()
-        if not coords:
-            self.show_error_dialog("No Destination", "Please select a valid destination")
-            return
-
-        character_id = parent.selected_character['id']
-
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
+                # Clear old locations except Peacekeepers
                 cursor.execute("""
-                    INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                """, (character_id, coords[0], coords[1]))
-
-                conn.commit()
-
-            # ✅ Save to recent using centralized logic
-            parent.save_to_recent_destinations(character_id, coords[0], coords[1])
-
-            # ✅ Reload destination from DB to sync to current character context
-            parent.load_last_destination_for_character(character_id)
-            parent.update_minimap()
-            logging.info(f"Set destination for character {character_id} to {coords}")
-            self.accept()
-
-        except sqlite3.Error as e:
-            logging.error(f"Failed to set destination: {e}")
-
-    def get_selected_destination(self) -> tuple[int, int] | None:
-        """Retrieve coordinates of the selected destination."""
-        if not self.parent:
-            return None
-
-        parent = cast("MainWindowType", self.parent)
-
-        if (recent := self.recent_destinations_dropdown.currentText()) != "Select a recent destination":
-            return self.recent_destinations_dropdown.currentData()
-
-        dropdowns = [
-            (self.tavern_dropdown, parent.taverns_coordinates),
-            (self.transit_dropdown, parent.transits_coordinates),
-            (self.shop_dropdown, parent.shops_coordinates),
-            (self.guild_dropdown, parent.guilds_coordinates),
-            (self.poi_dropdown, parent.places_of_interest_coordinates),
-            (self.user_building_dropdown, parent.user_buildings_coordinates),
-        ]
-        for dropdown, data in dropdowns:
-            if (sel := dropdown.currentText()) != "Select a destination":
-                return data[sel]
-
-        # Bank dropdown (custom formatted)
-        if (bank := self.bank_dropdown.currentText()) != "Select a destination":
-            try:
-                col_name, row_name = bank.split(" & ")
-                col = parent.columns.get(col_name.strip())
-                row = parent.rows.get(row_name.strip())
-                if col is not None and row is not None:
-                    return col + 1, row + 1
-            except ValueError:
-                logging.warning(f"Invalid bank format: {bank}")
-                return None
-
-        # Custom XY + direction
-        col = parent.columns.get(self.columns_dropdown.currentText())
-        row = parent.rows.get(self.rows_dropdown.currentText())
-        direction = self.directional_dropdown.currentText()
-
-        if col is not None and row is not None:
-            original_coords = (col, row)
-            if direction == "On":
-                return original_coords
-            elif direction == "East":
-                return (col + 1, row)
-            elif direction == "South":
-                return (col, row + 1)
-            elif direction == "South East":
-                return (col + 1, row + 1)
-            else:
-                logging.warning(f"Unrecognized direction: {direction}")
-                return original_coords
-
-        logging.debug("No valid destination selected")
-        return None
-
-    def set_external_destination(self, col: int, row: int, guild_name: str) -> None:
-        """Set a destination externally."""
-        self.parent().selected_route_label = None
-        self.recent_destinations_dropdown.clear()
-        self.recent_destinations_dropdown.addItem(f"{guild_name} - {col}, {row}", (col, row))
-        self.recent_destinations_dropdown.setCurrentIndex(0)  # Select the added item
-        self.set_destination()
-        logging.info(f"External destination set: {guild_name} at ({col}, {row})")
-
-    def show_error_dialog(self, title: str, message: str) -> None:
-        """Show an error dialog."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle(title)
-        # noinspection PyUnresolvedReferences
-        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel(message, dialog))
-        close_btn = QPushButton("Close", dialog)
-        close_btn.clicked.connect(dialog.accept)
-        layout.addWidget(close_btn)
-        dialog.setFixedSize(300, 100)
-        dialog.exec()
-        logging.debug(f"Error dialog shown: {title} - {message}")
-
-    def load_next_move_times(self):
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-
-                cursor.execute(
-                    "SELECT next_update, last_scraped FROM guilds WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL ORDER BY next_update ASC LIMIT 1")
-                result = cursor.fetchone()
-                self.next_guild_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc) if result else None
-                self.guild_scraped_at = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc) if result else None
-
-                cursor.execute(
-                    "SELECT next_update, last_scraped FROM shops WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL ORDER BY next_update ASC LIMIT 1")
-                result = cursor.fetchone()
-                self.next_shop_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc) if result else None
-                self.shop_scraped_at = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S").replace(
-                    tzinfo=timezone.utc) if result else None
-        except Exception as e:
-            logging.error(f"Failed to load next move times: {e}")
-            self.next_guild_update = self.guild_scraped_at = None
-            self.next_shop_update = self.shop_scraped_at = None
-
-    def update_countdown_labels(self):
-        now = datetime.now(timezone.utc)
-
-        def format_countdown(next_time, label: QLabel, label_name: str):
-            if next_time:
-                remaining = max(timedelta(0), next_time - now)  # simple, correct
-                days = remaining.days
-                hours, remainder = divmod(remaining.seconds, 3600)
-                minutes, seconds = divmod(remainder, 60)
-
-                label.setText(
-                    f"{label_name} move at {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')} or in {days}d {hours}h {minutes}m {seconds}s"
-                )
-            else:
-                label.setText(f"{label_name} move time unknown.")
-
-        format_countdown(self.next_guild_update, self.guildCountdownLabel, "Guilds")
-        format_countdown(self.next_shop_update, self.shopCountdownLabel, "Shops")
-
-# -----------------------
-# Shopping List Tools
-# -----------------------
-
-class ShoppingListTool(QDialog):
-    """Tool for managing a character’s shopping list with SQLite-backed shop data."""
-
-    def __init__(self, character_name: str, db_path: str, parent=None, color_mappings: dict | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Shopping List Tool")
-        self.setGeometry(100, 100, 700, 500)
-        self.character_name = character_name
-        self.DB_PATH = db_path
-        self.color_mappings = color_mappings or {}
-        self.list_total = 0
-        self.next_shop_update = None
-
-        try:
-            self.sqlite_connection = sqlite3.connect(self.DB_PATH)
-            self.sqlite_cursor = self.sqlite_connection.cursor()
-        except sqlite3.Error as e:
-            logging.error(f"Failed to connect to database: {e}")
-            self.sqlite_connection = None
-            self.sqlite_cursor = None
-
-        self.setup_ui()
-        if self.sqlite_connection:
-            self.populate_shop_dropdown()
-
-        self.load_shop_move_time()
-        self.shop_timer = QTimer(self)
-        self.shop_timer.timeout.connect(self.update_shop_countdown)
-        self.shop_timer.start(1000)
-
-        logging.debug(f"ShoppingListTool initialized for {character_name}")
-
-    def setup_ui(self) -> None:
-        main_layout = QVBoxLayout(self)
-
-        # Top row
-        filter_row = QHBoxLayout()
-        self.shop_combobox = QComboBox()
-        self.charisma_combobox = QComboBox()
-        self.charisma_combobox.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
-        filter_row.addWidget(QLabel("Select Shop:"))
-        filter_row.addWidget(self.shop_combobox)
-        filter_row.addSpacing(20)
-        filter_row.addWidget(QLabel("Charisma Level:"))
-        filter_row.addWidget(self.charisma_combobox)
-        main_layout.addLayout(filter_row)
-
-        # Middle row
-        list_row = QHBoxLayout()
-
-        # Available Items
-        available_layout = QVBoxLayout()
-        available_layout.addWidget(QLabel("Available Items:"))
-        self.available_items_list = QListWidget()
-        available_layout.addWidget(self.available_items_list)
-        self.add_item_button = QPushButton("Add →")
-        available_layout.addWidget(self.add_item_button)
-        list_row.addLayout(available_layout)
-
-        # Shopping List
-        shopping_layout = QVBoxLayout()
-        shopping_layout.addWidget(QLabel("Shopping List:"))
-        self.shopping_list = QListWidget()
-        shopping_layout.addWidget(self.shopping_list)
-        self.remove_item_button = QPushButton("← Remove")
-        shopping_layout.addWidget(self.remove_item_button)
-        list_row.addLayout(shopping_layout)
-
-        main_layout.addLayout(list_row)
-
-        # Bottom
-        self.total_label = QLabel()
-        self.total_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.shop_countdown_label = QLabel()
-        self.shop_countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        main_layout.addSpacing(10)
-        main_layout.addWidget(self.total_label)
-        main_layout.addWidget(self.shop_countdown_label)
-
-        self.setLayout(main_layout)
-
-        # Connect signals
-        self.add_item_button.clicked.connect(self.add_item)
-        self.remove_item_button.clicked.connect(self.remove_item)
-        self.shop_combobox.currentIndexChanged.connect(self.load_items)
-        self.charisma_combobox.currentIndexChanged.connect(self._update_all)
-
-        # Apply theme
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        self.update_total()
-
-    def populate_shop_dropdown(self) -> None:
-        if not self.sqlite_cursor:
-            return
-        try:
-            self.sqlite_cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
-            shops = [row[0] for row in self.sqlite_cursor.fetchall()]
-            self.shop_combobox.addItems(shops)
-            logging.debug(f"Populated shop dropdown with {len(shops)} shops")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to populate shop dropdown: {e}")
-
-    def load_items(self) -> None:
-        if not self.sqlite_cursor or not self.shop_combobox.currentText():
-            self.available_items_list.clear()
-            return
-
-        self.available_items_list.clear()
-        shop_name = self.shop_combobox.currentText()
-        price_column = {
-            "No Charisma": "base_price",
-            "Charisma 1": "charisma_level_1",
-            "Charisma 2": "charisma_level_2",
-            "Charisma 3": "charisma_level_3"
-        }.get(self.charisma_combobox.currentText(), "base_price")
-
-        try:
-            self.sqlite_cursor.execute(
-                f"SELECT item_name, {price_column} FROM shop_items WHERE shop_name = ?",
-                (shop_name,)
-            )
-            for name, price in self.sqlite_cursor.fetchall():
-                self.available_items_list.addItem(f"{name} - {price} Coins")
-            logging.debug(f"Loaded {self.available_items_list.count()} items for {shop_name}")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load items: {e}")
-
-    def add_item(self) -> None:
-        if not (item := self.available_items_list.currentItem()):
-            return
-
-        name, price_str = item.text().split(" - ")
-        price = int(price_str.split(" Coins")[0])
-        quantity, ok = QInputDialog.getInt(self, "Quantity", f"How many {name}?", 1, 1)
-        if not ok:
-            return
-
-        for i in range(self.shopping_list.count()):
-            if (existing := self.shopping_list.item(i).text()).startswith(f"{name} - "):
-                curr_qty = int(existing.split(" - ")[2].split("x")[0])
-                self.shopping_list.item(i).setText(f"{name} - {price} Coins - {curr_qty + quantity}x")
-                self.update_total()
-                return
-
-        self.shopping_list.addItem(f"{name} - {price} Coins - {quantity}x")
-        self.update_total()
-        logging.debug(f"Added {name} x{quantity} to shopping list")
-
-    def remove_item(self) -> None:
-        if not (item := self.shopping_list.currentItem()):
-            return
-
-        name, price_str, qty_str = item.text().split(" - ")
-        price = int(price_str.split(" Coins")[0])
-        curr_qty = int(qty_str.split("x")[0])
-        qty_to_remove, ok = QInputDialog.getInt(self, "Remove", f"How many {name}?", 1, 1, curr_qty)
-        if not ok:
-            return
-
-        new_qty = curr_qty - qty_to_remove
-        if new_qty > 0:
-            item.setText(f"{name} - {price} Coins - {new_qty}x")
-        else:
-            self.shopping_list.takeItem(self.shopping_list.row(item))
-        self.update_total()
-        logging.debug(f"Removed {qty_to_remove}x {name} from shopping list")
-
-    def _update_all(self) -> None:
-        self.load_items()
-        self.update_shopping_list_prices()
-
-    def update_shopping_list_prices(self) -> None:
-        if not self.sqlite_cursor or not self.shop_combobox.currentText():
-            return
-
-        shop_name = self.shop_combobox.currentText()
-        price_column = {
-            "No Charisma": "base_price",
-            "Charisma 1": "charisma_level_1",
-            "Charisma 2": "charisma_level_2",
-            "Charisma 3": "charisma_level_3"
-        }.get(self.charisma_combobox.currentText(), "base_price")
-
-        try:
-            items = {self.shopping_list.item(i).text().split(" - ")[0]: i for i in range(self.shopping_list.count())}
-            if items:
-                self.sqlite_cursor.execute(
-                    f"SELECT item_name, {price_column} FROM shop_items WHERE shop_name = ? AND item_name IN ({','.join('?' * len(items))})",
-                    (shop_name, *items.keys())
-                )
-                for name, price in self.sqlite_cursor.fetchall():
-                    i = items[name]
-                    qty = int(self.shopping_list.item(i).text().split(" - ")[2].split("x")[0])
-                    self.shopping_list.item(i).setText(f"{name} - {price} Coins - {qty}x")
-            self.update_total()
-        except sqlite3.Error as e:
-            logging.error(f"Failed to update shopping list prices: {e}")
-
-    def update_total(self) -> None:
-        self.list_total = sum(
-            int(item.text().split(" - ")[1].split(" Coins")[0]) * int(item.text().split(" - ")[2].split("x")[0])
-            for item in [self.shopping_list.item(i) for i in range(self.shopping_list.count())]
-        )
-        self.total_label.setText(
-            f"<b>List total:</b> {self.list_total} Coins | <b>Coins in Pocket:</b> {self.coins_in_pocket()} | <b>Bank:</b> {self.coins_in_bank()}"
-        )
-
-    def coins_in_pocket(self) -> int:
-        if not self.sqlite_cursor:
-            return 0
-        try:
-            self.sqlite_cursor.execute(
-                "SELECT pocket FROM coins WHERE character_id = (SELECT id FROM characters WHERE name = ?)",
-                (self.character_name,))
-            result = self.sqlite_cursor.fetchone()
-            return result[0] if result else 0
-        except sqlite3.Error as e:
-            logging.error(f"Failed to fetch pocket coins: {e}")
-            return 0
-
-    def coins_in_bank(self) -> int:
-        if not self.sqlite_cursor:
-            return 0
-        try:
-            self.sqlite_cursor.execute(
-                "SELECT bank FROM coins WHERE character_id = (SELECT id FROM characters WHERE name = ?)",
-                (self.character_name,))
-            result = self.sqlite_cursor.fetchone()
-            return result[0] if result else 0
-        except sqlite3.Error as e:
-            logging.error(f"Failed to fetch bank coins: {e}")
-            return 0
-
-    def load_shop_move_time(self):
-        try:
-            with sqlite3.connect(self.DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT next_update FROM shops WHERE next_update IS NOT NULL ORDER BY next_update ASC LIMIT 1"
-                )
-                result = cursor.fetchone()
-                if result:
-                    self.next_shop_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
-                        tzinfo=timezone.utc)
-        except Exception as e:
-            logging.error(f"Failed to load shop move time: {e}")
-            self.next_shop_update = None
-
-    def update_shop_countdown(self):
-        now = datetime.now(timezone.utc)
-        if self.next_shop_update:
-            remaining = max(timedelta(0), self.next_shop_update - now)
-            days = remaining.days
-            hours, rem = divmod(remaining.seconds, 3600)
-            minutes, seconds = divmod(rem, 60)
-            text = (
-                f"Shops move at {self.next_shop_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
-                f"or in {days}d {hours}h {minutes}m {seconds}s"
-            )
-        else:
-            text = "Shops move time unknown."
-        self.shop_countdown_label.setText(text)
-
-    def closeEvent(self, event) -> None:
-        if self.sqlite_connection:
-            try:
-                self.sqlite_connection.close()
-                logging.debug("SQLite connection closed")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to close connection: {e}")
-        event.accept()
-
-
-# -----------------------
-# Damage Calculator Tool
-# -----------------------
-
-class DamageCalculator(QDialog):
-    """Dialog for calculating weapons needed to reduce a target BP."""
-
-    def __init__(self, db_connection: sqlite3.Connection, parent=None, color_mappings: dict | None = None) -> None:
-        """
-        Initialize the Damage Calculator.
-
-        Args:
-            db_connection: SQLite database connection (unused currently).
-            parent: Parent widget (default is None).
-            color_mappings: Theme colors dictionary (optional).
-        """
-        super().__init__(parent)
-        self.db_connection = db_connection
-        self.charisma_level = 0
-        self.color_mappings = color_mappings or {}
-
-        self.setWindowTitle("Damage Calculator")
-        self.setWindowIcon(APP_ICON)
-        self.setMinimumWidth(400)
-
-        main_layout = QVBoxLayout(self)
-
-        # Target BP input
-        bp_layout = QHBoxLayout()
-        bp_layout.addWidget(QLabel("Target BP:"))
-        self.bp_input = QLineEdit()
-        self.bp_input.setValidator(PySide6.QtGui.QIntValidator(0, 100000000))
-        bp_layout.addWidget(self.bp_input)
-        main_layout.addLayout(bp_layout)
-
-        # Charisma dropdown
-        charisma_layout = QHBoxLayout()
-        charisma_layout.addWidget(QLabel("Charisma Level:"))
-        self.charisma_dropdown = QComboBox()
-        self.charisma_dropdown.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
-        self.charisma_dropdown.currentIndexChanged.connect(self.update_charisma_level)
-        charisma_layout.addWidget(self.charisma_dropdown)
-        main_layout.addLayout(charisma_layout)
-
-        # Output and controls
-        self.result_display = QTextEdit()
-        self.result_display.setReadOnly(True)
-        self.result_display.setPlaceholderText("Weapons needed will be displayed here.")
-        main_layout.addWidget(self.result_display)
-
-        self.total_cost_label = QLabel("Total Cost: 0 Coins")
-        main_layout.addWidget(self.total_cost_label)
-
-        # Calculate button
-        calc_button = QPushButton("Calculate")
-        calc_button.clicked.connect(self.calculate_damage)
-        main_layout.addWidget(calc_button)
-
-        self.setLayout(main_layout)
-
-        # Apply theme if available
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        # Static prices
-        self.discount_magic_prices = {
-            "Vial of Holy Water": [1400, 1357, 1302, 1260],
-            "Garlic Spray": [700, 678, 651, 630],
-            "Wooden Stake": [2800, 2715, 2604, 2520],
-        }
-        logging.debug("DamageCalculator initialized")
-
-    def update_charisma_level(self) -> None:
-        """Update charisma level based on dropdown selection."""
-        self.charisma_level = self.charisma_dropdown.currentIndex()
-        logging.debug(f"Charisma level set to {self.charisma_level}")
-
-    def calculate_damage(self) -> None:
-        """Calculate weapons needed to reduce target BP to 0."""
-        self.result_display.clear()
-        try:
-            target_bp = int(self.bp_input.text())
-            if target_bp <= 0:
-                raise ValueError("BP must be positive")
-        except ValueError:
-            self.result_display.setText("Please enter a valid positive BP value")
-            logging.warning("Invalid BP input")
-            return
-
-        vial_cost = self.discount_magic_prices["Vial of Holy Water"][self.charisma_level]
-        spray_cost = self.discount_magic_prices["Garlic Spray"][self.charisma_level]
-        stake_cost = self.discount_magic_prices["Wooden Stake"][self.charisma_level]
-
-        remaining_bp = target_bp
-        total_cost = 0
-        total_hits = 0
-        results = []
-
-        # Vials until BP <= 1350
-        vial_hits = 0
-        while remaining_bp > 1350:
-            damage = math.floor(remaining_bp * 0.6)
-            remaining_bp -= damage
-            vial_hits += 1
-            total_cost += vial_cost
-            total_hits += 1
-        if vial_hits:
-            results.append(
-                f"Discount Magic - Vial of Holy Water - Qty: {vial_hits} - Total Cost: {vial_hits * vial_cost:,} coins")
-
-        # Sprays until BP <= 200
-        spray_hits = 0
-        while remaining_bp > 200:
-            remaining_bp -= 75
-            spray_hits += 1
-            total_cost += spray_cost
-            total_hits += 1
-        if spray_hits:
-            results.append(
-                f"Discount Magic - Garlic Spray - Qty: {spray_hits} - Total Cost: {spray_hits * spray_cost:,} coins")
-
-        # Stake if BP <= 200
-        if 0 < remaining_bp <= 200:
-            total_cost += stake_cost
-            total_hits += 1
-            results.append(f"Discount Magic - Wooden Stake - Qty: 1 - Total Cost: {stake_cost:,} coins")
-            remaining_bp = 0
-
-        # Summary
-        results.append(f"Totals: Hits: {total_hits} Coins: {total_cost:,}")
-        self.result_display.setText("\n".join(results))
-        self.total_cost_label.setText(f"Total Cost: {total_cost:,} Coins")
-        logging.debug(f"Calculated for BP {target_bp}: {total_hits} hits, {total_cost} coins")
-
-
-# -----------------------
-# Powers Reference Tool
-# -----------------------
-
-class PowersDialog(QDialog):
-    """Dialog displaying power information with destination-setting functionality."""
-
-    def __init__(self, parent: QWidget, character_x: int, character_y: int, db_path: str,
-                 color_mappings: dict | None = None) -> None:
-        super().__init__(parent)
-        self.setWindowTitle("Powers Information")
-        self.setWindowIcon(APP_ICON)
-        self.setMinimumSize(600, 400)
-        self.parent = parent
-        self.character_x = character_x
-        self.character_y = character_y
-        self.DB_PATH = db_path
-        self.color_mappings = color_mappings or {}
-
-        try:
-            self.db_connection = sqlite3.connect(db_path)
-        except sqlite3.Error as e:
-            logging.error(f"Failed to connect to database: {e}")
-            self.db_connection = None
-
-        # Main layout
-        main_layout = QHBoxLayout(self)
-
-        # Powers List
-        self.powers_list = QListWidget()
-        self.powers_list.itemClicked.connect(self.load_power_info)
-        main_layout.addWidget(self.powers_list)
-
-        # Details Panel
-        self.details_panel = QVBoxLayout()
-
-        # --- Centered Guild Move Timer ---
-        self.guild_countdown_label = QLabel("Guilds move time unknown.")
-        self.guild_countdown_label.setStyleSheet("font-size: 9pt; color: gray; margin-bottom: 4px;")
-        self.guild_countdown_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
-        self.details_panel.addWidget(self.guild_countdown_label)
-
-        # --- Power Info Fields ---
-        self.power_name_label: QLabel = self._create_labeled_field("Power")
-        self.guild_label: QLabel = self._create_labeled_field("Guild")
-        self.cost_label: QLabel = self._create_labeled_field("Cost")
-        self.quest_info_text: QTextEdit = self._create_labeled_field("Quest Info", QTextEdit)
-        self.skill_info_text: QTextEdit = self._create_labeled_field("Skill Info", QTextEdit)
-
-        # --- Destination Button ---
-        self.set_destination_button = QPushButton("Set Destination")
-        self.set_destination_button.setEnabled(False)
-        self.set_destination_button.clicked.connect(self.set_destination)
-        self.details_panel.addWidget(self.set_destination_button)
-
-        main_layout.addLayout(self.details_panel)
-        self.setLayout(main_layout)
-
-        # Apply theme
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        # Load powers and initialize timer
-        if self.db_connection:
-            self.load_powers()
-        self.load_guild_move_time()
-        self.guild_timer = QTimer(self)
-        self.guild_timer.timeout.connect(self.update_guild_countdown)
-        self.guild_timer.start(1000)
-        logging.debug(f"PowersDialog initialized at ({character_x}, {character_y})")
-
-    T = TypeVar("T", QLabel, QTextEdit)
-
-    def _create_labeled_field(self, label_text: str, widget_type: Type[T] = QLabel) -> T:
-        """Create a labeled field with a widget."""
-        label = QLabel(f"<b>{label_text}:</b>", self)
-        widget = widget_type(self)
-        if isinstance(widget, QTextEdit):
-            widget.setReadOnly(True)
-        self.details_panel.addWidget(label)
-        self.details_panel.addWidget(widget)
-        return widget
-
-    def load_powers(self) -> None:
-        """Load powers from the database into the list."""
-        try:
-            with self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute("SELECT name FROM powers ORDER BY name ASC")
-                for name, in cursor.fetchall():
-                    self.powers_list.addItem(name)
-            logging.debug(f"Loaded {self.powers_list.count()} powers")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load powers: {e}")
-            QMessageBox.critical(self, "Database Error", "Failed to load powers")
-
-    def load_power_info(self, item: QListWidgetItem) -> None:
-        """Display details for the selected power."""
-        power_name = item.text()
-        try:
-            with self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute(
-                    "SELECT name, guild, cost, quest_info, skill_info FROM powers WHERE name = ?",
-                    (power_name,)
-                )
-                details = cursor.fetchone()
-                if not details:
-                    raise ValueError(f"No details for {power_name}")
-
-                name, guild, cost, quest_info, skill_info = details
-                self.power_name_label.setText(f"<b>Power:</b> {name}")
-                self.guild_label.setText(f"<b>Guild:</b> {guild or 'Unknown'}")
-                self.cost_label.setText(f"<b>Cost:</b> {cost or 'Unknown'} coins")
-                self.quest_info_text.setPlainText(quest_info or "None")
-                self.skill_info_text.setPlainText(skill_info or "None")
-
-                if power_name == "Battle Cloak":
-                    self._enable_nearest_peacekeeper_mission()
-                elif guild:
+                    UPDATE guilds
+                    SET `Column` = 'NA', `Row` = 'NA', `next_update` = ?, `last_scraped` = ?
+                    WHERE Name NOT LIKE 'Peacekeepers Mission%'""",
+                               (guilds_next, scrape_timestamp)
+                               )
+                cursor.execute("""
+                    UPDATE shops
+                    SET `Column` = 'NA', `Row` = 'NA', `next_update` = ?, `last_scraped` = ?""",
+                               (shops_next, scrape_timestamp)
+                               )
+
+                # Insert guilds
+                for key, entry in data.get("guilds", {}).items():
+                    name = entry.get("display", key)
+                    col = entry.get("column", "NA")
+                    row = entry.get("row", "NA")
                     cursor.execute("""
-                        SELECT c.Coordinate, r.Coordinate
-                        FROM guilds g
-                        JOIN columns c ON g.Column = c.Name
-                        JOIN rows r ON g.Row = r.Name
-                        WHERE g.Name = ?
-                    """, (guild,))
-                    if loc := cursor.fetchone():
-                        self._configure_destination_button(guild, loc[0], loc[1])
-                    else:
-                        self.set_destination_button.setEnabled(False)
-                else:
-                    self.set_destination_button.setEnabled(False)
-            logging.debug(f"Loaded info for {power_name}")
-        except (sqlite3.Error, ValueError) as e:
-            logging.error(f"Failed to load power info for {power_name}: {e}")
-            QMessageBox.warning(self, "Error", f"Failed to load details for '{power_name}'")
+                        INSERT OR REPLACE INTO guilds (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)""",
+                                   (name, col, row, guilds_next, scrape_timestamp)
+                                   )
 
-    def _enable_nearest_peacekeeper_mission(self) -> None:
-        """Enable destination button with the nearest Peacekeeper's Mission."""
-        try:
-            with self.db_connection:
-                cursor = self.db_connection.cursor()
-                cursor.execute(
-                    "SELECT c.`Coordinate`, r.`Coordinate` FROM `columns` c JOIN `rows` r "
-                    "WHERE (c.`Name` = 'Emerald' AND r.`Name` IN ('67th', '33rd')) "
-                    "OR (c.`Name` = 'Unicorn' AND r.`Name` = '33rd')"
-                )
-                missions = cursor.fetchall()
-            if missions:
-                closest = min(missions, key=lambda m: max(abs(m[0] - self.character_x), abs(m[1] - self.character_y)))
-                self._configure_destination_button("Peacekeeper's Mission", closest[0], closest[1])
-            else:
-                self.set_destination_button.setEnabled(False)
-                logging.debug("No Peacekeeper's Missions found")
-        except sqlite3.Error as e:
-            logging.error(f"Failed to find Peacekeeper's Mission: {e}")
+                # Insert shops
+                for key, entry in data.get("shops", {}).items():
+                    name = entry.get("display", key)
+                    col = entry.get("column", "NA")
+                    row = entry.get("row", "NA")
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO shops (Name, `Column`, `Row`, `next_update`, `last_scraped`)
+                        VALUES (?, ?, ?, ?, ?)""",
+                                   (name, col, row, shops_next, scrape_timestamp)
+                                   )
 
-    def _configure_destination_button(self, guild: str, col: str | int | None, row: str | int | None) -> None:
-        """Configure the destination button with guild location."""
-        try:
-            col_val = int(col) if col not in ("NA", None) else None
-            row_val = int(row) if row not in ("NA", None) else None
-        except (ValueError, TypeError):
-            logging.warning(f"Invalid col/row for destination: col={col}, row={row}")
-            self.set_destination_button.setEnabled(False)
-            return
-
-        enabled = col_val is not None and row_val is not None
-        self.set_destination_button.setEnabled(enabled)
-        if enabled:
-            self.set_destination_button.setProperty("guild", guild)
-            self.set_destination_button.setProperty("Column", col_val)
-            self.set_destination_button.setProperty("Row", row_val)
-        logging.debug(f"Destination button {'enabled' if enabled else 'disabled'} for {guild} at ({col}, {row})")
-
-    def set_destination(self) -> None:
-        """Set the destination in the database and update the minimap."""
-        guild = self.set_destination_button.property("guild")
-        col = self.set_destination_button.property("Column")
-        row = self.set_destination_button.property("Row")
-
-        if not self.parent:
-            logging.warning("No parent window set; cannot update destination.")
-            return
-
-        parent = cast("MainWindowType", self.parent)
-
-        if not guild or not parent.selected_character:
-            logging.warning("Missing guild or character for destination")
-            QMessageBox.warning(self, "Error", "No character selected or invalid guild")
-            return
-
-        character_id = parent.selected_character['id']
-        try:
-            with sqlite3.connect(self.DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp) "
-                    "VALUES (?, ?, ?, datetime('now'))",
-                    (character_id, col, row)
-                )
                 conn.commit()
-            parent.destination = (col, row)
-            parent.update_minimap()
-            logging.info(f"Destination set for {character_id} to {guild} at ({col}, {row})")
-            # noinspection PyUnresolvedReferences
-            QMessageBox.information(self, "Success", f"Destination set to {guild} at ({col}, {row})", QMessageBox.Ok)
-        except sqlite3.Error as e:
-            logging.error(f"Failed to set destination: {e}")
-            QMessageBox.critical(self, "Database Error", "Failed to set destination")
+                logging.info(
+                    f"Database updated with {len(data.get('guilds', {}))} guilds and {len(data.get('shops', {}))} shops.")
 
-    def closeEvent(self, event) -> None:
-        """Close the database connection on dialog close."""
-        if self.db_connection:
-            try:
-                self.db_connection.close()
-                logging.debug("Database connection closed")
-            except sqlite3.Error as e:
-                logging.error(f"Failed to close database: {e}")
-        event.accept()
-
-    def load_guild_move_time(self):
-        try:
-            with sqlite3.connect(self.DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT next_update FROM guilds WHERE next_update IS NOT NULL ORDER BY next_update ASC LIMIT 1"
-                )
-                result = cursor.fetchone()
-                if result:
-                    self.next_guild_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
-                        tzinfo=timezone.utc)
-                else:
-                    self.next_guild_update = None
         except Exception as e:
-            logging.error(f"Failed to load guild move time: {e}")
-            self.next_guild_update = None
-
-    def update_guild_countdown(self):
-        now = datetime.now(timezone.utc)
-        if self.next_guild_update:
-            remaining = max(timedelta(0), self.next_guild_update - now)
-            days = remaining.days
-            hours, rem = divmod(remaining.seconds, 3600)
-            minutes, seconds = divmod(rem, 60)
-            text = (
-                f"Guilds move at {self.next_guild_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
-                f"or in {days}d {hours}h {minutes}m {seconds}s"
-            )
-        else:
-            text = "Guilds move time unknown."
-        self.guild_countdown_label.setText(text)
-
-
-# -----------------------
-# Log Viewer
-# -----------------------
-
-class LogViewer(QDialog):
-    """A dialog window to view and optionally send application logs."""
-
-    def __init__(self, parent: QWidget, log_directory: str, color_mappings: dict | None = None):
-        super().__init__(parent)
-        self.setWindowTitle("Log Viewer")
-        self.setWindowIcon(APP_ICON)
-        self.resize(900, 600)
-
-        self.color_mappings = color_mappings or {}
-        self.log_directory = LOG_DIR
-        self.current_log_lines = []
-
-        # Layouts
-        main_layout = QHBoxLayout(self)
-        left_layout = QVBoxLayout()
-        right_layout = QVBoxLayout()
-
-        # File List
-        self.log_list = QListWidget()
-        self.log_list.itemClicked.connect(self.load_log)
-        left_layout.addWidget(QLabel("Available Logs"))
-        left_layout.addWidget(self.log_list)
-
-        # Populate Log Files
-        for file in sorted(os.listdir(log_directory), reverse=True):
-            if file.endswith(".log"):
-                self.log_list.addItem(file)
-
-        # Log Viewer Text Area
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-
-        # Filter checkboxes
-        self.levels = {
-            "DEBUG": QCheckBox("DEBUG"),
-            "INFO": QCheckBox("INFO"),
-            "WARNING": QCheckBox("WARNING"),
-            "ERROR": QCheckBox("ERROR"),
-            "CRITICAL": QCheckBox("CRITICAL")
-        }
-        for cb in self.levels.values():
-            cb.setChecked(True)
-            cb.stateChanged.connect(self.apply_filter)
-
-        filter_box = QGroupBox("Log Level Filters")
-        filter_layout = QHBoxLayout()
-        for cb in self.levels.values():
-            filter_layout.addWidget(cb)
-        filter_box.setLayout(filter_layout)
-
-        # Buttons
-        delete_button = QPushButton("Delete Log")
-        delete_button.clicked.connect(self.delete_log)
-
-        close_button = QPushButton("Close")
-        close_button.clicked.connect(self.close)
-
-        button_layout = QHBoxLayout()
-        button_layout.addWidget(delete_button)
-        button_layout.addStretch(1)
-        button_layout.addWidget(close_button)
-
-        # Assemble Right Layout
-        right_layout.addWidget(QLabel("Log Contents"))
-        right_layout.addWidget(self.log_text)
-        right_layout.addWidget(filter_box)
-        right_layout.addLayout(button_layout)
-
-        # Final Layout
-        main_layout.addLayout(left_layout, 2)
-        main_layout.addLayout(right_layout, 5)
-
-        # Apply theme if provided
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-    def load_log(self, item: QListWidgetItem):
-        file_path = os.path.join(self.log_directory, item.text())
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                self.current_log_lines = f.readlines()
-            self.apply_filter()
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not open file: {e}")
-
-    def apply_filter(self):
-        enabled_levels = [level for level, cb in self.levels.items() if cb.isChecked()]
-        filtered = [
-            line for line in self.current_log_lines
-            if any(level in line for level in enabled_levels)
-        ]
-        self.log_text.setPlainText("".join(filtered))
-
-    def delete_log(self):
-        selected_item = self.log_list.currentItem()
-        if not selected_item:
-            QMessageBox.warning(self, "No File Selected", "Please select a log file first.")
-            return
-
-        filename = selected_item.text()
-        file_path = os.path.join(self.log_directory, filename)
-
-        confirm = QMessageBox.warning(
-            self, "WARNING!",
-            "Are you sure you want to delete this log file?\n\nThis cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-
-        if confirm != QMessageBox.StandardButton.Yes:
-            return
-
-        try:
-            os.remove(file_path)
-            self.log_list.takeItem(self.log_list.currentRow())
-            self.log_text.clear()
-            self.current_log_lines = []
-            # noinspection PyUnresolvedReferences
-            QMessageBox.information(self, "Deleted", f"Successfully deleted: {filename}", QMessageBox.Ok)
-
-        except Exception as delete_error:
-            try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.truncate(0)
-                self.current_log_lines = []
-                self.log_text.clear()
-                # noinspection PyUnresolvedReferences
-                QMessageBox.information(
-                    self, "Cleared Instead",
-                    f"Could not delete '{filename}' (in use), so its contents were cleared instead.", QMessageBox.Ok
-                )
-            except Exception as clear_error:
-                QMessageBox.critical(
-                    self, "Error",
-                    f"Failed to delete or clear the log file:\n{delete_error}\n\nAlso failed to clear contents:\n{clear_error}"
-                )
-
-    def copy_log_file_to_clipboard(self, file_path: str):
-        mime_data = QMimeData()
-        mime_data.setUrls([QUrl.fromLocalFile(file_path)])
-        QApplication.clipboard().setMimeData(mime_data)
-
-
-# -----------------------
-# Discord Menu
-# -----------------------
-
-class DiscordServerDialog(QDialog):
-    def __init__(self, parent=None, color_mappings: dict | None = None):
-        super().__init__(parent)
-        self.setWindowTitle("Community Discord Servers")
-        self.setMinimumSize(400, 300)
-        self.color_mappings = color_mappings or {}
-
-        layout = QVBoxLayout(self)
-        self.setLayout(layout)
-
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT name, invite_link FROM discord_servers")
-                servers = cursor.fetchall()
-        except sqlite3.Error as e:
-            logging.error(f"Failed to load Discord servers: {e}")
-            QMessageBox.critical(self, "Database Error", "Unable to load server list.")
-            servers = []
-
-        for name, link in servers:
-            btn = QPushButton(name)
-            btn.clicked.connect(lambda _, url=link: webbrowser.open(url))
-            layout.addWidget(btn)
-
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-
-# -----------------------
-# Compass Overlay
-# -----------------------
-
-class CompassOverlay(QDialog):
-    """
-    A floating compass window that shows both Direct and Transit routes to a destination,
-    sorted by AP cost. Color-coded: Green = Direct, Purple = Transit.
-    """
-
-    def __init__(self, direct_route_info, transit_route_info, parent=None):
-        """
-        Args:
-            direct_route_info (tuple): (int ap_cost, str description)
-            transit_route_info (tuple): (int ap_cost, str description)
-        """
-        super().__init__(parent)
-        self.setWindowTitle("Compass Routes")
-        self.setFixedSize(200, 150)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
-
-        self.direct_route_info = direct_route_info
-        self.transit_route_info = transit_route_info
-
-        self._init_ui()
-
-    def _init_ui(self):
-        layout = QVBoxLayout()
-
-        header = QLabel("Shortest Available Route:")
-        header.setStyleSheet("font-weight: bold; font-size: 14px;")
-        layout.addWidget(header)
-
-        self.route_list = QListWidget()
-        self.route_list.setFrameShape(QFrame.NoFrame)
-
-        # Track route data
-        self.route_mapping = {}
-
-        routes = [
-            ("Direct Route", self.direct_route_info[0], self.direct_route_info[1], PySide6.QtGui.QColor("green"),
-             PySide6.QtGui.QColor("white")),
-            ("Transit Route", self.transit_route_info[0], self.transit_route_info[1], PySide6.QtGui.QColor(128, 0, 128),
-             PySide6.QtGui.QColor("white")),  # dark purple
-        ]
-        routes.sort(key=lambda r: r[1])  # sort by AP cost
-
-        for label, cost, desc, bg_color, text_color in routes:
-            item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
-            item.setBackground(bg_color)
-            item.setForeground(text_color)
-            self.route_list.addItem(item)
-            path = self.direct_route_info[2] if label == "Direct Route" else self.transit_route_info[2]
-            self.route_mapping[label] = (cost, desc, path)
-
-        self.route_list.itemClicked.connect(self.route_selected)  # ✅ Hook click signal
-        layout.addWidget(self.route_list)
-
-        btn_layout = QHBoxLayout()
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(self.close)
-        btn_layout.addStretch()
-        btn_layout.addWidget(close_btn)
-        layout.addLayout(btn_layout)
-
-        self.setLayout(layout)
-
-    def refresh(self, direct_route_info, transit_route_info):
-        """
-        Update the overlay with new route data.
-        """
-        self.direct_route_info = direct_route_info
-        self.transit_route_info = transit_route_info
-
-        self.route_list.clear()
-        self.route_mapping = {}  # ✅ Reset once outside the loop
-
-        # Unpack only ap + desc, exclude path (3rd element), just like in _init_ui
-        routes = [
-            ("Direct Route", self.direct_route_info[0], self.direct_route_info[1], PySide6.QtGui.QColor("green"),
-             PySide6.QtGui.QColor("white")),
-            ("Transit Route", self.transit_route_info[0], self.transit_route_info[1], PySide6.QtGui.QColor(128, 0, 128),
-             PySide6.QtGui.QColor("white")),
-        ]
-        routes.sort(key=lambda r: r[1])  # Sort by AP
-
-        for label, cost, desc, bg_color, text_color in routes:
-            item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
-            item.setBackground(bg_color)
-            item.setForeground(text_color)
-            self.route_list.addItem(item)
-
-            # ✅ Preserve path too for selection support
-            path = self.direct_route_info[2] if label == "Direct Route" else self.transit_route_info[2]
-            self.route_mapping[label] = (cost, desc, path)
-
-    def route_selected(self, item):
-        label_text = item.text().split("—")[0].strip()
-        route_info = self.route_mapping.get(label_text)
-        if route_info and self.parent():
-            self.parent().set_compass_display_from_overlay(label_text, route_info)
-
-
-# -----------------------
-# Main Entry Point
-# -----------------------
-
-def main() -> None:
-    """Run the RBC City Map Application."""
-    global APP_ICON
-    app = QApplication(sys.argv)
-    APP_ICON = PySide6.QtGui.QIcon('./images/favicon.ico')
-    app.setWindowIcon(APP_ICON)
-
-    splash = SplashScreen("images/loading.png")
-    splash.show()
-    splash.show_message("Starting up...")
-
-    # Delay decorating until instance is created
-    main_window = RBCCommunityMap()
-
-    init_methods = [
-        '_init_scraper',
-        '_init_window_properties',
-        '_init_web_profile',
-        '_init_ui_state',
-        '_init_characters',
-        '_init_ui_components',
-        '_finalize_setup'
-    ]
-
-    for name in init_methods:
-        method = getattr(main_window, name)
-        setattr(main_window, name, splash_message(splash)(method))
-
-    main_window.splash = splash
-    main_window.show()
-    splash.finish(main_window)
-
-    sys.exit(app.exec())
-
-
-if __name__ == "__main__":
-    main()
+            logging.error(f"Error updating database: {e}")
