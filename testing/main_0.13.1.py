@@ -374,7 +374,7 @@ class SplashScreen(QSplashScreen):
             logging.error(f"Image not found: {image_path}")
             pixmap = PySide6.QtGui.QPixmap(300, 200)
             # noinspection PyUnresolvedReferences
-            pixmap.fill(Qt.black)
+            pixmap.fill(Qt.GlobalColor.black)
         else:
             pixmap = PySide6.QtGui.QPixmap(image_path)
             if pixmap.isNull():
@@ -1962,7 +1962,7 @@ def load_data() -> tuple:
             cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
             rows = {row[0]: row[1] for row in cursor.fetchall()}
 
-            def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
+            def to_coords(col_name: str, row_name: str) -> tuple[int | None, int | None]:
                 if col_name not in columns or row_name not in rows:
                     logging.warning(f"Could not resolve coordinates for {col_name} & {row_name}")
                     return None, None
@@ -2943,13 +2943,13 @@ class RBCCommunityMap(QMainWindow):
         # Ko-Fi button with a programmatically generated icon
         kofi_button = QPushButton()
         kofi_icon = PySide6.QtGui.QPixmap(30, 30)
-        kofi_icon.fill(Qt.transparent)
+        kofi_icon.fill(Qt.GlobalColor.transparent)
         painter = PySide6.QtGui.QPainter(kofi_icon)
-        painter.setRenderHint(PySide6.QtGui.QPainter.Antialiasing)
-        painter.setPen(PySide6.QtGui.QPen(Qt.black, 2))
+        painter.setRenderHint(PySide6.QtGui.QPainter.RenderHint.Antialiasing)
+        painter.setPen(PySide6.QtGui.QPen(Qt.GlobalColor.black, 2))
         painter.setBrush(PySide6.QtGui.QBrush(PySide6.QtGui.QColor(0, 188, 212)))  # Ko-Fi teal color
         painter.drawEllipse(5, 5, 20, 20)
-        painter.setPen(PySide6.QtGui.QPen(Qt.white, 2))
+        painter.setPen(PySide6.QtGui.QPen(Qt.GlobalColor.white, 2))
         painter.drawText(kofi_icon.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "K")
         painter.end()
         kofi_button.setIcon(PySide6.QtGui.QIcon(kofi_icon))
