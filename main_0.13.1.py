@@ -2229,12 +2229,12 @@ class StartupUpdateWorker(QObject):
         try:
             # This is your current synchronous logic, extracted from _init_map_data
             logging.info("[Startup] Requesting secure token...")
-            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response = requests.get("https://lollis-home.ddns.net/api/request-token.py")
             token_response.raise_for_status()
             token = token_response.text.strip()
 
             logging.info(f"[Startup] Token received: {token}")
-            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
             trigger_response = requests.get(trigger_url)
             trigger_response.raise_for_status()
 
