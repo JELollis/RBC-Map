@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.13.1
+# Filename: main_0.13.2
 
 """
 ======================
@@ -22,15 +22,16 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v0.13.1)
+RBC City Map Application (v0.13.2)
 =================================
 
 This application provides an interactive mapping and character management tool for the browser-based vampire RPG
 **Vampires! The Dark Alleyway**, set in the fictional RavenBlack City.
 
-Version 0.13.1 represents a significant internal refinement of the monolithic architecture used in earlier releases.
-While the application is still packaged as a single file, major upgrades include improved nickname normalization,
-external API integration, enhanced minimap accuracy, and multiple dialog updates to improve usability and maintainability.
+Version 0.13.2 represents a small security and robustness update on v0.13.1.
+While still packaged as a single file, upgrades include safer JavaScript login injection, request timeouts to
+avoid blocking background threads, and removal of runtime pip auto-install behavior (packagers should provide
+dependencies).
 
 Key Features:
 -------------
@@ -50,14 +51,11 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v0.13.1:
+Updated in v0.13.2:
 -------------------
-- Fully replaces legacy web scraping logic with Discord API sync (`locations.json`).
-- Countdown timers displayed for next shop/guild rotation in SetDestination and Powers dialogs.
-- Minimap draw method updated for stability and consistent label rendering.
-- Dropdowns across dialogs now use canonical nickname mapping and normalized sorting.
-- Logging system now uses debug level persistence and improved visibility control.
-- Miscellaneous performance improvements and logic consolidation throughout.
+- Replace runtime pip auto-install with fail-fast dependency reporting (packaging must provide dependencies).
+- Add request timeouts (default 10s) for external HTTP calls to improve robustness.
+- Use json.dumps to safely construct JS string literals for login script injection (avoids accidental JS injection).
 
 Modules Used:
 -------------
@@ -116,7 +114,7 @@ def get_logging_level_from_db(default=logging.INFO) -> int:
         print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
-VERSION_NUMBER = "0.13.1"
+VERSION_NUMBER = "0.13.2"
 
 # Keybinding Defaults
 DEFAULT_KEYBINDS = {
@@ -148,8 +146,6 @@ BUILDING_CLASS_MAP = {
 # -----------------------
 # Imports Handling
 # -----------------------
-
-import subprocess
 import sys
 
 # List of required modules with pip package names (some differ from import names)
@@ -169,57 +165,6 @@ required_modules = {
     'webbrowser': 'webbrowser'     # Built-in
 }
 
-def check_and_install_modules(modules: dict[str, str]) -> bool:
-    missing_modules = []
-    pip_installable = []
-
-    for module, pip_name in modules.items():
-        try:
-            __import__(module)
-        except ImportError:
-            missing_modules.append(module)
-            if pip_name not in ('re', 'time', 'sqlite3', 'webbrowser', 'datetime'):
-                pip_installable.append(pip_name)
-
-    if not missing_modules:
-        return True
-
-    print("The following modules are missing:")
-    for mod in missing_modules:
-        print(f"- {mod}")
-
-    if not pip_installable:
-        print("All missing modules are built-ins that should come with Python.")
-        return False
-
-    try:
-        from PySide6.QtWidgets import QApplication, QMessageBox
-        _ = QApplication(sys.argv)
-        response = QMessageBox.question(
-            None, "Missing Modules",
-            f"Missing modules: {', '.join(missing_modules)}\n\nInstall with pip?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if response != QMessageBox.StandardButton.Yes:
-            return False
-    except ImportError:
-        response = input(f"\nInstall missing modules ({', '.join(set(pip_installable))}) with pip? (y/n): ").strip().lower()
-        if response != 'y':
-            return False
-
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install"] + list(set(pip_installable)))
-        for module in missing_modules:
-            __import__(module)
-        return True
-    except Exception as e:
-        print(f"Failed to install or import modules: {e}")
-        return False
-
-
-if not check_and_install_modules(required_modules):
-    sys.exit("Missing required modules. Please install and retry.")
-
 # -----------------------
 # Actual Imports
 # -----------------------
@@ -229,6 +174,7 @@ import math
 import os
 import re
 import sqlite3
+import threading
 import webbrowser
 from collections.abc import KeysView
 from datetime import datetime, timedelta, timezone
@@ -240,8 +186,8 @@ from bs4 import BeautifulSoup
 # PySide6 Core
 from PySide6.QtCore import (
     QByteArray, QDateTime, QEasingCurve, QEvent, QMimeData,
-    QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
-    Slot as pyqtSlot, QObject, Signal
+    QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
+    Slot as pyqtSlot, QObject, QThread, Signal, QThreadPool
 )
 
 # PySide6 GUI
@@ -374,7 +320,7 @@ class SplashScreen(QSplashScreen):
             logging.error(f"Image not found: {image_path}")
             pixmap = PySide6.QtGui.QPixmap(300, 200)
             # noinspection PyUnresolvedReferences
-            pixmap.fill(Qt.black)
+            pixmap.fill(Qt.GlobalColor.black)
         else:
             pixmap = PySide6.QtGui.QPixmap(image_path)
             if pixmap.isNull():
@@ -1962,7 +1908,7 @@ def load_data() -> tuple:
             cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
             rows = {row[0]: row[1] for row in cursor.fetchall()}
 
-            def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
+            def to_coords(col_name: str, row_name: str) -> tuple[int | None, int | None]:
                 if col_name not in columns or row_name not in rows:
                     logging.warning(f"Could not resolve coordinates for {col_name} & {row_name}")
                     return None, None
@@ -2342,12 +2288,12 @@ class RBCCommunityMap(QMainWindow):
         """Silently trigger the Discord bot scrape and update the map database."""
         try:
             logging.info("[Startup] Requesting secure token...")
-            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response = requests.get("https://lollis-home.ddns.net/api/request-token.py")
             token_response.raise_for_status()
             token = token_response.text.strip()
 
             logging.info(f"[Startup] Token received: {token}")
-            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
             trigger_response = requests.get(trigger_url)
             trigger_response.raise_for_status()
 
@@ -2943,13 +2889,13 @@ class RBCCommunityMap(QMainWindow):
         # Ko-Fi button with a programmatically generated icon
         kofi_button = QPushButton()
         kofi_icon = PySide6.QtGui.QPixmap(30, 30)
-        kofi_icon.fill(Qt.transparent)
+        kofi_icon.fill(Qt.GlobalColor.transparent)
         painter = PySide6.QtGui.QPainter(kofi_icon)
-        painter.setRenderHint(PySide6.QtGui.QPainter.Antialiasing)
-        painter.setPen(PySide6.QtGui.QPen(Qt.black, 2))
+        painter.setRenderHint(PySide6.QtGui.QPainter.RenderHint.Antialiasing)
+        painter.setPen(PySide6.QtGui.QPen(Qt.GlobalColor.black, 2))
         painter.setBrush(PySide6.QtGui.QBrush(PySide6.QtGui.QColor(0, 188, 212)))  # Ko-Fi teal color
         painter.drawEllipse(5, 5, 20, 20)
-        painter.setPen(PySide6.QtGui.QPen(Qt.white, 2))
+        painter.setPen(PySide6.QtGui.QPen(Qt.GlobalColor.white, 2))
         painter.drawText(kofi_icon.rect(), QtCore.Qt.AlignmentFlag.AlignCenter, "K")
         painter.end()
         kofi_button.setIcon(PySide6.QtGui.QIcon(kofi_icon))
@@ -3960,7 +3906,7 @@ class RBCCommunityMap(QMainWindow):
             self.character_list.setCurrentRow(0)
             logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
             self.save_last_active_character(self.selected_character['id'])
-            
+
             self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
         else:
             self.selected_character = None
@@ -5663,14 +5609,14 @@ class RBCCommunityMap(QMainWindow):
 
         try:
             # Step 1: Request a one-time token
-            token_response = requests.get("https://lollis-home.ddns.net/api/wsgi/request-token.py")
+            token_response = requests.get("https://lollis-home.ddns.net/api/request-token.py")
             token_response.raise_for_status()
             token = token_response.text.strip()
 
             logging.info(f"Token received: {token}")
 
             # Step 2: Trigger the update using the token
-            trigger_url = f"https://lollis-home.ddns.net/api/wsgi/trigger-update.py?token={token}"
+            trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
             trigger_response = requests.get(trigger_url)
             trigger_response.raise_for_status()
 
