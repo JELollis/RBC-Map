@@ -6,7 +6,7 @@
 License Agreement
 ======================
 
-Copyright 2024–2026 RBC Community Map Team
+Copyright 2024-2025 RBC Community Map Team
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,50 +25,46 @@ limitations under the License.
 RBC City Map Application (v0.13.2)
 =================================
 
-This application provides an interactive mapping and character management tool
-for the browser-based vampire RPG **Vampires! The Dark Alleyway**, set in the
-fictional RavenBlack City.
+This application provides an interactive mapping and character management tool for the browser-based vampire RPG
+**Vampires! The Dark Alleyway**, set in the fictional RavenBlack City.
 
-Version 0.13.2 represents a security and robustness update on v0.13.1.
-While still packaged as a single file, upgrades include safer JavaScript login
-injection, initial request timeout handling, and removal of runtime pip
-auto-install behavior (packagers should provide dependencies).
+Version 0.13.2 represents a small security and robustness update on v0.13.1.
+While still packaged as a single file, upgrades include safer JavaScript login injection, request timeouts to
+avoid blocking background threads, and removal of runtime pip auto-install behavior (packagers should provide
+dependencies).
 
 Key Features:
 -------------
 - **WASD Minimap Navigation**: Move across the city grid using familiar keyboard controls.
 - **Character Management**: Add and switch between characters with saved login credentials.
-- **Minimap Visualization**: Display current location, nearby banks, taverns, transit stops,
-  and AP-based destinations.
-- **Discord Bot Data Integration**: Guild and shop location data is pulled from a live
-  Discord bot via a secure HTTP endpoint (`locations.json`), replacing in-app scraping and
-  supporting next-move countdowns.
-- **Nickname Mapping**: Internal names are normalized across dropdowns
-  (e.g., "Ace Porn" → "Ace Pawn").
+- **Minimap Visualization**: Display current location, nearby banks, taverns, transit stops, and AP-based destinations.
+- **Discord API Integration**: All guild/shop location data now pulled from a live Discord bot (`locations.json`)—
+  replaces in-app scraping and adds support for next move countdowns.
+- **Nickname Mapping**: Internal names are now fully normalized across dropdowns (e.g., "Ace Porn" → "Ace Pawn").
 - **Set Destination Dialog Enhancements**:
   - Dropdowns show nicknames, sorted and searchable.
   - Countdown overlays show remaining time to next guild/shop movement.
-  - "Update Data" triggers a fresh data pull from the update service.
+  - "Update Data" triggers the Discord bot API for a fresh scrape.
 - **Theming Tools**: Customize UI colors and webview appearance using dedicated dialogs.
-- **Log Viewer**: Live, filterable log output with optional debug visibility.
-- **Damage Calculator**: Plan combat attacks and calculate required weapon damage.
+- **Log Viewer**: Live filterable log output with optional debug visibility.
+- **Damage Calculator**: Plan combat attacks and see total required weapon damage.
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
 Updated in v0.13.2:
 -------------------
-- Replaced runtime pip auto-install with fail-fast dependency reporting.
-- Introduced initial request timeout handling for external HTTP calls.
-- Hardened JavaScript login injection using safe string construction.
+- Replace runtime pip auto-install with fail-fast dependency reporting (packaging must provide dependencies).
+- Add request timeouts (default 10s) for external HTTP calls to improve robustness.
+- Use json.dumps to safely construct JS string literals for login script injection (avoids accidental JS injection).
 
 Modules Used:
 -------------
 - **sys, os**: Core system integration and path handling.
-- **HTTP client**: Fetches external JSON data (`locations.json`) from the update service.
+- **requests**: API fetches from external JSON (locations.json).
 - **re**: Regex for parsing and name normalization.
 - **datetime**: Countdown and timestamp calculations.
 - **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
-- **PySide6**: Qt-based GUI framework, dialogs, embedded webview, and event system.
+- **PySide6**: Provides the full Qt GUI, dialogs, embedded webview, and event system.
 - **sqlite3**: Local data storage for characters, locations, settings, and logs.
 - **logging**: Captures logs for display and debugging.
 - **math**: AP cost and damage calculations.
@@ -76,89 +72,55 @@ Modules Used:
 =================================
 Installation Instructions
 =================================
-
-For development environments, ensure the following dependencies are available:
-
-- PySide6
-- PySide6-WebEngine
-- beautifulsoup4
-
-Packaged builds (e.g., Nuitka executables) include all required dependencies.
+To install required dependencies:
+```bash
+pip install requests bs4 PySide6 PySide6-WebEngine
+```
 
 This version is distributed as a monolithic .py file or a compiled .exe via Nuitka.
 
 Join the community:
 
 Discord: https://discord.gg/rKamEZvK6X
+
 """
+
 # -----------------------
 # Startup Imports
 # -----------------------
 
 import logging
-import math
-import os
+import logging.handlers
 import platform
-import re
-import sqlite3
-import sys
 import time
-import webbrowser
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import TYPE_CHECKING, Tuple, Type, TypeVar, cast
 
-import PySide6.QtGui  # kept for dynamic access
 from PySide6 import QtCore
 
 # -----------------------
 # Global Constants
 # -----------------------
+# Database Path
+DB_PATH = 'sessions/rbc_map_data.db'
 
-BASE_DIR = Path(__file__).resolve().parent
-
-LOG_DIR = BASE_DIR / "logs"
-SESSIONS_DIR = BASE_DIR / "sessions"
-IMAGES_DIR = BASE_DIR / "images"
-
-DB_PATH = SESSIONS_DIR / "rbc_map_data.db"
-
-REQUIRED_DIRECTORIES = [
-    LOG_DIR,
-    SESSIONS_DIR,
-    IMAGES_DIR,
-]
-
-VERSION_NUMBER = "0.13.2"
-
-# -----------------------
 # Logging Configuration
-# -----------------------
-
+LOG_DIR = 'logs'
 DEFAULT_LOG_LEVEL = logging.DEBUG
-LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
-
-
-def get_logging_level_from_db(default: int = logging.INFO) -> int:
-    """Retrieve logging level from the settings table, with safe fallback."""
+LOG_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+def get_logging_level_from_db(default=logging.INFO) -> int:
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                "SELECT setting_value FROM settings WHERE setting_name = 'log_level'"
-            )
+            cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'log_level'")
             row = cursor.fetchone()
             if row:
                 return int(row[0])
-    except Exception as exc:
-        print(f"Failed to load log level from DB: {exc}", file=sys.stderr)
+    except Exception as e:
+        print(f"Failed to load log level from DB: {e}", file=sys.stderr)
     return default
 
+VERSION_NUMBER = "0.13.2"
 
-# -----------------------
 # Keybinding Defaults
-# -----------------------
-
 DEFAULT_KEYBINDS = {
     "move_up": "W",
     "move_down": "S",
@@ -168,10 +130,10 @@ DEFAULT_KEYBINDS = {
     "zoom_out": "PageDown",
 }
 
-# -----------------------
-# Building Metadata
-# -----------------------
+# Required Directories
+REQUIRED_DIRECTORIES = ['logs', 'sessions', 'images']
 
+# Buildings
 BUILDING_CLASS_MAP = {
     "bank":    {"table": "banks",            "name_col": "Name"},
     "pub":     {"table": "taverns",          "name_col": "Name"},
@@ -181,53 +143,83 @@ BUILDING_CLASS_MAP = {
     "grave":   {"table": "placesofinterest", "name_col": "Name"},
     "lair":    {"table": "userbuildings",    "name_col": "Name"},
     "alchemy": {"table": "placesofinterest", "name_col": "Name"},
-    # intentionally excluded: pk, human variants, object, sewer, bind, intersect
+    # intentionally exclude: pk, human variants, object, sever, bind, intersect
 }
 
-# -----------------------
-# Dependency Metadata (Validation Only)
-# -----------------------
 
+# -----------------------
+# Imports Handling
+# -----------------------
+import sys
+
+# List of required modules with pip package names (some differ from import names)
 required_modules = {
-    "PySide6.QtCore": "PySide6",
-    "PySide6.QtGui": "PySide6",
-    "PySide6.QtNetwork": "PySide6",
-    "PySide6.QtWebChannel": "PySide6",
-    "PySide6.QtWebEngineWidgets": "PySide6",
-    "PySide6.QtWidgets": "PySide6",
-    "bs4": "beautifulsoup4",
-    "requests": "requests",
+    'PySide6.QtCore': 'PySide6',
+    'PySide6.QtGui': 'PySide6',
+    'PySide6.QtNetwork': 'PySide6',
+    'PySide6.QtWebChannel': 'PySide6',
+    'PySide6.QtWebEngineWidgets': 'PySide6',
+    'PySide6.QtWidgets': 'PySide6',
+    'bs4': 'beautifulsoup4',
+    'datetime': 'datetime',        # Built-in
+    're': 're',                    # Built-in
+    'requests': 'requests',
+    'sqlite3': 'sqlite3',          # Built-in
+    'time': 'time',                # Built-in
+    'webbrowser': 'webbrowser'     # Built-in
 }
 
 # -----------------------
-# Third-Party Imports
+# Actual Imports
 # -----------------------
 
+# Built-in / stdlib
+import math
+import os
+import re
+import sqlite3
+import threading
+import webbrowser
+from collections.abc import KeysView
+from datetime import datetime, timedelta, timezone
+
+# Third-party
 import requests
 from bs4 import BeautifulSoup
 
+# PySide6 Core
 from PySide6.QtCore import (
     QByteArray, QDateTime, QEasingCurve, QEvent, QMimeData,
-    QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
-    Slot as pyqtSlot, QObject, Signal, QThread,
+    QPoint, QPropertyAnimation, QRect, QSize, Qt, QTimer, QUrl,
+    Slot as pyqtSlot, QObject, QThread, Signal, QThreadPool
 )
 
+# PySide6 GUI
+import PySide6.QtGui  # Keep for dynamic access
+
+# PySide6 Widgets
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QColorDialog, QComboBox, QCompleter,
     QDialog, QFileDialog, QFormLayout, QFrame, QGridLayout, QGroupBox,
     QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
     QMainWindow, QMessageBox, QPushButton, QScrollArea, QSplashScreen,
     QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QTextEdit,
-    QVBoxLayout, QWidget, QInputDialog, QSizePolicy, QAbstractItemView, QStackedWidget,
+    QVBoxLayout, QWidget, QInputDialog, QSizePolicy
 )
 
+# PySide6 Web
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
+
+# PySide6 Network
 from PySide6.QtNetwork import QNetworkCookie
 
+# Typing
+from typing import TYPE_CHECKING, List, Tuple, Type, TypeVar, cast
+
 # -----------------------
-# Type Checking
+# Define Type Checking
 # -----------------------
 
 if TYPE_CHECKING:
@@ -235,21 +227,28 @@ if TYPE_CHECKING:
         def scrape_guilds_and_shops(self) -> None: ...
         def close_connection(self) -> None: ...
 
+
     class MainWindowType(QWidget):
         current_css_profile: str
         selected_character: dict | None
         destination: tuple[int, int] | None
         website_frame: QWebEngineView
         scraper: Scraper
-
-        columns: dict[str, int]
-        rows: dict[str, int]
-
         def apply_custom_css(self, css: str) -> None: ...
         def update_minimap(self) -> None: ...
 
+        columns: dict[str, int]
+        rows: dict[str, int]
+        taverns_coordinates: dict[str, tuple[int, int]]
+        banks_coordinates: dict[str, tuple[str, str, str, str]]
+        transits_coordinates: dict[str, tuple[int, int]]
+        shops_coordinates: dict[str, tuple[int, int]]
+        guilds_coordinates: dict[str, tuple[int, int]]
+        places_of_interest_coordinates: dict[str, tuple[int, int]]
+        user_buildings_coordinates: dict[str, tuple[int, int]]
+
 # -----------------------
-# Application Icon
+# Define App Icon
 # -----------------------
 
 APP_ICON = PySide6.QtGui.QIcon()
@@ -259,14 +258,14 @@ APP_ICON = PySide6.QtGui.QIcon()
 # -----------------------
 
 def apply_theme_to_widget(widget: QWidget, color_mappings: dict) -> None:
-    """Apply theme colors to a widget using Qt stylesheets."""
+    """Apply the selected theme colors to the given widget's stylesheet."""
     try:
-        bg_color = color_mappings.get("background", PySide6.QtGui.QColor("white")).name()
-        text_color = color_mappings.get("text_color", PySide6.QtGui.QColor("black")).name()
-        btn_color = color_mappings.get("button_color", PySide6.QtGui.QColor("lightgrey")).name()
-        btn_hover_color = color_mappings.get("button_hover_color", PySide6.QtGui.QColor("grey")).name()
-        btn_pressed_color = color_mappings.get("button_pressed_color", PySide6.QtGui.QColor("darkgrey")).name()
-        btn_border_color = color_mappings.get("button_border_color", PySide6.QtGui.QColor("black")).name()
+        bg_color = color_mappings.get('background', PySide6.QtGui.QColor('white')).name()
+        text_color = color_mappings.get('text_color', PySide6.QtGui.QColor('black')).name()
+        btn_color = color_mappings.get('button_color', PySide6.QtGui.QColor('lightgrey')).name()
+        btn_hover_color = color_mappings.get('button_hover_color', PySide6.QtGui.QColor('grey')).name()
+        btn_pressed_color = color_mappings.get('button_pressed_color', PySide6.QtGui.QColor('darkgrey')).name()
+        btn_border_color = color_mappings.get('button_border_color', PySide6.QtGui.QColor('black')).name()
 
         widget.setStyleSheet(
             f"""
@@ -310,13 +309,9 @@ def apply_theme_to_widget(widget: QWidget, color_mappings: dict) -> None:
             }}
             """
         )
-        logging.debug("Theme applied to %s", widget.__class__.__name__)
-    except Exception as exc:
-        logging.error(
-            "Failed to apply theme to %s: %s",
-            widget.__class__.__name__,
-            exc,
-        )
+        logging.debug(f"Theme applied to {widget.__class__.__name__}")
+    except Exception as e:
+        logging.error(f"Failed to apply theme to {widget.__class__.__name__}: {e}")
         widget.setStyleSheet("")
 
 # -----------------------
@@ -324,42 +319,39 @@ def apply_theme_to_widget(widget: QWidget, color_mappings: dict) -> None:
 # -----------------------
 
 class SplashScreen(QSplashScreen):
-    def __init__(self, image_path: str, max_height: int = 400):
+    def __init__(self, image_path, max_height=400):
         if not os.path.exists(image_path):
-            logging.error("Image not found: %s", image_path)
+            logging.error(f"Image not found: {image_path}")
             pixmap = PySide6.QtGui.QPixmap(300, 200)
+            # noinspection PyUnresolvedReferences
             pixmap.fill(Qt.GlobalColor.black)
         else:
             pixmap = PySide6.QtGui.QPixmap(image_path)
             if pixmap.isNull():
-                logging.error("Failed to load image: %s", image_path)
+                logging.error(f"Failed to load image: {image_path}")
                 pixmap = PySide6.QtGui.QPixmap(300, 200)
-                pixmap.fill(Qt.GlobalColor.black)
-            elif pixmap.height() > max_height:
-                pixmap = pixmap.scaledToHeight(
-                    max_height,
-                    Qt.SmoothTransformation,
-                )
+                # noinspection PyUnresolvedReferences
+                pixmap.fill(Qt.black)
+            else:
+                # Scale pixmap to max_height, preserving aspect ratio
+                if pixmap.height() > max_height:
+                    # noinspection PyUnresolvedReferences
 
+                    pixmap = pixmap.scaledToHeight(max_height, Qt.SmoothTransformation)
+        # noinspection PyUnresolvedReferences
         super().__init__(pixmap, Qt.WindowStaysOnTopHint)
+        # noinspection PyUnresolvedReferences
         self.setAttribute(Qt.WA_DeleteOnClose)
 
-    def show_message(self, message: str) -> None:
-        self.showMessage(
-            f"Startup script: {message} loading...",
-            Qt.AlignBottom | Qt.AlignHCenter,
-            Qt.GlobalColor.white,
-        )
+    def show_message(self, message):
+        # noinspection PyUnresolvedReferences
+        self.showMessage(f"Startup script: {message} loading...", Qt.AlignBottom | Qt.AlignHCenter, Qt.white)
         QApplication.processEvents()
-
 
 # -----------------------
 # Directory Setup
 # -----------------------
-
-def ensure_directories_exist(
-    directories: list[os.PathLike | str] | None = None,
-) -> bool:
+def ensure_directories_exist(directories: list[str] = None) -> bool:
     """
     Ensure that the required directories exist, creating them if necessary.
     """
@@ -369,126 +361,76 @@ def ensure_directories_exist(
     success = True
     for directory in directories:
         try:
+            # Check existence first to avoid unnecessary syscalls
             if not os.path.isdir(directory):
                 os.makedirs(directory, exist_ok=True)
-                logging.debug("Created directory: %s", directory)
+                logging.debug(f"Created directory: {directory}")
             else:
-                logging.debug("Directory already exists: %s", directory)
-        except OSError as exc:
-            logging.error(
-                "Failed to create directory '%s': %s",
-                directory,
-                exc,
-            )
+                logging.debug(f"Directory already exists: {directory}")
+        except OSError as e:
+            logging.error(f"Failed to create directory '{directory}': {e}")
             success = False
-
     return success
 
-
-# Validate directories at startup
+# Example usage at startup (optional, depending on your flow)
 if not ensure_directories_exist():
-    logging.warning(
-        "Some directories could not be created. "
-        "Application may encounter issues."
-    )
-
+    logging.warning("Some directories could not be created. Application may encounter issues.")
 
 # -----------------------
 # Logging Setup
 # -----------------------
-
-def setup_logging(
-    log_dir: os.PathLike | str = LOG_DIR,
-    log_level: int = DEFAULT_LOG_LEVEL,
-    log_format: str = LOG_FORMAT,
-) -> bool:
+def setup_logging(log_dir: str = LOG_DIR, log_level: int = DEFAULT_LOG_LEVEL, log_format: str = LOG_FORMAT) -> bool:
     """
-    Configure file-based logging with daily log files.
+    Set up logging configuration to save logs in the specified directory with daily rotation.
     """
-    log_filename: str | None = None
-
+    log_filename = None  # Predefine so it's always available in except blocks
     try:
-        log_filename = os.path.join(
-            str(log_dir),
-            datetime.now().strftime("rbc_%Y-%m-%d.log"),
-        )
+        log_filename = datetime.now().strftime(f'{log_dir}/rbc_%Y-%m-%d.log')
 
+        # Clear any existing handlers to avoid duplication if called multiple times
         logger = logging.getLogger()
-
-        # Prevent duplicate handlers if re-initialized
         if logger.handlers:
             logger.handlers.clear()
 
-        handler = logging.FileHandler(
-            log_filename,
-            mode="a",
-            encoding="utf-8",
-        )
+        handler = logging.FileHandler(log_filename, mode='a', encoding='utf-8')
         handler.setFormatter(logging.Formatter(log_format))
         handler.setLevel(log_level)
 
         logger.setLevel(log_level)
         logger.addHandler(handler)
 
-        logger.info(
-            "Logging initialized. Logs will be written to %s",
-            log_filename,
-        )
+        logger.info(f"Logging initialized. Logs will be written to {log_filename}")
         return True
 
-    except OSError as exc:
-        print(
-            f"Failed to set up logging to {log_filename or '[unknown]'}: {exc}",
-            file=sys.stderr,
-        )
+    except OSError as e:
+        print(f"Failed to set up logging to {log_filename or '[unknown]'}: {e}", file=sys.stderr)
         return False
-    except Exception as exc:
-        print(
-            f"Unexpected error during logging setup: {exc}",
-            file=sys.stderr,
-        )
+    except Exception as e:
+        print(f"Unexpected error during logging setup: {e}", file=sys.stderr)
         return False
-
 
 # Initialize logging at startup
 if not setup_logging(log_level=get_logging_level_from_db()):
-    print(
-        "Logging setup failed. Continuing without file logging.",
-        file=sys.stderr,
-    )
-    logging.basicConfig(
-        level=DEFAULT_LOG_LEVEL,
-        format=LOG_FORMAT,
-        stream=sys.stderr,
-    )
+    print("Logging setup failed. Continuing without file logging.", file=sys.stderr)
+    logging.basicConfig(level=DEFAULT_LOG_LEVEL, format=LOG_FORMAT, stream=sys.stderr)  # Fallback to console
 
-logging.info("Launching app version %s", VERSION_NUMBER)
-
+# Log app version
+logging.info(f"Launching app version {VERSION_NUMBER}")
 
 def save_logging_level_to_db(level: int) -> bool:
-    """Persist the selected logging level to the settings table."""
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
+            cursor.execute("""
                 INSERT INTO settings (setting_name, setting_value)
                 VALUES (?, ?)
-                ON CONFLICT(setting_name)
-                DO UPDATE SET setting_value = excluded.setting_value
-                """,
-                ("log_level", str(level)),
-            )
+                ON CONFLICT(setting_name) DO UPDATE SET setting_value=excluded.setting_value
+            """, ('log_level', str(level)))
             conn.commit()
-
-        logging.info(
-            "Log level updated to %s in settings",
-            logging.getLevelName(level),
-        )
-        return True
-
-    except Exception as exc:
-        logging.error("Failed to save log level: %s", exc)
+            logging.info(f"Log level updated to {logging.getLevelName(level)} in settings")
+            return True
+    except Exception as e:
+        logging.error(f"Failed to save log level: {e}")
         return False
 
 # -----------------------
@@ -1956,253 +1898,146 @@ elif not initialize_database(DB_PATH):
 
 def load_data() -> tuple:
     """
-    Load map-related data from the SQLite database.
+    Load map-related data from the SQLite database efficiently.
 
-    Also loads:
-    - keybind configuration
-    - active CSS profile
-    - last active character
-    - most recent destination
+    Also loads the last active character and their most recent destination.
     """
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
 
-            # -----------------------
-            # Coordinate Mappings
-            # -----------------------
-
-            cursor.execute("SELECT Name, Coordinate FROM columns")
-            columns = {name: coord for name, coord in cursor.fetchall()}
-
-            cursor.execute("SELECT Name, Coordinate FROM rows")
-            rows = {name: coord for name, coord in cursor.fetchall()}
+            # Coordinate mappings
+            cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
+            columns = {row[0]: row[1] for row in cursor.fetchall()}
+            cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
+            rows = {row[0]: row[1] for row in cursor.fetchall()}
 
             def to_coords(col_name: str, row_name: str) -> tuple[int | None, int | None]:
                 if col_name not in columns or row_name not in rows:
-                    logging.warning(
-                        "Could not resolve coordinates for %s & %s",
-                        col_name,
-                        row_name,
-                    )
+                    logging.warning(f"Could not resolve coordinates for {col_name} & {row_name}")
                     return None, None
-                return columns[col_name] + 1, rows[row_name] + 1
 
-            # -----------------------
-            # Banks (string-based)
-            # -----------------------
+                col = columns[col_name] + 1
+                row = rows[row_name] + 1
+                return col, row
 
-            banks_coordinates: dict[str, tuple[str, str]] = {}
-            cursor.execute("SELECT Column, Row FROM banks")
-            for col_name, row_name in cursor.fetchall():
+            # Banks
+            banks_coordinates = {}
+            cursor.execute("SELECT `Column`, `Row`, Name, ID FROM banks")
+            for col_name, row_name, _, _ in cursor.fetchall():
                 banks_coordinates[f"{col_name} & {row_name}"] = (col_name, row_name)
 
-            # -----------------------
-            # Coordinate-Based Entities
-            # -----------------------
-
+            # Other coordinate-based structures
             taverns_coordinates = {
                 name: to_coords(col, row)
-                for name, col, row in cursor.execute(
-                    "SELECT Name, Column, Row FROM taverns"
-                )
+                for name, col, row in cursor.execute("SELECT Name, `Column`, `Row` FROM taverns")
             }
-
             transits_coordinates = {
                 name: to_coords(col, row)
-                for name, col, row in cursor.execute(
-                    "SELECT Name, Column, Row FROM transits"
-                )
+                for name, col, row in cursor.execute("SELECT Name, `Column`, `Row` FROM transits")
             }
-
             user_buildings_coordinates = {
                 name: to_coords(col, row)
-                for name, col, row in cursor.execute(
-                    "SELECT Name, Column, Row FROM userbuildings"
-                )
+                for name, col, row in cursor.execute("SELECT Name, `Column`, `Row` FROM userbuildings")
             }
 
-            # -----------------------
-            # Color Mappings
-            # -----------------------
+            # Color mappings
+            color_mappings = {}
+            for type_, color in cursor.execute("SELECT Type, Color FROM color_mappings"):
+                try:
+                    qcolor = PySide6.QtGui.QColor(color)
+                    if not qcolor.isValid():
+                        logging.warning(f"Invalid color for type '{type_}': '{color}'")
+                    color_mappings[type_] = qcolor
+                except Exception as e:
+                    logging.error(f"Failed to load QColor for '{type_}': {e}")
+                    color_mappings[type_] = PySide6.QtGui.QColor("#000000")
 
-            color_mappings: dict[str, PySide6.QtGui.QColor] = {}
-            for type_, color in cursor.execute(
-                "SELECT type, color FROM color_mappings"
-            ):
-                qcolor = PySide6.QtGui.QColor(color)
-                if not qcolor.isValid():
-                    logging.warning(
-                        "Invalid color value for '%s': %s",
-                        type_,
-                        color,
-                    )
-                    qcolor = PySide6.QtGui.QColor("#000000")
-                color_mappings[type_] = qcolor
+            # Shops and Guilds
+            shops_coordinates = {}
+            for name, col, row in cursor.execute("SELECT Name, `Column`, `Row` FROM shops"):
+                if col != "NA" and row != "NA":
+                    shops_coordinates[name] = to_coords(col, row)
+            guilds_coordinates = {}
+            for name, col, row in cursor.execute("SELECT Name, `Column`, `Row` FROM guilds"):
+                if col != "NA" and row != "NA":
+                    guilds_coordinates[name] = to_coords(col, row)
 
-            # -----------------------
-            # Shops & Guilds
-            # -----------------------
-
-            shops_coordinates = {
-                name: to_coords(col, row)
-                for name, col, row in cursor.execute(
-                    "SELECT Name, Column, Row FROM shops"
-                )
-                if col != "NA" and row != "NA"
-            }
-
-            guilds_coordinates = {
-                name: to_coords(col, row)
-                for name, col, row in cursor.execute(
-                    "SELECT Name, Column, Row FROM guilds"
-                )
-                if col != "NA" and row != "NA"
-            }
-
-            # -----------------------
             # Points of Interest
-            # -----------------------
+            places_of_interest_coordinates = {}
+            cursor.execute("SELECT Name, `Column`, `Row` FROM placesofinterest")
+            rows_data = cursor.fetchall()
 
-            places_of_interest_coordinates: dict[str, tuple[int, int]] = {}
-            cursor.execute("SELECT Name, Column, Row FROM placesofinterest")
-
-            for name, col, row in cursor.fetchall():
+            logging.debug("Resolved POI coordinates:")
+            for name, col, row in rows_data:
                 coords = to_coords(col, row)
                 if coords == (None, None):
-                    logging.warning(
-                        "Skipping POI '%s' due to unresolved coordinates (%s, %s)",
-                        name,
-                        col,
-                        row,
-                    )
+                    logging.warning(f"Skipping POI {name} due to unresolved coordinates: {col}, {row}")
                 else:
                     places_of_interest_coordinates[name] = coords
+                    logging.debug(f"{name}: {coords}")
 
-            # -----------------------
-            # Settings
-            # -----------------------
-
-            cursor.execute(
-                "SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'"
-            )
+            # Load settings
+            cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
             row = cursor.fetchone()
             keybind_config = int(row[0]) if row else 1
 
-            cursor.execute(
-                "SELECT setting_value FROM settings WHERE setting_name = 'css_profile'"
-            )
+            cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'css_profile'")
             row = cursor.fetchone()
             current_css_profile = row[0] if row else "Default"
 
-            # -----------------------
-            # Last Active Character
-            # -----------------------
-
+            # Load last active character
             selected_character = None
             last_destination = None
-
-            cursor.execute(
-                "SELECT character_id FROM last_active_character LIMIT 1"
-            )
+            cursor.execute("SELECT character_id FROM last_active_character LIMIT 1")
             row = cursor.fetchone()
+            character_id = row[0] if row else None
 
-            if row:
-                character_id = row[0]
-                cursor.execute(
-                    "SELECT id, name, password FROM characters WHERE id = ?",
-                    (character_id,),
-                )
-                char = cursor.fetchone()
-
-                if char:
+            if character_id:
+                cursor.execute("SELECT id, name, password FROM characters WHERE id = ?", (character_id,))
+                char_row = cursor.fetchone()
+                if char_row:
                     selected_character = {
-                        "id": char[0],
-                        "name": char[1],
-                        "password": char[2],
+                        "id": char_row[0],
+                        "name": char_row[1],
+                        "password": char_row[2]
                     }
 
+                    # Load last destination for this character
                     cursor.execute(
-                        """
-                        SELECT col, row
-                        FROM destinations
-                        WHERE character_id = ?
-                        ORDER BY timestamp DESC
-                        LIMIT 1
-                        """,
-                        (character_id,),
+                        "SELECT col, row FROM destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 1",
+                        (character_id,)
                     )
-                    dest = cursor.fetchone()
-                    if dest:
-                        last_destination = (dest[0], dest[1])
+                    row = cursor.fetchone()
+                    if row:
+                        last_destination = (row[0], row[1])
 
-            logging.debug("Database data loaded successfully")
-
+            logging.debug("Loaded data from database successfully")
             return (
-                columns,
-                rows,
-                banks_coordinates,
-                taverns_coordinates,
-                transits_coordinates,
-                user_buildings_coordinates,
-                color_mappings,
-                shops_coordinates,
-                guilds_coordinates,
-                places_of_interest_coordinates,
-                keybind_config,
-                current_css_profile,
-                selected_character,
-                last_destination,
+                columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates,
+                user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates,
+                places_of_interest_coordinates, keybind_config, current_css_profile,
+                selected_character, last_destination
             )
 
-    except sqlite3.Error as exc:
-        logging.error(
-            "Failed to load data from database %s: %s",
-            DB_PATH,
-            exc,
-        )
+    except sqlite3.Error as e:
+        logging.error(f"Failed to load data from database {DB_PATH}: {e}")
         raise
 
-# -----------------------
-# Load Data at Startup
-# -----------------------
-
+# Load data at startup
 try:
     (
-        columns,
-        rows,
-        banks_coordinates,
-        taverns_coordinates,
-        transits_coordinates,
-        user_buildings_coordinates,
-        color_mappings,
-        shops_coordinates,
-        guilds_coordinates,
-        places_of_interest_coordinates,
-        keybind_config,
-        current_css_profile,
-        selected_character,
-        last_destination,
+        columns, rows, banks_coordinates, taverns_coordinates, transits_coordinates,
+        user_buildings_coordinates, color_mappings, shops_coordinates, guilds_coordinates,
+        places_of_interest_coordinates, keybind_config, current_css_profile,
+        selected_character, last_destination
     ) = load_data()
-
 except sqlite3.Error:
-    logging.critical(
-        "Database load failed. Falling back to empty runtime data."
-    )
-
-    columns = rows = {}
+    logging.critical("Database load failed. Using fallback empty data.")
+    columns = rows = taverns_coordinates = transits_coordinates = user_buildings_coordinates = \
+        shops_coordinates = guilds_coordinates = places_of_interest_coordinates = {}
     banks_coordinates = {}
-    taverns_coordinates = {}
-    transits_coordinates = {}
-    user_buildings_coordinates = {}
-    shops_coordinates = {}
-    guilds_coordinates = {}
-    places_of_interest_coordinates = {}
-
-    color_mappings = {
-        "default": PySide6.QtGui.QColor("#000000")
-    }
-
+    color_mappings = {'default': PySide6.QtGui.QColor('#000000')}  # Minimal fallback
     keybind_config = 1
     current_css_profile = "Default"
     selected_character = None
@@ -2214,204 +2049,117 @@ except sqlite3.Error:
 
 def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
     """
-    Save or update a single cookie in the SQLite database.
+    Save or update a single cookie in the SQLite database, overwriting if it exists.
 
-    Cookies are uniquely identified by (name, domain, path).
+    Args:
+        cookie (QNetworkCookie): The cookie to save or update.
+
+    Returns:
+        bool: True if the cookie was saved/updated successfully, False otherwise.
     """
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-
-            name = cookie.name().data().decode("utf-8", errors="replace")
-            value = cookie.value().data().decode("utf-8", errors="replace")
+            name = cookie.name().data().decode('utf-8', errors='replace')
             domain = cookie.domain()
             path = cookie.path()
-
-            expiration = (
-                cookie.expirationDate().toString(Qt.DateFormat.ISODate)
-                if not cookie.isSessionCookie()
-                else None
-            )
-
+            value = cookie.value().data().decode('utf-8', errors='replace')
+            # noinspection PyUnresolvedReferences
+            expiration = cookie.expirationDate().toString(Qt.DateFormat.ISODate) if not cookie.isSessionCookie() else None
             secure = int(cookie.isSecure())
             httponly = int(cookie.isHttpOnly())
 
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO cookies
-                    (name, value, domain, path, expiration, secure, httponly)
+            # Use UPSERT (INSERT OR REPLACE) to overwrite existing cookies based on name, domain, and path
+            cursor.execute('''
+                INSERT OR REPLACE INTO cookies (name, value, domain, path, expiration, secure, httponly)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (name, value, domain, path, expiration, secure, httponly),
-            )
+            ''', (name, value, domain, path, expiration, secure, httponly))
 
             conn.commit()
-
-            logging.debug(
-                "Saved/updated cookie '%s' for domain '%s'",
-                name,
-                domain,
-            )
+            logging.debug(f"Saved/updated cookie: {name} for domain {domain}")
             return True
-
-    except sqlite3.Error as exc:
-        logging.error(
-            "Failed to save/update cookie '%s': %s",
-            cookie.name().data().decode("utf-8", errors="replace"),
-            exc,
-        )
+    except sqlite3.Error as e:
+        logging.error(f"Failed to save/update cookie {cookie.name().data()}: {e}")
         return False
 
-def load_cookies_from_db() -> list[QNetworkCookie]:
+def load_cookies_from_db() -> List[QNetworkCookie]:
     """
-    Load all stored cookies from the SQLite database.
-    """
-    cookies: list[QNetworkCookie] = []
+    Load all cookies from the SQLite database.
 
+    Returns:
+        list[QNetworkCookie]: List of QNetworkCookie objects from the database.
+    """
+    cookies = []
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT name, value, domain, path, expiration, secure, httponly
-                FROM cookies
-                """
-            )
-
+            cursor.execute('SELECT name, value, domain, path, expiration, secure, httponly FROM cookies')
             for name, value, domain, path, expiration, secure, httponly in cursor.fetchall():
                 cookie = QNetworkCookie(
-                    name.encode("utf-8"),
-                    value.encode("utf-8"),
+                    name.encode('utf-8'),
+                    value.encode('utf-8')
                 )
                 cookie.setDomain(domain)
                 cookie.setPath(path)
-
                 if expiration:
-                    cookie.setExpirationDate(
-                        QDateTime.fromString(
-                            expiration,
-                            Qt.DateFormat.ISODate,
-                        )
-                    )
-
+                    # noinspection PyUnresolvedReferences
+                    cookie.setExpirationDate(QDateTime.fromString(expiration, Qt.DateFormat.ISODate))
                 cookie.setSecure(bool(secure))
                 cookie.setHttpOnly(bool(httponly))
                 cookies.append(cookie)
-
-        logging.debug(
-            "Loaded %d cookies from database",
-            len(cookies),
-        )
-
-    except sqlite3.Error as exc:
-        logging.error("Failed to load cookies: %s", exc)
-
+            logging.debug(f"Loaded {len(cookies)} cookies from database")
+    except sqlite3.Error as e:
+        logging.error(f"Failed to load cookies: {e}")
     return cookies
 
 def clear_cookie_db() -> bool:
     """
-    Remove all cookies from the SQLite database.
+    Clear all cookies from the SQLite database.
+
+    Returns:
+        bool: True if cookies were cleared successfully, False otherwise.
     """
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM cookies")
+            cursor.execute('DELETE FROM cookies')
             conn.commit()
-
-        logging.info("Cleared all cookies from database")
-        return True
-
-    except sqlite3.Error as exc:
-        logging.error("Failed to clear cookies: %s", exc)
+            logging.info("Cleared all cookies from database")
+            return True
+    except sqlite3.Error as e:
+        logging.error(f"Failed to clear cookies: {e}")
         return False
 
 # -----------------------
 # Splash Messages Decorator
 # -----------------------
 
-from functools import wraps
-from typing import Callable, Any
-
-
-def splash_message(
-    splash_source: Callable[[Any], Any] | Any,
-    message: str | None = None,
-):
-    """
-    Decorator to display a startup splash message before executing a method.
-
-    Args:
-        splash_source:
-            Either a callable (e.g. lambda self: self.splash)
-            or a splash instance.
-        message:
-            Optional explicit message to display. If omitted, the
-            function name is used.
-    """
+def splash_message(splash_getter):
     def decorator(func):
-        @wraps(func)
         def wrapper(self, *args, **kwargs):
-            try:
-                splash = (
-                    splash_source(self)
-                    if callable(splash_source)
-                    else splash_source
-                )
-
-                if splash is not None:
-                    # Defensive: ensure Qt object is still valid and visible
-                    try:
-                        if hasattr(splash, "isHidden") and not splash.isHidden():
-                            splash.show_message(message or func.__name__)
-                    except Exception:
-                        # Splash issues must never block execution
-                        pass
-
-            except Exception:
-                # Any splash-related failure must be silent
-                pass
-
+            splash = splash_getter(self) if callable(splash_getter) else splash_getter
+            if splash and not splash.isHidden():
+                splash.show_message(func.__name__)
             return func(self, *args, **kwargs)
-
+        wrapper.__name__ = func.__name__
         return wrapper
-
     return decorator
 
+
 # -----------------------
-# OS-Specific Environment Setup
+# OS Specific Environs
 # -----------------------
 
-def configure_qtwebengine_environment() -> None:
-    """
-    Apply OS-specific environment variables required for QtWebEngine stability.
+if sys.platform.startswith("linux"):
+    # Linux/Proton compatibility tweaks for QtWebEngine
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-software-rasterizer"
 
-    These must be set BEFORE any QtWebEngine components are initialized.
-    """
-    platform_name = sys.platform
-
-    if platform_name.startswith("linux"):
-        # Linux / Proton / containerized environments
-        os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
-        os.environ.setdefault(
-            "QTWEBENGINE_CHROMIUM_FLAGS",
-            "--disable-software-rasterizer",
-        )
-
-    elif platform_name == "darwin":
-        # macOS (notably VMware / Parallels GPU instability)
-        os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
-        os.environ.setdefault(
-            "QTWEBENGINE_CHROMIUM_FLAGS",
-            "--disable-gpu",
-        )
-        os.environ.setdefault(
-            "QTWEBENGINE_DICTIONARIES_PATH",
-            "/tmp",
-        )
-
-
-# Apply environment configuration immediately at import time
-configure_qtwebengine_environment()
+elif sys.platform == "darwin":
+    # macOS (especially VMware) fixes for Chromium GPU crashes
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = "--disable-gpu"
+    os.environ["QTWEBENGINE_DISABLE_SANDBOX"] = "1"
+    os.environ["QTWEBENGINE_DICTIONARIES_PATH"] = "/tmp"  # Suppress dictionary warnings
 
 # -----------------------
 # Startup Data Fetch
@@ -2421,138 +2169,40 @@ class StartupUpdateWorker(QObject):
     started = Signal()
     finished = Signal(bool, str)  # (ok, message)
 
-    REQUEST_TIMEOUT = 10  # seconds
-
     def __init__(self, app_ref):
         super().__init__()
         self.app = app_ref  # reference to RBCCommunityMap
 
     @pyqtSlot()
-    def run(self) -> None:
+    def run(self):
         self.started.emit()
-
         try:
+            # This is your current synchronous logic, extracted from _init_map_data
             logging.info("[Startup] Requesting secure token...")
-
-            token_response = requests.get(
-                "https://lollis-home.ddns.net/api/request-token.py",
-                timeout=self.REQUEST_TIMEOUT,
-            )
+            token_response = requests.get("https://lollis-home.ddns.net/api/request-token.py")
             token_response.raise_for_status()
-
             token = token_response.text.strip()
-            if not token:
-                raise ValueError("Empty token received from server")
 
-            logging.info("[Startup] Token received successfully")
-
-            trigger_url = (
-                "https://lollis-home.ddns.net/api/trigger-update.py"
-                f"?token={token}"
-            )
-
-            trigger_response = requests.get(
-                trigger_url,
-                timeout=self.REQUEST_TIMEOUT,
-            )
+            logging.info(f"[Startup] Token received: {token}")
+            trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
             trigger_response.raise_for_status()
 
-            logging.info("[Startup] Bot scrape triggered; waiting for data availability")
-
-            # Controlled delay — still synchronous, but explicit
+            logging.info("[Startup] Bot scrape triggered. Waiting 10 seconds...")
             time.sleep(10)
 
-            json_response = requests.get(
-                "https://lollis-home.ddns.net/api/locations.json",
-                timeout=self.REQUEST_TIMEOUT,
-            )
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
             json_response.raise_for_status()
+            data = json_response.json()
 
-            try:
-                data = json_response.json()
-            except ValueError as exc:
-                raise ValueError("Invalid JSON received from locations endpoint") from exc
-
+            # Call your existing updater (DB only; no direct widget touches)
             self.app.update_database_with_json(data)
-
-            logging.info("[Startup] Database updated with fresh bot data")
+            logging.info("[Startup] Database updated with fresh bot data.")
             self.finished.emit(True, "Initial data update completed")
-
-        except requests.RequestException as exc:
-            logging.warning(
-                "[Startup] Network error during startup update: %s",
-                exc,
-            )
-            self.finished.emit(False, "Startup update failed (network error)")
-
-        except Exception as exc:
-            logging.warning(
-                "[Startup] Startup update failed: %s",
-                exc,
-            )
-            self.finished.emit(False, "Startup update failed")
-
-# ---------------------------------------------------------------------
-# QtNetwork-based Startup Update (PLACEHOLDER / NOT ACTIVE)
-# ---------------------------------------------------------------------
-#
-# This is an alternative implementation of StartupUpdateWorker using
-# QNetworkAccessManager instead of `requests`.
-#
-# Intended for:
-# - Future testing
-# - Event-loop-friendly networking
-# - Better integration with Qt threading and shutdown
-#
-# NOT ACTIVE:
-# - This code is intentionally commented out
-# - No signals are connected
-# - No behavior is changed by its presence
-#
-# ---------------------------------------------------------------------
-#
-# from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
-# from PySide6.QtCore import QUrl, QByteArray
-#
-#
-# class StartupUpdateWorkerQt(QObject):
-#     started = Signal()
-#     finished = Signal(bool, str)
-#
-#     def __init__(self, app_ref):
-#         super().__init__()
-#         self.app = app_ref
-#         self.manager = QNetworkAccessManager(self)
-#
-#     def run(self):
-#         """
-#         Conceptual flow:
-#         1. Request token via QNetworkRequest
-#         2. Trigger bot update
-#         3. Poll or delay using QTimer (NOT time.sleep)
-#         4. Fetch locations.json
-#         5. Parse JSON and update database
-#
-#         All steps would be driven by signals:
-#         - finished(QNetworkReply*)
-#         - errorOccurred(...)
-#         """
-#         self.started.emit()
-#
-#         # Example (token request):
-#         # request = QNetworkRequest(QUrl("https://lollis-home.ddns.net/api/request-token.py"))
-#         # reply = self.manager.get(request)
-#         # reply.finished.connect(lambda: self._handle_token_reply(reply))
-#
-#     # def _handle_token_reply(self, reply):
-#     #     if reply.error():
-#     #         self.finished.emit(False, "Startup update failed (network error)")
-#     #         return
-#     #
-#     #     token = bytes(reply.readAll()).decode("utf-8").strip()
-#     #     # Continue chain...
-#
-# ---------------------------------------------------------------------
+        except Exception as e:
+            logging.warning(f"[Startup] Silent update failed: {e}")
+            self.finished.emit(False, f"Startup update failed: {e}")
 
 # -----------------------
 # RBC Community Map Main Class
@@ -2563,195 +2213,187 @@ class RBCCommunityMap(QMainWindow):
     Main application class for the RBC Community Map.
     """
 
-    def __init__(self, splash=None):
+    def __init__(self, splash = None):
+        """
+        Initialize the RBCCommunityMap and its components efficiently.
+
+        Sets up the main window, scraper, cookie handling, data loading, and UI components
+        with proper error handling and asynchronous initialization where possible.
+        """
         super().__init__()
 
-        # -----------------------
-        # Core State
-        # -----------------------
-
-        self.splash = splash
+        # Core state flags
         self.is_updating_minimap = False
         self.login_needed = True
         self.webview_loaded = False
+        self.splash = splash
 
-        # Compass / routing state
-        self.selected_route_label = None
-        self.selected_route_description = None
-        self.selected_route_path = None
+        # Compass route state
+        self.selected_route_label = None  # "Direct Route" or "Transit Route"
+        self.selected_route_description = None  # Full arrow description shown in the compass label
+        self.selected_route_path = None  # List of (x, y) coordinate tuples to draw on minimap
 
-        # Character / navigation state
+        # Initialize character coordinates
         self.character_x = None
         self.character_y = None
         self.selected_character = None
         self.destination = None
 
-        # Self-learning building cache
-        self._seen_buildings: set[tuple[str, str, str]] = set()
-
-        # -----------------------
-        # Initialization Pipeline
-        # -----------------------
-
+        # Initialize essential components early
         self._init_data()
         self._init_window_properties()
         self._init_web_profile()
+
+        # Update map data from scraper bot
+        self._init_map_data()
+
+        # UI and character setup
         self._init_ui_state()
         self._init_characters()
         self._init_ui_components()
+
+        # Final setup steps
         self._finalize_setup()
 
-        # Kick off background map update AFTER UI is shown
-        self._start_startup_update()
+        #Self-learning Building Cache
+        self._seen_buildings: set[tuple[str, str, str]] = set()  # (cls, name, "Col|Row")
 
-    # -----------------------
-    # Initialization Steps
-    # -----------------------
-
-    @splash_message(lambda self: self.splash, "Configuring window")
+    @splash_message(lambda self: self.splash)
     def _init_window_properties(self) -> None:
+        """Set up main window properties."""
         try:
-            icon_path = IMAGES_DIR / "favicon.ico"
-            self.setWindowIcon(PySide6.QtGui.QIcon(str(icon_path)))
-            self.setWindowTitle("RBC Community Map")
+            self.setWindowIcon(PySide6.QtGui.QIcon('images/favicon.ico'))
+            self.setWindowTitle('RBC Community Map')
             self.setGeometry(100, 100, 1200, 800)
             self.load_theme_settings()
             self.apply_theme()
-        except Exception as exc:
-            logging.error("Failed to set window properties: %s", exc)
-            self.setWindowTitle("RBC Community Map (Fallback)")
+        except Exception as e:
+            logging.error(f"Failed to set window properties: {e}")
+            # Fallback to default icon/title if needed
+            self.setWindowTitle('RBC Community Map (Fallback)')
 
-    @splash_message(lambda self: self.splash, "Initializing web profile")
+    @splash_message(lambda self: self.splash)
     def _init_web_profile(self) -> None:
+        """Set up QWebEngineProfile for cookie handling."""
         self.web_profile = QWebEngineProfile.defaultProfile()
-
+        cookie_storage_path = os.path.join(os.getcwd(), 'sessions')
         try:
-            SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
-            self.web_profile.setPersistentCookiesPolicy(
-                QWebEngineProfile.ForcePersistentCookies
-            )
-            self.web_profile.setPersistentStoragePath(str(SESSIONS_DIR))
+            os.makedirs(cookie_storage_path, exist_ok=True)
+            # noinspection PyUnresolvedReferences
+            self.web_profile.setPersistentCookiesPolicy(QWebEngineProfile.ForcePersistentCookies)
+            self.web_profile.setPersistentStoragePath(cookie_storage_path)
             self.setup_cookie_handling()
-        except OSError as exc:
-            logging.error(
-                "Failed to set up cookie storage at %s: %s",
-                SESSIONS_DIR,
-                exc,
-            )
-            # Continue with in-memory cookies
+        except OSError as e:
+            logging.error(f"Failed to set up cookie storage at {cookie_storage_path}: {e}")
+            # Continue with in-memory cookies if storage fails
 
-    @splash_message(lambda self: self.splash, "Loading local data")
+    @splash_message(lambda self: self.splash)
+    def _init_map_data(self) -> None:
+        """Silently trigger the Discord bot scrape and update the map database."""
+        try:
+            logging.info("[Startup] Requesting secure token...")
+            token_response = requests.get("https://lollis-home.ddns.net/api/request-token.py")
+            token_response.raise_for_status()
+            token = token_response.text.strip()
+
+            logging.info(f"[Startup] Token received: {token}")
+            trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
+            trigger_response = requests.get(trigger_url)
+            trigger_response.raise_for_status()
+
+            logging.info("[Startup] Bot scrape triggered. Waiting 10 seconds...")
+            time.sleep(10)
+
+            json_url = "https://lollis-home.ddns.net/api/locations.json"
+            json_response = requests.get(json_url)
+            json_response.raise_for_status()
+            data = json_response.json()
+
+            self.update_database_with_json(data)
+            logging.info("[Startup] Database updated with fresh bot data.")
+        except Exception as e:
+            logging.warning(f"[Startup] Silent update failed: {e}")
+
+    @splash_message(lambda self: self.splash)
     def _init_data(self) -> None:
+        """Load initial data from the database with fallback."""
         try:
             (
-                self.columns,
-                self.rows,
-                self.banks_coordinates,
-                self.taverns_coordinates,
-                self.transits_coordinates,
-                self.user_buildings_coordinates,
-                self.color_mappings,
-                self.shops_coordinates,
-                self.guilds_coordinates,
-                self.places_of_interest_coordinates,
-                self.keybind_config,
-                self.current_css_profile,
-                self.selected_character,
-                self.destination,
+                self.columns, self.rows, self.banks_coordinates, self.taverns_coordinates,
+                self.transits_coordinates, self.user_buildings_coordinates, self.color_mappings,
+                self.shops_coordinates, self.guilds_coordinates, self.places_of_interest_coordinates,
+                self.keybind_config, self.current_css_profile,
+                self.selected_character, self.destination  # <-- just store, don't update minimap yet
             ) = load_data()
-        except sqlite3.Error as exc:
-            logging.critical("Failed to load initial data: %s", exc)
-
-            self.columns = self.rows = {}
-            self.banks_coordinates = {}
-            self.taverns_coordinates = {}
-            self.transits_coordinates = {}
-            self.user_buildings_coordinates = {}
-            self.shops_coordinates = {}
-            self.guilds_coordinates = {}
-            self.places_of_interest_coordinates = {}
-            self.color_mappings = {
-                "default": PySide6.QtGui.QColor("#000000")
-            }
+        except sqlite3.Error as e:
+            logging.critical(f"Failed to load initial data: {e}")
+            # Use fallback data
+            self.columns = self.rows = self.banks_coordinates = self.taverns_coordinates = \
+                self.transits_coordinates = self.user_buildings_coordinates = \
+                self.shops_coordinates = self.guilds_coordinates = self.places_of_interest_coordinates = {}
+            self.color_mappings = {'default': PySide6.QtGui.QColor('#000000')}
             self.keybind_config = 1
             self.current_css_profile = "Default"
             self.selected_character = None
             self.destination = None
 
-    @splash_message(lambda self: self.splash, "Preparing UI state")
+    @splash_message(lambda self: self.splash)
     def _init_ui_state(self) -> None:
+        """Initialize UI-related state variables."""
         self.zoom_level = 3
-        self.load_zoom_level_from_database()
+        self.load_zoom_level_from_database()  # May override zoom_level
         self.minimap_size = 280
         self.column_start = 0
         self.row_start = 0
         self.destination = None
-
         self.map_icons = {
-            "bank": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "bank.png")),
-            "tavern": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "saloon.png")),
-            "transit": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "transit.png")),
-            "user_building": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "castle.png")),
-            "guild": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "guild.png")),
-            "shop": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "shop.png")),
-            "graveyard": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "graveyard.png")),
-            "hall_binding": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "binding.png")),
-            "hall_severance": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "severance.png")),
+            "bank": PySide6.QtGui.QPixmap("images/bank.png"),
+            "tavern": PySide6.QtGui.QPixmap("images/saloon.png"),
+            "transit": PySide6.QtGui.QPixmap("images/transit.png"),
+            "user_building": PySide6.QtGui.QPixmap("images/castle.png"),
+            "guild": PySide6.QtGui.QPixmap("images/guild.png"),
+            "shop": PySide6.QtGui.QPixmap("images/shop.png"),
+            "graveyard": PySide6.QtGui.QPixmap("images/graveyard.png"),
+            "hall_binding": PySide6.QtGui.QPixmap("images/binding.png"),
+            "hall_severance": PySide6.QtGui.QPixmap("images/severance.png"),
         }
 
-    @splash_message(lambda self: self.splash, "Loading characters")
+    @splash_message(lambda self: self.splash)
     def _init_characters(self) -> None:
+        """Initialize character-related data and widgets."""
         self.characters = []
         self.character_list = QListWidget()
         self.selected_character = None
-
         self.load_characters()
         if not self.characters:
             self.firstrun_character_creation()
 
-    @splash_message(lambda self: self.splash, "Building interface")
+    @splash_message(lambda self: self.splash)
     def _init_ui_components(self) -> None:
+        """Set up UI components and console logging."""
         self.setup_ui_components()
         self.setup_console_logging()
 
-    @splash_message(lambda self: self.splash, "Finalizing startup")
+    @splash_message(lambda self: self.splash)
     def _finalize_setup(self) -> None:
+        """Complete initialization with UI display and final configurations."""
         self.show()
-
         if self.selected_character and self.destination:
             self.update_minimap()
-
         self.load_last_active_character()
         self.setup_keybindings()
-
+        # noinspection PyUnresolvedReferences
         self.setFocusPolicy(Qt.StrongFocus)
-        if hasattr(self, "website_frame"):
+        if hasattr(self, 'website_frame'):
+            # noinspection PyUnresolvedReferences
             self.website_frame.setFocusPolicy(Qt.StrongFocus)
-
+        else:
+            logging.warning("website_frame not initialized before focus setup")
         css = self.load_current_css()
         self.apply_custom_css(css)
 
-    def _start_startup_update(self) -> None:
-        """
-        Start the background startup data update worker.
-        """
-        try:
-            self.startup_worker = StartupUpdateWorker(self)
-            self.startup_thread = QThread(self)
-
-            self.startup_worker.moveToThread(self.startup_thread)
-            self.startup_thread.started.connect(self.startup_worker.run)
-            self.startup_worker.finished.connect(self._on_startup_update_finished)
-
-            self.startup_worker.finished.connect(self.startup_thread.quit)
-            self.startup_worker.finished.connect(self.startup_worker.deleteLater)
-            self.startup_thread.finished.connect(self.startup_thread.deleteLater)
-
-            self.startup_thread.start()
-            logging.debug("Startup update worker launched")
-
-        except Exception as e:
-            logging.error(f"Failed to start startup update worker: {e}")
+        # Kick off the background update after the window is up
+        QTimer.singleShot(0, self._init_map_data)
 
     def _on_startup_update_finished(self, ok: bool, msg: str):
         # Refresh any UI that depends on DB state (no heavy work here)
@@ -2787,166 +2429,155 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Failed to load CSS: {e}")
             return ""
 
-    # -----------------------
-    # Keybindings
-    # -----------------------
+# -----------------------
+# Keybindings
+# -----------------------
 
     def load_keybind_config(self) -> int:
         """
         Load keybind configuration from the database.
 
         Returns:
-            int: Keybind mode (0=Off, 1=WASD, 2=Arrows)
+            int: Keybind mode (0=Off, 1=WASD, 2=Arrows), defaults to 1 (WASD) if not found.
         """
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'"
-                )
-                row = cursor.fetchone()
-                return int(row[0]) if row else 1
-        except sqlite3.Error as exc:
-            logging.error("Failed to load keybind config: %s", exc)
-            return 1
-
+                cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'keybind_config'")
+                result = cursor.fetchone()
+                return int(result[0]) if result else 1  # Default to WASD
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load keybind config: {e}")
+            return 1  # Fallback to WASD on error
 
     def setup_keybindings(self) -> None:
-        """Set up movement keybindings based on current keybind_config."""
-        self.clear_existing_keybindings()
-
-        if self.keybind_config == 0:
-            logging.info("Keybindings disabled")
-            return
-
+        """Set up keybindings for character movement based on current config."""
         movement_configs = {
-            1: {  # WASD
-                Qt.Key.Key_W: 1,
-                Qt.Key.Key_A: 3,
-                Qt.Key.Key_S: 7,
-                Qt.Key.Key_D: 5,
+            1: {  # WASD Mode
+                Qt.Key.Key_W: 1,  # Top-center
+                Qt.Key.Key_A: 3,  # Middle-left
+                Qt.Key.Key_S: 7,  # Bottom-center
+                Qt.Key.Key_D: 5  # Middle-right
             },
-            2: {  # Arrows
+            2: {  # Arrow Keys Mode
                 Qt.Key.Key_Up: 1,
                 Qt.Key.Key_Left: 3,
                 Qt.Key.Key_Down: 7,
-                Qt.Key.Key_Right: 5,
+                Qt.Key.Key_Right: 5
             },
+            0: {}  # Off mode (no keybindings)
         }
 
-        keymap = movement_configs.get(self.keybind_config)
-        if not keymap:
-            logging.warning("Unknown keybind mode: %s", self.keybind_config)
+        self.movement_keys = movement_configs.get(self.keybind_config, movement_configs[1])
+        logging.debug(f"Setting up keybindings: {self.movement_keys}")
+
+        self.clear_existing_keybindings()
+
+        if self.keybind_config == 0:
+            logging.info("Keybindings disabled (mode 0)")
             return
 
-        self._movement_shortcuts: list[PySide6.QtGui.QShortcut] = []
+        if not hasattr(self, 'website_frame'):
+            logging.error("website_frame not initialized; skipping keybinding setup")
+            return
 
-        for key, move_index in keymap.items():
-            shortcut = PySide6.QtGui.QShortcut(
-                PySide6.QtGui.QKeySequence(key),
-                self,
-                context=Qt.ShortcutContext.ApplicationShortcut,
-            )
-            shortcut.activated.connect(
-                lambda idx=move_index: self.move_character(idx)
-            )
-            self._movement_shortcuts.append(shortcut)
-
-        logging.debug(
-            "Registered %d movement keybindings",
-            len(self._movement_shortcuts),
-        )
-
-
-    def clear_existing_keybindings(self) -> None:
-        """Remove previously registered movement shortcuts."""
-        shortcuts = getattr(self, "_movement_shortcuts", [])
-        for shortcut in shortcuts:
-            shortcut.setEnabled(False)
-            shortcut.deleteLater()
-
-        self._movement_shortcuts = []
-
+        for key, move_index in self.movement_keys.items():
+            shortcut = PySide6.QtGui.QShortcut(PySide6.QtGui.QKeySequence(key), self.website_frame, context=Qt.ShortcutContext.ApplicationShortcut)
+            shortcut.activated.connect(lambda idx=move_index: self.move_character(idx))
+            logging.debug(f"Bound key {key} to move index {move_index}")
 
     def move_character(self, move_index: int) -> None:
         """
-        Move character using injected JavaScript, unless focus is on an input widget.
+        Move character to the specified grid position via JavaScript,
+        but only if the currently focused widget is not an input field.
+
+        Args:
+            move_index (int): Index in the 3x3 movement grid (0-8).
         """
         widget = QApplication.focusWidget()
         if isinstance(widget, (QLineEdit, QComboBox)):
+            logging.debug(f"Ignored movement key {move_index} due to focus on input: {widget}")
             return
 
-        if not hasattr(self, "website_frame") or not self.website_frame.page():
-            logging.warning("Cannot move character: website_frame not ready")
+        if not hasattr(self, 'website_frame') or not self.website_frame.page():
+            logging.warning("Cannot move character: website_frame or page not initialized")
             return
 
-        js_code = f"""
-            (function() {{
+        logging.debug(f"Attempting move to grid index: {move_index}")
+        js_code = """
+            (function() {
                 const table = document.querySelector('table table');
                 if (!table) return 'No table';
                 const spaces = Array.from(table.querySelectorAll('td'));
-                if (spaces.length !== 9) return 'Invalid grid';
-                const target = spaces[{move_index}];
-                if (!target) return 'Invalid target';
-                const form = target.querySelector('form[action="/blood.pl"][method="POST"]');
+                if (spaces.length !== 9) return 'Invalid grid size: ' + spaces.length;
+                const targetSpace = spaces[%d];
+                if (!targetSpace) return 'No target space';
+                const form = targetSpace.querySelector('form[action="/blood.pl"][method="POST"]');
                 if (!form) return 'No form';
+                const x = form.querySelector('input[name="x"]').value;
+                const y = form.querySelector('input[name="y"]').value;
                 form.submit();
-                return 'Move submitted';
-            }})();
-        """
-
-        self.website_frame.page().runJavaScript(
-            js_code,
-            lambda result: logging.debug("Move result: %s", result),
-        )
+                return 'Submitted to x=' + x + ', y=' + y;
+            })();
+        """ % move_index
+        self.website_frame.page().runJavaScript(js_code, lambda result: logging.debug(f"Move result: {result}"))
         self.website_frame.setFocus()
 
-
     def toggle_keybind_config(self, mode: int) -> None:
-        """Switch keybinding mode and persist to database."""
-        if mode not in (0, 1, 2):
-            logging.warning("Invalid keybind mode: %s", mode)
+        """
+        Switch between keybinding modes (0=Off, 1=WASD, 2=Arrows) and update settings.
+
+        Args:
+            mode (int): Keybind mode to switch to.
+        """
+        if mode not in {0, 1, 2}:
+            logging.warning(f"Invalid keybind mode: {mode}; ignoring")
             return
 
         self.keybind_config = mode
+        mode_text = {0: "Off", 1: "WASD", 2: "Arrow Keys"}[mode]
+        logging.info(f"Switching to keybind mode {mode} ({mode_text})")
 
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO settings (setting_name, setting_value)
-                    VALUES ('keybind_config', ?)
-                    """,
-                    (mode,),
+                    "INSERT OR REPLACE INTO settings (setting_name, setting_value) VALUES ('keybind_config', ?)",
+                    (mode,)
                 )
                 conn.commit()
-        except sqlite3.Error as exc:
-            logging.error("Failed to save keybind config: %s", exc)
-            return
+        except sqlite3.Error as e:
+            logging.error(f"Failed to save keybind config {mode}: {e}")
+            return  # Don’t proceed if database fails
 
         self.setup_keybindings()
         self.update_keybind_menu()
-
-        mode_text = {0: "Off", 1: "WASD", 2: "Arrow Keys"}[mode]
+        # noinspection PyArgumentList
         QMessageBox.information(self, "Keybind Config", f"Switched to {mode_text}")
 
-
     def update_keybind_menu(self) -> None:
-        """Update keybinding menu checkmarks."""
-        if not all(
-            hasattr(self, attr)
-            for attr in (
-                "keybind_wasd_action",
-                "keybind_arrow_action",
-                "keybind_off_action",
-            )
-        ):
+        """Update keybinding menu checkmarks based on current config."""
+        if not hasattr(self, 'keybind_wasd_action') or not hasattr(self, 'keybind_arrow_action') or \
+           not hasattr(self, 'keybind_off_action'):
+            logging.warning("Keybind menu actions not initialized; skipping update")
             return
 
         self.keybind_wasd_action.setChecked(self.keybind_config == 1)
         self.keybind_arrow_action.setChecked(self.keybind_config == 2)
         self.keybind_off_action.setChecked(self.keybind_config == 0)
+        logging.debug(f"Updated keybind menu: WASD={self.keybind_config == 1}, Arrows={self.keybind_config == 2}, Off={self.keybind_config == 0}")
+
+    def clear_existing_keybindings(self) -> None:
+        """Remove existing shortcuts from website_frame to prevent duplicates."""
+        if not hasattr(self, 'website_frame'):
+            logging.debug("No website_frame to clear keybindings from")
+            return
+
+        shortcuts = list(self.website_frame.findChildren(PySide6.QtGui.QShortcut))
+        for shortcut in shortcuts:
+            shortcut.setParent(None)
+            shortcut.deleteLater()  # Ensure cleanup
+        logging.debug(f"Cleared {len(shortcuts)} existing keybindings")
 
 # -----------------------
 # Load and Apply Customized UI Theme
@@ -3730,16 +3361,16 @@ class RBCCommunityMap(QMainWindow):
         """
         self.website_frame.page().runJavaScript(script)
 
-        @pyqtSlot(str)
-        def handle_console_message(self, message):
-            """
-            Handle console messages from the web view and log them.
+    @pyqtSlot(str)
+    def handle_console_message(self, message):
+        """
+        Handle console messages from the web view and log them.
 
-            Args:
-                message (str): The console message to be logged.
-            """
-            print(f"Console message: {message}")
-            logging.debug(f"Console message: {message}")
+        Args:
+            message (str): The console message to be logged.
+        """
+        print(f"Console message: {message}")
+        logging.debug(f"Console message: {message}")
 
 # -----------------------
 # Menu Control Items
@@ -4022,46 +3653,25 @@ class RBCCommunityMap(QMainWindow):
 
     def login_selected_character(self):
         if not self.selected_character:
+            logging.warning("No character selected for login.")
             return
 
-        if not self.auto_login_enabled:
-            logging.info("Auto-login disabled; skipping login injection.")
-            return
-
-        if self.login_attempts >= self.MAX_LOGIN_ATTEMPTS:
-            logging.warning(
-                "Max login attempts reached for %s; auto-login disabled.",
-                self.selected_character["name"],
-            )
-            self.auto_login_enabled = False
-            return
-
-        self.login_attempts += 1
-        name = self.selected_character["name"]
-        password = self.selected_character["password"]
-
-        logging.info(
-            "Attempting login %d/%d for %s",
-            self.login_attempts,
-            self.MAX_LOGIN_ATTEMPTS,
-            name,
-        )
+        name = self.selected_character['name']
+        password = self.selected_character['password']
+        logging.debug(f"Injecting login for character: {name} (ID: {self.selected_character.get('id')})")
 
         login_script = f"""
-        (function() {{
-            var loginForm = document.querySelector('form[action="/blood.pl"]');
-            if (!loginForm) {{
-                console.log("No login form found");
-                return;
+            var loginForm = document.querySelector('form');
+            if (loginForm) {{
+                loginForm.iam.value = '{name}';
+                loginForm.passwd.value = '{password}';
+                loginForm.submit();
+            }} else {{
+                console.error('Login form not found.');
             }}
-            loginForm.iam.value = {name!r};
-            loginForm.passwd.value = {password!r};
-            loginForm.submit();
-        }})();
         """
-
         self.website_frame.page().runJavaScript(login_script)
-        
+
     def firstrun_character_creation(self):
         """
         Handles the first-run character creation, saving the character in plaintext,
@@ -6093,55 +5703,33 @@ class RBCCommunityMap(QMainWindow):
 
 class DatabaseViewer(QDialog):
     """
-    Read-only graphical viewer for SQLite database tables,
-    presented in a grouped tabbed layout.
+    Graphical interface for viewing SQLite database tables in grouped tabbed layout.
     """
 
     TAB_GROUPS = {
         "App Info": [
             "rows", "columns", "settings", "last_active_character",
             "cookies", "css_profiles", "custom_css", "color_mappings",
-            "discord_servers", "powers", "shop_items",
+            "discord_servers", "powers", "shop_items"
         ],
         "Character Info": [
-            "characters", "coins", "destinations",
+            "characters", "coins", "destinations"
         ],
         "Building Info": [
             "banks", "placesofinterest", "taverns", "transits",
-            "userbuildings", "shops", "guilds",
-        ],
+            "userbuildings", "shops", "guilds"
+        ]
     }
 
-    def __init__(
-        self,
-        db_path: str,
-        parent=None,
-        color_mappings: dict | None = None,
-    ) -> None:
+    def __init__(self, db_connection, parent=None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-
-        self.setWindowTitle("SQLite Database Viewer (Read-Only)")
+        self.setWindowTitle("SQLite Database Viewer")
         self.setWindowIcon(APP_ICON)
         self.setGeometry(100, 100, 800, 600)
 
+        self.db_connection = db_connection
+        self.cursor = db_connection.cursor()
         self.color_mappings = color_mappings or {}
-
-        # Open database explicitly in read-only mode
-        try:
-            self.db_connection = sqlite3.connect(
-                f"file:{db_path}?mode=ro",
-                uri=True,
-            )
-            self.cursor = self.db_connection.cursor()
-        except sqlite3.Error as exc:
-            logging.error("Failed to open database in read-only mode: %s", exc)
-            QMessageBox.critical(
-                self,
-                "Database Error",
-                "Unable to open database in read-only mode.",
-            )
-            self.reject()
-            return
 
         main_layout = QVBoxLayout(self)
         self.parent_tab_widget = QTabWidget()
@@ -6151,118 +5739,69 @@ class DatabaseViewer(QDialog):
             apply_theme_to_widget(self, self.color_mappings)
 
         try:
-            self.cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
+            self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             all_tables = [row[0] for row in self.cursor.fetchall()]
-        except sqlite3.Error as exc:
-            logging.error("Failed to load tables: %s", exc)
-            QMessageBox.critical(
-                self,
-                "Error",
-                "Failed to load database tables.",
-            )
-            self.reject()
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load tables: {e}")
+            QMessageBox.critical(self, "Error", "Failed to load database tables.")
             return
 
-        added_tables: set[str] = set()
+        # Track added tables
+        added_tables = set()
 
         for group_name, table_list in self.TAB_GROUPS.items():
-            group_tabs = QTabWidget()
+            child_tab_widget = QTabWidget()
             for table in table_list:
                 if table in all_tables:
-                    columns, data = self.get_table_data(table)
-                    self.add_table_tab(group_tabs, table, columns, data)
+                    column_names, data = self.get_table_data(table)
+                    self.add_table_tab(child_tab_widget, table, column_names, data)
                     added_tables.add(table)
-            self.parent_tab_widget.addTab(group_tabs, group_name)
+            self.parent_tab_widget.addTab(child_tab_widget, group_name)
 
+        # Add remaining tables to 'Other' tab
+        other_tab_widget = QTabWidget()
         remaining_tables = sorted(set(all_tables) - added_tables)
+        for table in remaining_tables:
+            column_names, data = self.get_table_data(table)
+            self.add_table_tab(other_tab_widget, table, column_names, data)
         if remaining_tables:
-            other_tabs = QTabWidget()
-            for table in remaining_tables:
-                columns, data = self.get_table_data(table)
-                self.add_table_tab(other_tabs, table, columns, data)
-            self.parent_tab_widget.addTab(other_tabs, "Other")
+            self.parent_tab_widget.addTab(other_tab_widget, "Other")
 
-        logging.debug(
-            "Loaded %d tables into read-only database viewer",
-            len(all_tables),
-        )
+        logging.debug(f"Loaded {len(all_tables)} tables into grouped viewer")
 
-    def get_table_data(
-        self,
-        table_name: str,
-    ) -> tuple[list[str], list[tuple]]:
+    def get_table_data(self, table_name: str) -> tuple[list[str], list[tuple]]:
         try:
-            self.cursor.execute(
-                f"PRAGMA table_info(`{table_name}`)"
-            )
+            self.cursor.execute(f"PRAGMA table_info(`{table_name}`)")
             column_names = [col[1] for col in self.cursor.fetchall()]
-
-            self.cursor.execute(
-                f"SELECT * FROM `{table_name}`"
-            )
-            return column_names, self.cursor.fetchall()
-
-        except sqlite3.Error as exc:
-            logging.error(
-                "Failed to fetch data for table '%s': %s",
-                table_name,
-                exc,
-            )
+            self.cursor.execute(f"SELECT * FROM `{table_name}`")
+            data = self.cursor.fetchall()
+            return column_names, data
+        except sqlite3.Error as e:
+            logging.error(f"Failed to fetch data for table '{table_name}': {e}")
             return [], []
 
-    def add_table_tab(
-        self,
-        tab_widget: QTabWidget,
-        table_name: str,
-        column_names: list[str],
-        data: list[tuple],
-    ) -> None:
+    def add_table_tab(self, tab_widget: QTabWidget, table_name: str,
+                      column_names: list[str], data: list[tuple]) -> None:
         table_widget = QTableWidget()
         table_widget.setRowCount(len(data))
         table_widget.setColumnCount(len(column_names))
         table_widget.setHorizontalHeaderLabels(column_names)
 
-        # 🔒 Enforce read-only behavior
-        table_widget.setEditTriggers(
-            QAbstractItemView.NoEditTriggers
-        )
-        table_widget.setSelectionBehavior(
-            QAbstractItemView.SelectRows
-        )
-        table_widget.setSelectionMode(
-            QAbstractItemView.SingleSelection
-        )
-
         for row_idx, row_data in enumerate(data):
             for col_idx, value in enumerate(row_data):
-                item = QTableWidgetItem(str(value or ""))
-                item.setFlags(
-                    item.flags()
-                    & ~Qt.ItemIsEditable
-                )
-                table_widget.setItem(row_idx, col_idx, item)
+                table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
 
         table_widget.resizeColumnsToContents()
         tab_widget.addTab(table_widget, table_name)
-
-        logging.debug(
-            "Added read-only tab for table '%s' (%d rows)",
-            table_name,
-            len(data),
-        )
+        logging.debug(f"Added tab for table '{table_name}' with {len(data)} rows")
 
     def closeEvent(self, event) -> None:
         try:
             self.cursor.close()
             self.db_connection.close()
-            logging.debug("Database viewer connection closed")
-        except sqlite3.Error as exc:
-            logging.error(
-                "Failed to close database viewer connection: %s",
-                exc,
-            )
+            logging.debug("Database connection closed")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to close database connection: {e}")
         event.accept()
 
 # -----------------------
@@ -6271,116 +5810,56 @@ class DatabaseViewer(QDialog):
 
 class CharacterDialog(QDialog):
     """
-    Dialog for adding or editing a character.
-
-    This dialog is UI-only and does not write to the database.
-    The caller is responsible for persisting changes.
+    A dialog for adding or modifying a character, with validation.
     """
 
-    def __init__(
-        self,
-        parent=None,
-        character: dict | None = None,
-        color_mappings: dict | None = None,
-    ):
+    def __init__(self, parent=None, character=None, color_mappings: dict | None = None):
         super().__init__(parent)
-
-        self._is_edit = character is not None
-        self._original_name = character["name"] if character else None
-
-        self.setWindowTitle(
-            "Edit Character" if self._is_edit else "Add Character"
-        )
+        self.setWindowTitle("Character")
         self.setWindowIcon(APP_ICON)
-
         self.color_mappings = color_mappings or {}
 
-        # -----------------------
-        # Input Fields
-        # -----------------------
-
+        # Input fields
         self.name_edit = QLineEdit()
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
 
-        if self._is_edit:
-            self.name_edit.setText(character["name"])
-            self.name_edit.setEnabled(False)  # Prevent accidental renames
-            self.password_edit.setPlaceholderText(
-                "Enter new password (leave blank to keep existing)"
-            )
-        else:
-            self.password_edit.setPlaceholderText("Enter password")
+        if character:
+            self.name_edit.setText(character['name'])
+            self.password_edit.setText(character['password'])
 
-        # -----------------------
-        # Layout
-        # -----------------------
+        # Form layout
+        layout = QFormLayout()
+        layout.addRow("Name:", self.name_edit)
+        layout.addRow("Password:", self.password_edit)
 
-        form_layout = QFormLayout()
-        form_layout.addRow("Name:", self.name_edit)
-        form_layout.addRow("Password:", self.password_edit)
+        # OK and Cancel buttons
+        button_box = QHBoxLayout()
+        ok_button = QPushButton("OK")
+        cancel_button = QPushButton("Cancel")
+        button_box.addWidget(ok_button)
+        button_box.addWidget(cancel_button)
+        layout.addRow(button_box)
+        self.setLayout(layout)
 
-        button_layout = QHBoxLayout()
-        self.ok_button = QPushButton("Save" if self._is_edit else "Add")
-        self.cancel_button = QPushButton("Cancel")
-        button_layout.addWidget(self.ok_button)
-        button_layout.addWidget(self.cancel_button)
-
-        form_layout.addRow(button_layout)
-        self.setLayout(form_layout)
-
+        # Apply theme if available
         if self.color_mappings:
             apply_theme_to_widget(self, self.color_mappings)
 
-        # -----------------------
-        # Signals
-        # -----------------------
+        # Connect buttons
+        ok_button.clicked.connect(self.validate_and_accept)
+        cancel_button.clicked.connect(self.reject)
 
-        self.ok_button.clicked.connect(self.validate_and_accept)
-        self.cancel_button.clicked.connect(self.reject)
-
-    # -----------------------
-    # Public API
-    # -----------------------
-
-    def get_result(self) -> dict:
-        """
-        Return the dialog result data.
-
-        Returns:
-            dict with keys: name, password (password may be None)
-        """
-        password = self.password_edit.text().strip()
-        return {
-            "name": self.name_edit.text().strip(),
-            "password": password if password else None,
-        }
-
-    # -----------------------
-    # Validation
-    # -----------------------
-
-    def validate_and_accept(self) -> None:
+    def validate_and_accept(self):
+        """Check if inputs are valid before accepting."""
         name = self.name_edit.text().strip()
         password = self.password_edit.text().strip()
 
-        if not name:
-            QMessageBox.warning(
-                self,
-                "Validation Error",
-                "Character name cannot be empty.",
-            )
-            return
+        if not name or not password:
+            QMessageBox.warning(self, "Validation Error", "Character name and password cannot be empty.")
+            return  # 🚨 Do NOT call accept(), keep dialog open
 
-        if not self._is_edit and not password:
-            QMessageBox.warning(
-                self,
-                "Validation Error",
-                "Password cannot be empty when creating a character.",
-            )
-            return
-
-        self.accept()
+        self.accept()  # ✅ Only accept if valid
 
 # -----------------------
 # Theme Customization Dialog
@@ -6389,667 +5868,500 @@ class CharacterDialog(QDialog):
 class ThemeCustomizationDialog(QDialog):
     """
     Dialog for customizing application theme colors for UI and minimap elements.
-
-    This dialog is UI-only and returns updated color mappings to the caller.
     """
 
-    UI_ELEMENTS = [
-        "background",
-        "text_color",
-        "button_color",
-        "button_hover_color",
-        "button_pressed_color",
-        "button_border_color",
-    ]
-
-    MINIMAP_ELEMENTS = [
-        "bank",
-        "tavern",
-        "transit",
-        "user_building",
-        "shop",
-        "guild",
-        "placesofinterest",
-    ]
-
-    def __init__(
-        self,
-        parent=None,
-        color_mappings: dict | None = None,
-    ) -> None:
+    def __init__(self, parent=None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-
-        self.setWindowTitle("Theme Customization")
+        self.setWindowTitle('Theme Customization')
         self.setWindowIcon(APP_ICON)
         self.setMinimumSize(400, 300)
 
-        # Work on a private copy only
-        self._working_colors: dict[str, PySide6.QtGui.QColor] = {
-            k: PySide6.QtGui.QColor(v)
-            for k, v in (color_mappings or {}).items()
-        }
+        self.color_mappings = color_mappings.copy() if color_mappings else {}
 
-        # -----------------------
-        # Layout
-        # -----------------------
-
+        # Main layout
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget(self)
         layout.addWidget(self.tabs)
 
+        # Tabs
         self.ui_tab = QWidget()
         self.minimap_tab = QWidget()
         self.tabs.addTab(self.ui_tab, "UI, Buttons, and Text")
         self.tabs.addTab(self.minimap_tab, "Minimap Content")
 
-        self._build_color_tab(self.ui_tab, self.UI_ELEMENTS)
-        self._build_color_tab(self.minimap_tab, self.MINIMAP_ELEMENTS)
+        self.setup_ui_tab()
+        self.setup_minimap_tab()
 
         # Buttons
         button_layout = QHBoxLayout()
-        save_button = QPushButton("Save", self)
-        cancel_button = QPushButton("Cancel", self)
+        save_button = QPushButton('Save', self)
+        cancel_button = QPushButton('Cancel', self)
         save_button.clicked.connect(self.accept)
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(save_button)
         button_layout.addWidget(cancel_button)
         layout.addLayout(button_layout)
 
-        apply_theme_to_widget(self, self._working_colors)
+        apply_theme_to_widget(self, self.color_mappings)
         logging.debug("Theme customization dialog initialized")
 
-    # -----------------------
-    # Public API
-    # -----------------------
+    def setup_ui_tab(self) -> None:
+        layout = QGridLayout(self.ui_tab)
+        ui_elements = [
+            'background',
+            'text_color',
+            'button_color',
+            'button_hover_color',
+            'button_pressed_color',
+            'button_border_color'
+        ]
 
-    def get_result(self) -> dict[str, PySide6.QtGui.QColor]:
-        """
-        Return the updated color mappings.
+        for idx, elem in enumerate(ui_elements):
+            color_square = QLabel(self.ui_tab)
+            color_square.setFixedSize(20, 20)
+            color = self.color_mappings.get(elem, PySide6.QtGui.QColor('white'))
+            pixmap = PySide6.QtGui.QPixmap(20, 20)
+            pixmap.fill(color)
+            color_square.setPixmap(pixmap)
 
-        Call only if dialog was accepted.
-        """
-        return {
-            k: PySide6.QtGui.QColor(v)
-            for k, v in self._working_colors.items()
-        }
+            color_button = QPushButton('Change Color', self.ui_tab)
+            color_button.clicked.connect(lambda _, e=elem, sq=color_square: self.change_color(e, sq))
 
-    # -----------------------
-    # Internal Helpers
-    # -----------------------
+            layout.addWidget(QLabel(f"{elem.replace('_', ' ').capitalize()}:", self.ui_tab), idx, 0)
+            layout.addWidget(color_square, idx, 1)
+            layout.addWidget(color_button, idx, 2)
 
-    def _build_color_tab(
-        self,
-        parent: QWidget,
-        elements: list[str],
-    ) -> None:
-        layout = QGridLayout(parent)
+    def setup_minimap_tab(self) -> None:
+        layout = QGridLayout(self.minimap_tab)
+        minimap_elements = ['bank', 'tavern', 'transit', 'user_building', 'shop', 'guild', 'placesofinterest']
 
-        for row, element in enumerate(elements):
-            label = QLabel(element.replace("_", " ").capitalize(), parent)
+        for idx, elem in enumerate(minimap_elements):
+            color_square = QLabel(self.minimap_tab)
+            color_square.setFixedSize(20, 20)
+            color = self.color_mappings.get(elem, PySide6.QtGui.QColor('white'))
+            pixmap = PySide6.QtGui.QPixmap(20, 20)
+            pixmap.fill(color)
+            color_square.setPixmap(pixmap)
 
-            square = QLabel(parent)
-            square.setFixedSize(20, 20)
-            self._update_color_square(
-                square,
-                self._working_colors.get(
-                    element,
-                    PySide6.QtGui.QColor("white"),
-                ),
-            )
+            color_button = QPushButton('Change Color', self.minimap_tab)
+            color_button.clicked.connect(lambda _, e=elem, sq=color_square: self.change_color(e, sq))
 
-            button = QPushButton("Change Color", parent)
-            button.clicked.connect(
-                lambda _, e=element, sq=square: self._change_color(e, sq)
-            )
+            layout.addWidget(QLabel(f"{elem.capitalize()}:", self.minimap_tab), idx, 0)
+            layout.addWidget(color_square, idx, 1)
+            layout.addWidget(color_button, idx, 2)
 
-            layout.addWidget(label, row, 0)
-            layout.addWidget(square, row, 1)
-            layout.addWidget(button, row, 2)
-
-    def _change_color(
-        self,
-        element_name: str,
-        color_square: QLabel,
-    ) -> None:
-        current = self._working_colors.get(
-            element_name,
-            PySide6.QtGui.QColor("white"),
-        )
-
-        color = QColorDialog.getColor(current, self)
+    def change_color(self, element_name: str, color_square: QLabel) -> None:
+        color = QColorDialog.getColor(self.color_mappings.get(element_name, PySide6.QtGui.QColor('white')), self)
         if color.isValid():
-            self._working_colors[element_name] = color
-            self._update_color_square(color_square, color)
-            logging.debug(
-                "Changed color for '%s' to %s",
-                element_name,
-                color.name(),
-            )
-
-    @staticmethod
-    def _update_color_square(
-        square: QLabel,
-        color: PySide6.QtGui.QColor,
-    ) -> None:
-        pixmap = PySide6.QtGui.QPixmap(20, 20)
-        pixmap.fill(color)
-        square.setPixmap(pixmap)
+            self.color_mappings[element_name] = color
+            pixmap = PySide6.QtGui.QPixmap(20, 20)
+            pixmap.fill(color)
+            color_square.setPixmap(pixmap)
+            logging.debug(f"Changed color for '{element_name}' to {color.name()}")
 
 # -----------------------
-# CSS Customization Dialog (Two-Factor)
+# CSS Customization Dialog
 # -----------------------
 
 class CSSCustomizationDialog(QDialog):
-    """
-    Two-mode CSS customization dialog.
-
-    - Simple Mode: GUI controls for non-CSS users
-    - Advanced Mode: Full raw CSS editor
-
-    CSS text is the single source of truth.
-    Database writes occur ONLY on Apply.
-    """
-
-    SIMPLE = 0
-    ADVANCED = 1
-
-    def __init__(
-        self,
-        parent: QWidget | None = None,
-        current_profile: str | None = None,
-        color_mappings: dict | None = None,
-    ) -> None:
+    def __init__(self, parent: QWidget = None, current_profile: str = None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-
         self.parent = parent
         self.color_mappings = color_mappings or {}
-        self.current_profile = current_profile or self._load_current_profile()
+        self.current_profile = current_profile or self.get_current_profile()
 
         self.setWindowTitle("CSS Customization")
         self.setWindowIcon(APP_ICON)
-        self.resize(900, 600)
-
-        # ---- CSS state ----
-        self._original_css = self._load_css_from_db(self.current_profile)
-        self._working_css = self._original_css
-
-        self._build_ui()
+        self.resize(600, 400)
+        self.tabs = {}
+        self.setup_ui()
+        self.load_existing_customizations()
 
         if self.color_mappings:
             apply_theme_to_widget(self, self.color_mappings)
 
-        logging.debug(
-            "CSSCustomizationDialog initialized (profile=%s)",
-            self.current_profile,
-        )
+        logging.debug(f"CSSCustomizationDialog initialized with profile '{self.current_profile}'")
 
-    # =====================================================
-    # UI
-    # =====================================================
+    def get_current_profile(self) -> str:
+        """Retrieve the current CSS profile from settings."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT setting_value FROM settings WHERE setting_name = 'css_profile'")
+                result = cursor.fetchone()
+                return result[0] if result else "Default"
+        except sqlite3.Error as e:
+            logging.error(f"Failed to retrieve current profile: {e}")
+            return "Default"
 
-    def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
+    def update_current_profile(self, profile: str) -> None:
+        """Update the css_profile setting in the database."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)",
+                    ("css_profile", profile)
+                )
+                conn.commit()
+            self.current_profile = profile
+            logging.debug(f"Updated css_profile to: {profile}")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to update css_profile: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to update profile: {e}")
 
-        # ---- Profile + Mode Bar ----
-        top_bar = QHBoxLayout()
+    def setup_ui(self) -> None:
+        """Set up the UI for CSS customization."""
+        main_layout = QVBoxLayout(self)
 
-        top_bar.addWidget(QLabel("Profile:"))
-
+        # Profile selection
+        profile_layout = QHBoxLayout()
+        profile_layout.addWidget(QLabel("Profile:"))
         self.profile_dropdown = QComboBox()
-        self._load_profiles()
+        self.load_profiles()
         self.profile_dropdown.setCurrentText(self.current_profile)
-        self.profile_dropdown.currentTextChanged.connect(self._on_profile_changed)
-        top_bar.addWidget(self.profile_dropdown)
+        self.profile_dropdown.currentTextChanged.connect(self.on_profile_change)
+        profile_layout.addWidget(self.profile_dropdown)
 
-        new_btn = QPushButton("New")
-        new_btn.clicked.connect(self._create_profile)
-        top_bar.addWidget(new_btn)
+        new_profile_btn = QPushButton("New Profile")
+        new_profile_btn.clicked.connect(self.create_new_profile)
+        profile_layout.addWidget(new_profile_btn)
 
-        delete_btn = QPushButton("Delete")
-        delete_btn.clicked.connect(self._delete_profile)
-        top_bar.addWidget(delete_btn)
+        delete_profile_btn = QPushButton("Delete Profile")
+        delete_profile_btn.clicked.connect(self.delete_profile)
+        profile_layout.addWidget(delete_profile_btn)
 
-        top_bar.addStretch()
+        main_layout.addLayout(profile_layout)
 
-        self.mode_selector = QComboBox()
-        self.mode_selector.addItems(["Simple", "Advanced"])
-        self.mode_selector.currentIndexChanged.connect(self._switch_mode)
-        top_bar.addWidget(QLabel("Mode:"))
-        top_bar.addWidget(self.mode_selector)
+        # Tabs for CSS categories
+        self.tab_widget = QTabWidget()
+        self.add_tab("Background", ["BODY"])
+        self.add_tab("Text", ["H1", "P", "A", "TD", "DIV"])
+        self.add_tab("City Elements", ["TD.cityblock", "TD.intersect", "TD.street", "TD.city"])
+        self.add_tab("Special Elements", [
+            "SPAN.intersect", "SPAN.transit", "SPAN.pub", "SPAN.bank", "SPAN.shop",
+            "SPAN.grave", "SPAN.pk", "SPAN.lair", "SPAN.alchemy"
+        ])
+        main_layout.addWidget(self.tab_widget)
 
-        layout.addLayout(top_bar)
+        # Buttons
+        button_layout = QHBoxLayout()
+        upload_btn = QPushButton("Upload CSS File")
+        upload_btn.clicked.connect(self.upload_css_file)
+        button_layout.addWidget(upload_btn)
 
-        # ---- Editor Stack ----
-        self.editor_stack = QStackedWidget()
-
-        self.simple_editor = QWidget()
-        self.advanced_editor = QTextEdit()
-
-        self._build_simple_editor()
-        self._build_advanced_editor()
-
-        self.editor_stack.addWidget(self.simple_editor)
-        self.editor_stack.addWidget(self.advanced_editor)
-
-        layout.addWidget(self.editor_stack)
-
-        # ---- Buttons ----
-        button_bar = QHBoxLayout()
-
-        load_btn = QPushButton("Load .css")
-        load_btn.clicked.connect(self._load_css_file)
-        button_bar.addWidget(load_btn)
-
-        save_btn = QPushButton("Save .css")
-        save_btn.clicked.connect(self._save_css_file)
-        button_bar.addWidget(save_btn)
-
-        button_bar.addStretch()
+        clear_btn = QPushButton("Clear All")
+        clear_btn.clicked.connect(self.clear_all_customizations)
+        button_layout.addWidget(clear_btn)
 
         apply_btn = QPushButton("Apply")
-        apply_btn.clicked.connect(self._apply_changes)
-        button_bar.addWidget(apply_btn)
+        apply_btn.clicked.connect(self.save_and_apply_changes)
+        button_layout.addWidget(apply_btn)
 
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
-        button_bar.addWidget(cancel_btn)
+        button_layout.addWidget(cancel_btn)
 
-        layout.addLayout(button_bar)
+        main_layout.addLayout(button_layout)
+        self.setLayout(main_layout)
 
-        # Start in Simple Mode
-        self._switch_mode(self.SIMPLE)
+        # Ensure preview updates even if currentTextChanged isn't triggered
+        self.on_profile_change(self.current_profile)
 
-    # =====================================================
-    # Simple Mode (GUI)
-    # =====================================================
+    def on_profile_change(self, profile: str) -> None:
+        """Handle profile change: update DB, load styles, apply CSS."""
+        if profile != self.current_profile:
+            self.update_current_profile(profile)
 
-    def _build_simple_editor(self) -> None:
-        layout = QFormLayout(self.simple_editor)
+        self.current_profile = profile
+        self.load_existing_customizations()
+        css = self.generate_custom_css()
 
-        bg_btn = QPushButton("Change Background Color")
-        bg_btn.clicked.connect(
-            lambda: self._pick_color("BODY", "background-color")
-        )
+        if css and self.parent:
+            parent = cast("MainWindowType", self.parent)
+            parent.apply_custom_css(css)
+            parent.website_frame.reload()
 
-        text_btn = QPushButton("Change Text Color")
-        text_btn.clicked.connect(
-            lambda: self._pick_color("BODY", "color")
-        )
+        logging.info(f"Switched to profile: {profile} and applied CSS")
 
-        link_btn = QPushButton("Change Link Color")
-        link_btn.clicked.connect(
-            lambda: self._pick_color("A", "color")
-        )
-
-        layout.addRow("Page Background:", bg_btn)
-        layout.addRow("Text Color:", text_btn)
-        layout.addRow("Link Color:", link_btn)
-
-        note = QLabel(
-            "Simple Mode modifies common visual elements safely.\n"
-            "Switch to Advanced Mode for full control."
-        )
-        note.setWordWrap(True)
-        layout.addRow(note)
-
-    def _pick_color(self, selector: str, prop: str) -> None:
-        color = QColorDialog.getColor(self)
-        if not color.isValid():
-            return
-
-        self._set_css_property(selector, prop, color.name())
-        self._sync_advanced_editor()
-
-    # =====================================================
-    # Advanced Mode (Raw CSS)
-    # =====================================================
-
-    def _build_advanced_editor(self) -> None:
-        self.advanced_editor.setFontFamily("Courier")
-        self.advanced_editor.setFontPointSize(10)
-        self.advanced_editor.setPlainText(self._working_css)
-        self.advanced_editor.textChanged.connect(self._on_advanced_changed)
-
-    def _on_advanced_changed(self) -> None:
-        self._working_css = self.advanced_editor.toPlainText()
-
-    def _sync_advanced_editor(self) -> None:
-        self.advanced_editor.blockSignals(True)
-        self.advanced_editor.setPlainText(self._working_css)
-        self.advanced_editor.blockSignals(False)
-
-    # =====================================================
-    # Mode Switching
-    # =====================================================
-
-    def _switch_mode(self, index: int) -> None:
-        self.editor_stack.setCurrentIndex(index)
-        if index == self.ADVANCED:
-            self._sync_advanced_editor()
-
-    # =====================================================
-    # CSS Manipulation (Core Helper)
-    # =====================================================
-
-    def _set_css_property(
-        self,
-        selector: str,
-        property_name: str,
-        value: str,
-    ) -> None:
-        """
-        Insert or update a single CSS property in a selector block
-        without disturbing other rules.
-        """
-        css = self._working_css
-
-        block_re = re.compile(
-            rf"({re.escape(selector)}\s*\{{)([^}}]*)(\}})",
-            re.IGNORECASE | re.MULTILINE,
-        )
-
-        match = block_re.search(css)
-
-        if match:
-            before, body, after = match.groups()
-
-            prop_re = re.compile(
-                rf"{re.escape(property_name)}\s*:\s*[^;]+;",
-                re.IGNORECASE,
-            )
-
-            if prop_re.search(body):
-                body = prop_re.sub(
-                    f"{property_name}: {value};",
-                    body,
-                )
-            else:
-                body = body.rstrip() + f"\n  {property_name}: {value};"
-
-            css = css[: match.start()] + before + body + after + css[match.end():]
-
-        else:
-            css += f"\n{selector} {{\n  {property_name}: {value};\n}}\n"
-
-        self._working_css = css
-
-    # =====================================================
-    # Apply / Cancel
-    # =====================================================
-
-    def _apply_changes(self) -> None:
-        css = self._working_css.strip()
-
+    def load_profiles(self) -> None:
+        """Load available CSS profiles from the database."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
-                cur = conn.cursor()
-
-                # Clear existing rules
-                cur.execute(
-                    "DELETE FROM custom_css WHERE profile_name = ?",
-                    (self.current_profile,),
-                )
-
-                rules = re.findall(
-                    r"([^{]+){([^}]+)}",
-                    css,
-                    re.DOTALL,
-                )
-
-                cur.executemany(
-                    """
-                    INSERT INTO custom_css (profile_name, element, value)
-                    VALUES (?, ?, ?)
-                    """,
-                    [
-                        (self.current_profile, sel.strip(), body.strip())
-                        for sel, body in rules
-                    ],
-                )
-
-                cur.execute(
-                    """
-                    INSERT OR REPLACE INTO settings (setting_name, setting_value)
-                    VALUES ('css_profile', ?)
-                    """,
-                    (self.current_profile,),
-                )
-
-                conn.commit()
-
-            if self.parent:
-                parent = cast("MainWindowType", self.parent)
-                parent.current_css_profile = self.current_profile
-                parent.apply_custom_css(css)
-                parent.website_frame.reload()
-
-            self.accept()
-            logging.info("CSS applied successfully")
-
-        except sqlite3.Error as e:
-            QMessageBox.critical(self, "Error", str(e))
-
-    # =====================================================
-    # File I/O
-    # =====================================================
-
-    def _load_css_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load CSS", "", "CSS Files (*.css)"
-        )
-        if path:
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    self._working_css = f.read()
-                    self._sync_advanced_editor()
-            except IOError as e:
-                QMessageBox.critical(self, "Error", str(e))
-
-    def _save_css_file(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save CSS", "", "CSS Files (*.css)"
-        )
-        if path:
-            try:
-                with open(path, "w", encoding="utf-8") as f:
-                    f.write(self._working_css)
-            except IOError as e:
-                QMessageBox.critical(self, "Error", str(e))
-
-    # =====================================================
-    # Profile Handling
-    # =====================================================
-
-    def _load_current_profile(self) -> str:
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT setting_value FROM settings WHERE setting_name = 'css_profile'"
-                )
-                row = cur.fetchone()
-                return row[0] if row else "Default"
-        except sqlite3.Error:
-            return "Default"
-
-    def _load_profiles(self) -> None:
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cur = conn.cursor()
-                cur.execute("SELECT profile_name FROM css_profiles")
-                profiles = [r[0] for r in cur.fetchall()]
+                cursor = conn.cursor()
+                cursor.execute("SELECT profile_name FROM css_profiles")
+                profiles = [row[0] for row in cursor.fetchall()]
             self.profile_dropdown.clear()
             self.profile_dropdown.addItems(profiles)
+            logging.debug(f"Loaded {len(profiles)} profiles")
         except sqlite3.Error as e:
-            logging.error("Failed to load CSS profiles: %s", e)
+            logging.error(f"Failed to load profiles: {e}")
+            QMessageBox.critical(self, "Error", "Failed to load profiles")
 
-    def _create_profile(self) -> None:
-        name, ok = QInputDialog.getText(self, "New Profile", "Profile name:")
-        if ok and name:
+    def create_new_profile(self) -> None:
+        """Create a new CSS profile."""
+        profile_name, ok = QInputDialog.getText(self, "New Profile", "Enter profile name:")
+        if ok and profile_name:
             try:
                 with sqlite3.connect(DB_PATH) as conn:
-                    cur = conn.cursor()
-                    cur.execute(
-                        "INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)",
-                        (name,),
-                    )
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT OR IGNORE INTO css_profiles (profile_name) VALUES (?)", (profile_name,))
                     conn.commit()
-                self._load_profiles()
-                self.profile_dropdown.setCurrentText(name)
+                self.load_profiles()
+                self.profile_dropdown.setCurrentText(profile_name)
+                self.on_profile_change(profile_name)
+                logging.info(f"Created new profile: {profile_name}")
             except sqlite3.Error as e:
-                QMessageBox.critical(self, "Error", str(e))
+                logging.error(f"Failed to create profile: {e}")
+                QMessageBox.critical(self, "Error", "Failed to create profile")
 
-    def _delete_profile(self) -> None:
+    def delete_profile(self) -> None:
+        """Delete the selected CSS profile."""
         profile = self.profile_dropdown.currentText()
         if profile == "Default":
-            QMessageBox.warning(self, "Warning", "Default profile cannot be deleted.")
+            QMessageBox.warning(self, "Warning", "Cannot delete the Default profile")
             return
+        # noinspection PyUnresolvedReferences
+        reply = QMessageBox.question(self, "Confirm Delete", f"Delete profile '{profile}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        # noinspection PyUnresolvedReferences
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM css_profiles WHERE profile_name = ?", (profile,))
+                    conn.commit()
+                self.load_profiles()
+                self.profile_dropdown.setCurrentText("Default")
+                self.on_profile_change("Default")
+                logging.info(f"Deleted profile: {profile}")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to delete profile: {e}")
+                QMessageBox.critical(self, "Error", "Failed to delete profile")
 
-        if QMessageBox.question(
-            self,
-            "Confirm",
-            f"Delete profile '{profile}'?",
-        ) != QMessageBox.StandardButton.Yes:
+    def add_tab(self, tab_title: str, elements: list[str]) -> None:
+        """Add a tab for a category of CSS elements."""
+        tab = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        grid = QGridLayout(container)
+
+        grid.addWidget(QLabel("Element"), 0, 0)
+        grid.addWidget(QLabel("Preview"), 0, 1)
+        grid.addWidget(QLabel("Color"), 0, 2)
+        grid.addWidget(QLabel("Image"), 0, 3)
+        grid.addWidget(QLabel("Shadow"), 0, 4)
+        grid.addWidget(QLabel("Reset"), 0, 5)
+
+        for i, element in enumerate(elements, 1):
+            label = QLabel(element)
+            preview = QLabel("Preview")
+            preview.setFixedSize(100, 30)
+            preview.setStyleSheet("border: 1px solid black;")
+            color_btn = QPushButton("Pick Color")
+            color_btn.clicked.connect(lambda _, e=element, p=preview: self.pick_color(e, p))
+            image_btn = QPushButton("Pick Image")
+            image_btn.clicked.connect(lambda _, e=element, p=preview: self.pick_image(e, p))
+            shadow_btn = QPushButton("Add Shadow")
+            shadow_btn.clicked.connect(lambda _, e=element: self.add_shadow(e))
+            reset_btn = QPushButton("Reset")
+            reset_btn.clicked.connect(lambda _, e=element, p=preview: self.reset_css_item(e, p))
+            grid.addWidget(label, i, 0)
+            grid.addWidget(preview, i, 1)
+            grid.addWidget(color_btn, i, 2)
+            grid.addWidget(image_btn, i, 3)
+            grid.addWidget(shadow_btn, i, 4)
+            grid.addWidget(reset_btn, i, 5)
+
+        scroll.setWidget(container)
+        tab.setLayout(QVBoxLayout())
+        tab.layout().addWidget(scroll)
+        self.tab_widget.addTab(tab, tab_title)
+        self.tabs[tab_title] = tab
+        tab.grid = grid
+
+    def pick_color(self, css_item: str, preview: QLabel) -> None:
+        """Open a color picker and apply the selected color."""
+        color = QColorDialog.getColor()
+        if color.isValid():
+            style = f"background-color: {color.name()};"
+            preview.setStyleSheet(style)
+            self.save_css_item(css_item, style)
+            logging.debug(f"Set color for '{css_item}': {color.name()}")
+
+    def pick_image(self, css_item: str, preview: QLabel) -> None:
+        """Open a file dialog to select an image and apply it as a background."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.png *.jpg *.jpeg)")
+        if file_path:
+            style = f"background-image: url({file_path}); background-size: cover;"
+            preview.setStyleSheet(style)
+            self.save_css_item(css_item, style)
+            logging.debug(f"Set image for '{css_item}': {file_path}")
+
+    def add_shadow(self, css_item: str) -> None:
+        """Add a default shadow effect to the element."""
+        style = "box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);"
+        self.save_css_item(css_item, style)
+        self.load_existing_customizations()
+        logging.debug(f"Added shadow to '{css_item}'")
+
+    def save_css_item(self, css_item: str, value: str) -> None:
+        """Save a CSS customization to the database under the current profile."""
+        if not value.strip():
             return
-
         try:
             with sqlite3.connect(DB_PATH) as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "DELETE FROM css_profiles WHERE profile_name = ?",
-                    (profile,),
-                )
-                cur.execute(
-                    "DELETE FROM custom_css WHERE profile_name = ?",
-                    (profile,),
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)",
+                    (self.current_profile, css_item, value)
                 )
                 conn.commit()
-            self._load_profiles()
-            self.profile_dropdown.setCurrentText("Default")
         except sqlite3.Error as e:
-            QMessageBox.critical(self, "Error", str(e))
+            logging.error(f"Failed to save CSS for '{css_item}': {e}")
+            QMessageBox.critical(self, "Error", f"Failed to save CSS: {e}")
 
-    def _on_profile_changed(self, profile: str) -> None:
-        self.current_profile = profile
-        self._original_css = self._load_css_from_db(profile)
-        self._working_css = self._original_css
-        self._sync_advanced_editor()
-
-    def _load_css_from_db(self, profile: str) -> str:
+    def load_existing_customizations(self) -> None:
+        """Load and apply existing CSS customizations for the current profile."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
-                cur = conn.cursor()
-                cur.execute(
+                cursor = conn.cursor()
+                cursor.execute(
                     "SELECT element, value FROM custom_css WHERE profile_name = ?",
-                    (profile,),
+                    (self.current_profile,)
                 )
-                return "\n".join(
-                    f"{sel} {{ {val} }}"
-                    for sel, val in cur.fetchall()
+                customizations = dict(cursor.fetchall())
+
+            for tab in self.tabs.values():
+                grid = tab.grid
+                for row in range(1, grid.rowCount()):
+                    label = grid.itemAtPosition(row, 0).widget()
+                    preview = grid.itemAtPosition(row, 1).widget()
+                    preview.setStyleSheet(customizations.get(label.text(), ""))
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load CSS customizations: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to load customizations: {e}")
+
+    def save_and_apply_changes(self) -> None:
+        selected_profile = self.profile_dropdown.currentText()
+        self.update_current_profile(selected_profile)
+        self.current_profile = selected_profile
+        css = self.generate_custom_css()
+        if css and self.parent:
+            parent = cast("MainWindowType", self.parent)
+            parent.current_css_profile = self.current_profile
+            parent.apply_custom_css(css)
+            parent.website_frame.reload()
+        self.accept()
+        logging.info("CSS changes saved and applied")
+
+    def generate_custom_css(self) -> str:
+        """Generate CSS string from database customizations for the current profile."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT element, value FROM custom_css WHERE profile_name = ?",
+                    (self.current_profile,)
                 )
-        except sqlite3.Error:
+                return "\n".join(f"{elem} {{ {val} }}" for elem, val in cursor.fetchall())
+        except sqlite3.Error as e:
+            logging.error(f"Failed to generate CSS: {e}")
             return ""
+
+    def upload_css_file(self) -> None:
+        """Upload and apply a CSS file to the current profile."""
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select CSS", "", "CSS Files (*.css)")
+        if file_path:
+            try:
+                with open(file_path, "r") as f, sqlite3.connect(DB_PATH) as conn:
+                    css = f.read()
+                    rules = re.findall(r'([^{]+){([^}]+)}', css, re.DOTALL)
+                    cursor = conn.cursor()
+                    cursor.executemany(
+                        "INSERT OR REPLACE INTO custom_css (profile_name, element, value) VALUES (?, ?, ?)",
+                        [(self.current_profile, sel.strip(), prop.strip()) for sel, prop in rules]
+                    )
+                    conn.commit()
+                self.load_existing_customizations()
+                if self.parent:
+                    parent = cast("MainWindowType", self.parent)
+                    parent.apply_custom_css(css)
+                    parent.website_frame.reload()
+                logging.info(f"Uploaded CSS file: {file_path} to profile '{self.current_profile}'")
+            except (IOError, sqlite3.Error) as e:
+                logging.error(f"Failed to upload CSS file: {e}")
+                QMessageBox.critical(self, "Error", f"Upload failed: {e}")
+
+    def reset_css_item(self, css_item: str, preview: QLabel) -> None:
+        """Reset a specific CSS item to default for the current profile."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "DELETE FROM custom_css WHERE profile_name = ? AND element = ?",
+                    (self.current_profile, css_item)
+                )
+                conn.commit()
+            preview.setStyleSheet("")
+            logging.debug(f"Reset CSS for '{css_item}' in profile '{self.current_profile}'")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to reset CSS for '{css_item}': {e}")
+            QMessageBox.critical(self, "Error", f"Failed to reset CSS: {e}")
+
+    def clear_all_customizations(self) -> None:
+        """Clear all CSS customizations for the current profile."""
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM custom_css WHERE profile_name = ?", (self.current_profile,))
+                conn.commit()
+            self.load_existing_customizations()
+            if self.parent:
+                parent = cast("MainWindowType", self.parent)
+                parent.apply_custom_css("")
+                parent.website_frame.reload()
+            logging.info(f"Cleared all CSS customizations for profile '{self.current_profile}'")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to clear CSS customizations: {e}")
+            QMessageBox.critical(self, "Error", "Failed to clear customizations")
 
 # -----------------------
 # Set Destination Dialog
 # -----------------------
 
 class SetDestinationDialog(QDialog):
-    """
-    Dialog for selecting and setting a destination on the map.
+    """Dialog for setting a destination on the map."""
 
-    UI-focused: persists destinations and triggers minimap refresh via parent.
-    """
+    def __init__(self, parent: QWidget = None, color_mappings: dict | None = None) -> None:
+        """
+        Initialize the Set Destination dialog.
 
-    RECENT_PLACEHOLDER = "Select a recent destination"
-    DEST_PLACEHOLDER = "Select a destination"
-
-    def __init__(
-        self,
-        parent: QWidget | None = None,
-        color_mappings: dict | None = None,
-    ) -> None:
+        Args:
+            parent: Reference to RBCCommunityMap.
+        """
         super().__init__(parent)
-
-        self.parent = cast("MainWindowType", parent) if parent else None
-        self.color_mappings = color_mappings or {}
-
         self.setWindowTitle("Set Destination")
         self.setWindowIcon(APP_ICON)
         self.resize(650, 300)
+        self.parent = parent
+        self.color_mappings = color_mappings or {}
 
         logging.debug("SetDestinationDialog initialized")
 
-        self._build_ui()
-        self._setup_timers()
-        self._populate_all_dropdowns()
+        main_layout = QVBoxLayout(self)
+        dropdown_style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
 
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
+        # Label for last updated time
+        self.last_updated_label = QLabel("Data last updated: calculating...")
+        main_layout.addWidget(self.last_updated_label)
+        self.update_last_updated_label()
 
-    # =====================================================
-    # UI Construction
-    # =====================================================
+        self.last_updated_timer = QTimer(self)
+        self.last_updated_timer.timeout.connect(self.update_last_updated_label)
+        self.last_updated_timer.start(1000)
 
-    def _build_ui(self) -> None:
-        self.main_layout = QVBoxLayout(self)
-
-        # ---- Last Updated Label ----
-        self.last_updated_label = QLabel("🕒 Location data last updated: calculating...")
-        self.main_layout.addWidget(self.last_updated_label)
-
-        # ---- Dropdowns ----
-        self._create_dropdowns()
-        self._configure_dropdowns()
-
-        dropdown_form = QFormLayout()
-        dropdown_form.addRow("Recent:", self.recent_destinations_dropdown)
-        dropdown_form.addRow("Tavern:", self.tavern_dropdown)
-        dropdown_form.addRow("Bank:", self.bank_dropdown)
-        dropdown_form.addRow("Transit:", self.transit_dropdown)
-        dropdown_form.addRow("Shop:", self.shop_dropdown)
-        dropdown_form.addRow("Guild:", self.guild_dropdown)
-        dropdown_form.addRow("Place of Interest:", self.poi_dropdown)
-        dropdown_form.addRow("User Building:", self.user_building_dropdown)
-        self.main_layout.addLayout(dropdown_form)
-
-        # ---- Custom Coordinates ----
-        coord_layout = QHBoxLayout()
-        coord_layout.addWidget(QLabel("ABC Street:"))
-        coord_layout.addWidget(self.columns_dropdown, 1)
-        coord_layout.addWidget(QLabel("123 Street:"))
-        coord_layout.addWidget(self.rows_dropdown, 1)
-        coord_layout.addWidget(QLabel("Direction:"))
-        coord_layout.addWidget(self.directional_dropdown, 1)
-        self.main_layout.addLayout(coord_layout)
-
-        # ---- Buttons ----
-        button_grid = QGridLayout()
-
-        set_btn = QPushButton("Set")
-        clear_btn = QPushButton("Clear")
-        update_btn = QPushButton("Update Data")
-        cancel_btn = QPushButton("Cancel")
-
-        set_btn.clicked.connect(self.set_destination)
-        clear_btn.clicked.connect(self.clear_destination)
-        update_btn.clicked.connect(self.update_combo_boxes)
-        cancel_btn.clicked.connect(self.reject)
-
-        button_grid.addWidget(set_btn, 0, 0)
-        button_grid.addWidget(clear_btn, 0, 1)
-        button_grid.addWidget(update_btn, 1, 0)
-        button_grid.addWidget(cancel_btn, 1, 1)
-
-        self.main_layout.addLayout(button_grid)
-
-        # ---- Countdown Labels ----
-        self.guildCountdownLabel = QLabel("Guilds move at ...")
-        self.shopCountdownLabel = QLabel("Shops move at ...")
-        self.main_layout.addWidget(self.guildCountdownLabel)
-        self.main_layout.addWidget(self.shopCountdownLabel)
-
-    def _create_dropdowns(self) -> None:
+        # Create all dropdowns
         self.recent_destinations_dropdown = QComboBox()
         self.tavern_dropdown = QComboBox()
         self.bank_dropdown = QComboBox()
@@ -7062,357 +6374,191 @@ class SetDestinationDialog(QDialog):
         self.rows_dropdown = QComboBox()
         self.directional_dropdown = QComboBox()
 
-    def _configure_dropdowns(self) -> None:
-        dropdowns = [
+        # Apply style and search to all dropdowns
+        all_dropdowns = [
             self.recent_destinations_dropdown,
-            self.tavern_dropdown,
-            self.bank_dropdown,
-            self.transit_dropdown,
-            self.shop_dropdown,
-            self.guild_dropdown,
-            self.poi_dropdown,
-            self.user_building_dropdown,
-            self.columns_dropdown,
-            self.rows_dropdown,
+            self.tavern_dropdown, self.bank_dropdown, self.transit_dropdown,
+            self.shop_dropdown, self.guild_dropdown, self.poi_dropdown,
+            self.user_building_dropdown, self.columns_dropdown, self.rows_dropdown,
             self.directional_dropdown,
         ]
 
-        style = "QComboBox { border: 2px solid #5F6368; padding: 5px; border-radius: 4px; }"
-
-        for dropdown in dropdowns:
-            dropdown.setStyleSheet(style)
+        for dropdown in all_dropdowns:
+            dropdown.setStyleSheet(dropdown_style)
             dropdown.setEditable(True)
+            # noinspection PyUnresolvedReferences
             dropdown.setInsertPolicy(QComboBox.NoInsert)
             completer = dropdown.completer()
+            # noinspection PyUnresolvedReferences
             completer.setCompletionMode(QCompleter.PopupCompletion)
+            # noinspection PyUnresolvedReferences
             completer.setFilterMode(Qt.MatchContains)
 
-    # =====================================================
-    # Timers
-    # =====================================================
+        # Populate dropdowns
+        self.populate_recent_destinations()
+        self._populate_initial_dropdowns()
 
-    def _setup_timers(self) -> None:
-        self.last_updated_timer = QTimer(self)
-        self.last_updated_timer.timeout.connect(self.update_last_updated_label)
-        self.last_updated_timer.start(1000)
+        if self.parent:
+            parent = cast("MainWindowType", self.parent)
+            self.populate_dropdown(self.columns_dropdown, list(parent.columns.keys()))
+            self.populate_dropdown(self.rows_dropdown, list(parent.rows.keys()))
+        else:
+            self.populate_dropdown(self.columns_dropdown, [])
+            self.populate_dropdown(self.rows_dropdown, [])
 
+        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "South East"])
+
+        # Layout: Dropdowns
+        dropdown_layout = QFormLayout()
+        dropdown_layout.addRow("Recent:", self.recent_destinations_dropdown)
+        dropdown_layout.addRow("Tavern:", self.tavern_dropdown)
+        dropdown_layout.addRow("Bank:", self.bank_dropdown)
+        dropdown_layout.addRow("Transit:", self.transit_dropdown)
+        dropdown_layout.addRow("Shop:", self.shop_dropdown)
+        dropdown_layout.addRow("Guild:", self.guild_dropdown)
+        dropdown_layout.addRow("Place of Interest:", self.poi_dropdown)
+        dropdown_layout.addRow("User Building:", self.user_building_dropdown)
+
+        # Layout: XY + Direction
+        custom_layout = QHBoxLayout()
+        custom_layout.addWidget(QLabel("ABC Street:"))
+        custom_layout.addWidget(self.columns_dropdown, 1)
+        custom_layout.addWidget(QLabel("123 Street:"))
+        custom_layout.addWidget(self.rows_dropdown, 1)
+        custom_layout.addWidget(QLabel("Direction:"))
+        custom_layout.addWidget(self.directional_dropdown, 1)
+
+        self.columns_dropdown.setMinimumWidth(120)
+        self.rows_dropdown.setMinimumWidth(120)
+        self.directional_dropdown.setMinimumWidth(120)
+
+        # Layout: Buttons
+        button_layout = QGridLayout()
+        set_btn = QPushButton("Set")
+        clear_btn = QPushButton("Clear")
+        update_btn = QPushButton("Update Data")
+        cancel_btn = QPushButton("Cancel")
+        button_layout.addWidget(set_btn, 0, 0)
+        button_layout.addWidget(clear_btn, 0, 1)
+        button_layout.addWidget(update_btn, 1, 0)
+        button_layout.addWidget(cancel_btn, 1, 1)
+
+        set_btn.clicked.connect(lambda: self.set_destination())
+        clear_btn.clicked.connect(self.clear_destination)
+        update_btn.clicked.connect(self.update_combo_boxes)
+        cancel_btn.clicked.connect(self.reject)
+
+        # Countdown labels
+        self.guildCountdownLabel = QLabel("Guilds move at ...")
+        self.shopCountdownLabel = QLabel("Shops move at ...")
+
+        # Final layout
+        main_layout.addLayout(dropdown_layout)
+        main_layout.addLayout(custom_layout)
+        main_layout.addLayout(button_layout)
+        main_layout.addWidget(self.guildCountdownLabel)
+        main_layout.addWidget(self.shopCountdownLabel)
+        self.setLayout(main_layout)
+
+        # Apply theme
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
+        # Countdown logic
+        self.load_next_move_times()
         self.countdown_timer = QTimer(self)
         self.countdown_timer.timeout.connect(self.update_countdown_labels)
         self.countdown_timer.start(1000)
+        #self.update_combo_boxes()
 
-        self.load_next_move_times()
-        self.update_last_updated_label()
-
-    def closeEvent(self, event) -> None:
-        # Stop timers cleanly (prevents timer callbacks after dialog close)
-        try:
-            if hasattr(self, "last_updated_timer") and self.last_updated_timer:
-                self.last_updated_timer.stop()
-            if hasattr(self, "countdown_timer") and self.countdown_timer:
-                self.countdown_timer.stop()
-        finally:
-            event.accept()
-
-    # =====================================================
-    # Dropdown Population
-    # =====================================================
-
-    def _populate_all_dropdowns(self) -> None:
-        self.populate_recent_destinations()
-
+    def _populate_initial_dropdowns(self) -> None:
+        """Populate predefined destination dropdowns with initial data."""
         if not self.parent:
-            # still populate direction so dialog UI is usable in fallback
-            self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "Southeast"], placeholder=self.DEST_PLACEHOLDER)
-            self.populate_dropdown(self.columns_dropdown, [], placeholder=self.DEST_PLACEHOLDER)
-            self.populate_dropdown(self.rows_dropdown, [], placeholder=self.DEST_PLACEHOLDER)
+            logging.warning("No parent; skipping dropdown population")
             return
 
-        p = self.parent
+        parent = cast("MainWindowType", self.parent)
 
-        self.populate_dropdown(self.tavern_dropdown, p.taverns_coordinates.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.transit_dropdown, p.transits_coordinates.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.shop_dropdown, p.shops_coordinates.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.guild_dropdown, p.guilds_coordinates.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.poi_dropdown, p.places_of_interest_coordinates.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.user_building_dropdown, p.user_buildings_coordinates.keys(), placeholder=self.DEST_PLACEHOLDER)
+        self.populate_dropdown(self.tavern_dropdown, list(parent.taverns_coordinates.keys()))
+        self.populate_dropdown(self.bank_dropdown, [f"{col} & {row}" for col, row, *_ in parent.banks_coordinates.values()])
+        self.populate_dropdown(self.transit_dropdown, list(parent.transits_coordinates.keys()))
+        self.populate_dropdown(self.shop_dropdown, list(parent.shops_coordinates.keys()))
+        self.populate_dropdown(self.guild_dropdown, list(parent.guilds_coordinates.keys()))
+        self.populate_dropdown(self.poi_dropdown, list(parent.places_of_interest_coordinates.keys()))
+        self.populate_dropdown(self.user_building_dropdown, list(parent.user_buildings_coordinates.keys()))
 
-        # Banks: support both refactored and legacy shapes
-        bank_items = self._get_bank_display_items(p)
-        self.populate_dropdown(self.bank_dropdown, bank_items, placeholder=self.DEST_PLACEHOLDER)
-
-        # Columns/Rows
-        self.populate_dropdown(self.columns_dropdown, p.columns.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.rows_dropdown, p.rows.keys(), placeholder=self.DEST_PLACEHOLDER)
-
-        # Direction
-        self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "Southeast"], placeholder=self.DEST_PLACEHOLDER)
-
-    def _get_bank_display_items(self, p) -> list[str]:
-        """
-        Return bank items suitable for display in bank dropdown.
-
-        Supports:
-        - refactor: banks_coordinates is dict[str, tuple[str,str]] where keys are "Col & Row"
-        - legacy: banks_coordinates might be dict/iterables containing col,row pairs
-        """
-        banks = getattr(p, "banks_coordinates", None)
-        if not banks:
-            return []
-
-        # If dict-like, prefer keys when they look like intersections already.
-        if hasattr(banks, "keys") and hasattr(banks, "values"):
-            keys = list(banks.keys())
-            # If keys already contain '&' then they are display labels.
-            if any("&" in str(k) for k in keys):
-                return [str(k) for k in keys]
-            # Otherwise try to build from values (col,row,...)
-            items = []
-            try:
-                for val in banks.values():
-                    if isinstance(val, (tuple, list)) and len(val) >= 2:
-                        items.append(f"{val[0]} & {val[1]}")
-            except Exception:
-                pass
-            return items
-
-        # Fallback: iterable of tuples
-        items = []
-        try:
-            for val in banks:
-                if isinstance(val, (tuple, list)) and len(val) >= 2:
-                    items.append(f"{val[0]} & {val[1]}")
-        except Exception:
-            pass
-        return items
-
-    def populate_dropdown(self, dropdown: QComboBox, items, placeholder: str) -> None:
-        dropdown.clear()
-        dropdown.addItem(placeholder)
-        dropdown.addItems(sorted([str(item) for item in items]))
+        logging.debug("Initial dropdowns populated")
 
     def populate_recent_destinations(self) -> None:
-        """
-        Populate recent destinations for the currently selected character.
-        Attaches (col,row) as userData so currentData() works.
-        """
+        """Populate recent destinations dropdown for the selected character."""
         self.recent_destinations_dropdown.clear()
-        self.recent_destinations_dropdown.addItem(self.RECENT_PLACEHOLDER)
+        self.recent_destinations_dropdown.addItem("Select a recent destination")
 
-        if not self.parent or not getattr(self.parent, "selected_character", None):
+        if not self.parent:
+            logging.debug("No parent; skipping recent destinations")
             return
 
-        character_id = self.parent.selected_character.get("id")
-        if not character_id:
+        parent = cast("MainWindowType", self.parent)
+
+        if not parent.selected_character:
+            logging.debug("No character selected; skipping recent destinations")
             return
+
+        character_id = parent.selected_character.get('id')
 
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    SELECT col, row
-                    FROM recent_destinations
-                    WHERE character_id = ?
-                    ORDER BY timestamp DESC
-                    LIMIT 10
-                    """,
-                    (character_id,),
+                    "SELECT col, row FROM recent_destinations WHERE character_id = ? ORDER BY timestamp DESC LIMIT 10",
+                    (character_id,)
                 )
 
-                inv_cols = {v: k for k, v in self.parent.columns.items()}
-                inv_rows = {v: k for k, v in self.parent.rows.items()}
+                # Create inverse mappings (coord → name)
+                inverse_columns = {v: k for k, v in parent.columns.items()}
+                inverse_rows = {v: k for k, v in parent.rows.items()}
 
                 for col, row in cursor.fetchall():
+                    # Round down to nearest even coordinate for label mapping
                     even_col = col - (col % 2)
                     even_row = row - (row % 2)
 
-                    col_name = inv_cols.get(even_col, f"Column {even_col}")
-                    row_name = inv_rows.get(even_row, f"Row {even_row}")
-                    building = self._get_building_name(cursor, col_name, row_name)
+                    col_name = inverse_columns.get(even_col, f"Column {even_col}")
+                    row_name = inverse_rows.get(even_row, f"Row {even_row}")
+                    building_name = self._get_building_name(cursor, col_name, row_name)
 
-                    display = f"{col_name} & {row_name}"
-                    if building:
-                        display += f" - {building}"
-
-                    # ✅ Attach coords as userData
+                    display = f"{col_name} & {row_name}" + (f" - {building_name}" if building_name else "")
                     self.recent_destinations_dropdown.addItem(display, (col, row))
+
+                logging.debug(f"Loaded {self.recent_destinations_dropdown.count() - 1} recent destinations")
 
         except sqlite3.Error as e:
             logging.error(f"Failed to load recent destinations: {e}")
 
     def _get_building_name(self, cursor: sqlite3.Cursor, col: str, row: str) -> str | None:
+        """Get building name at given coordinates."""
         tables = ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]
         for table in tables:
-            try:
-                cursor.execute(
-                    f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?",
-                    (col, row),
-                )
-                if (res := cursor.fetchone()):
-                    return res[0]
-            except sqlite3.Error:
-                continue
+            cursor.execute(f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?", (col, row))
+            if result := cursor.fetchone():
+                return result[0]
         return None
 
-    # =====================================================
-    # Actions
-    # =====================================================
+    def populate_dropdown(self, dropdown: QComboBox, items: list | KeysView) -> None:
+        """Populate a dropdown with sorted items."""
+        dropdown.clear()
+        dropdown.addItem("Select a destination")
+        dropdown.addItems(sorted([str(item) for item in items]))
+        logging.debug(f"Populated dropdown with {len(items)} items (sorted)")
 
-    def clear_destination(self) -> None:
-        if not self.parent or not self.parent.selected_character:
-            self.show_error_dialog("No Character", "Please select a character first.")
-            return
-
-        character_id = self.parent.selected_character["id"]
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("DELETE FROM destinations WHERE character_id = ?", (character_id,))
-                conn.commit()
-
-            self.parent.destination = None
-            self.parent.update_minimap()
-            logging.info(f"Cleared destination for character {character_id}")
-            self.accept()
-
-        except sqlite3.Error as e:
-            logging.error(f"Failed to clear destination: {e}")
-            self.show_error_dialog("Database Error", f"Failed to clear destination:\n{e}")
-
-    def set_destination(self) -> None:
-        if not self.parent or not self.parent.selected_character:
-            self.show_error_dialog("No Character", "Please select a character first.")
-            return
-
-        self.parent.selected_route_label = None
-
-        coords = self.get_selected_destination()
-        if not coords:
-            self.show_error_dialog("No Destination", "Please select a valid destination.")
-            return
-
-        character_id = self.parent.selected_character["id"]
-
-        try:
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                    """,
-                    (character_id, coords[0], coords[1]),
-                )
-                conn.commit()
-
-            # Save to recent (parent implements)
-            if hasattr(self.parent, "save_to_recent_destinations"):
-                self.parent.save_to_recent_destinations(character_id, coords[0], coords[1])
-
-            # Reload destination (parent implements)
-            if hasattr(self.parent, "load_last_destination_for_character"):
-                self.parent.load_last_destination_for_character(character_id)
-            else:
-                self.parent.destination = coords
-
-            self.parent.update_minimap()
-            logging.info(f"Set destination for character {character_id} to {coords}")
-            self.accept()
-
-        except sqlite3.Error as e:
-            logging.error(f"Failed to set destination: {e}")
-            self.show_error_dialog("Database Error", f"Failed to set destination:\n{e}")
-
-    def get_selected_destination(self) -> tuple[int, int] | None:
-        if not self.parent:
-            return None
-
-        p = self.parent
-
-        # 1) Recent
-        if self.recent_destinations_dropdown.currentText() != self.RECENT_PLACEHOLDER:
-            data = self.recent_destinations_dropdown.currentData()
-            if isinstance(data, tuple) and len(data) == 2:
-                return data
-            # fallback parse if data missing
-            return None
-
-        # 2) Named dropdowns (safe lookup)
-        dropdowns = [
-            (self.tavern_dropdown, p.taverns_coordinates),
-            (self.transit_dropdown, p.transits_coordinates),
-            (self.shop_dropdown, p.shops_coordinates),
-            (self.guild_dropdown, p.guilds_coordinates),
-            (self.poi_dropdown, p.places_of_interest_coordinates),
-            (self.user_building_dropdown, p.user_buildings_coordinates),
-        ]
-        for dd, mapping in dropdowns:
-            sel = dd.currentText()
-            if sel != self.DEST_PLACEHOLDER:
-                coords = mapping.get(sel)
-                if coords:
-                    return coords
-
-        # 3) Bank dropdown (supports " & " and " &amp; ")
-        bank = self.bank_dropdown.currentText()
-        if bank != self.DEST_PLACEHOLDER:
-            col_name, row_name = self._split_intersection(bank)
-            if col_name and row_name:
-                col = p.columns.get(col_name.strip())
-                row = p.rows.get(row_name.strip())
-                if col is not None and row is not None:
-                    return (col + 1, row + 1)
-
-        # 4) Custom XY + direction
-        col = p.columns.get(self.columns_dropdown.currentText())
-        row = p.rows.get(self.rows_dropdown.currentText())
-        if col is None or row is None:
-            return None
-
-        direction = self.directional_dropdown.currentText()
-        if direction == "On":
-            return (col, row)
-        if direction == "East":
-            return (col + 1, row)
-        if direction == "South":
-            return (col, row + 1)
-        if direction in ("Southeast", "South East"):
-            return (col + 1, row + 1)
-
-        return (col, row)
-
-    @staticmethod
-    def _split_intersection(text: str) -> tuple[str | None, str | None]:
-        # Accept both " & " and " &amp; "
-        if " &amp; " in text:
-            parts = text.split(" &amp; ", 1)
-        elif " & " in text:
-            parts = text.split(" & ", 1)
-        else:
-            return None, None
-        if len(parts) != 2:
-            return None, None
-        return parts[0], parts[1]
-
-    # =====================================================
-    # Update Data (kept, but guarded)
-    # =====================================================
-
-    def update_combo_boxes(self) -> None:
+    def update_combo_boxes(self):
         logging.info("Updating combo boxes.")
 
         if not self.parent:
-            self.show_error_dialog("No Parent", "No parent window found.")
+            logging.warning("No parent found; cannot update combo boxes.")
             return
 
-        # Prefer parent.update_data() if it exists; otherwise bail cleanly.
-        if not hasattr(self.parent, "update_data") or not callable(getattr(self.parent, "update_data")):
-            self.show_error_dialog(
-                "Update Not Available",
-                "Update service is not available in this build.\n"
-                "Startup update runs automatically if enabled.",
-            )
-            return
+        parent = cast("MainWindowType", self.parent)
 
         status_dialog = QDialog(self)
         status_dialog.setWindowTitle("Updating Location Data")
@@ -7426,7 +6572,7 @@ class SetDestinationDialog(QDialog):
 
         try:
             # Step 1: Trigger update
-            self.parent.update_data()
+            parent.update_data()
 
             # Step 2: Reload from DB
             status_label.setText("Step 2: Reloading updated location data...")
@@ -7434,25 +6580,26 @@ class SetDestinationDialog(QDialog):
 
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT Name, Coordinate FROM columns")
+
+                cursor.execute("SELECT `Name`, `Coordinate` FROM `columns`")
                 columns = {row[0]: row[1] for row in cursor.fetchall()}
-                cursor.execute("SELECT Name, Coordinate FROM rows")
+                cursor.execute("SELECT `Name`, `Coordinate` FROM `rows`")
                 rows = {row[0]: row[1] for row in cursor.fetchall()}
 
                 def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
                     return (columns.get(col_name, 0) + 1, rows.get(row_name, 0) + 1)
 
-                cursor.execute("SELECT Name, Column, Row FROM shops")
-                self.parent.shops_coordinates.clear()
-                self.parent.shops_coordinates.update({
+                cursor.execute("SELECT Name, `Column`, `Row` FROM shops")
+                parent.shops_coordinates.clear()
+                parent.shops_coordinates.update({
                     name: to_coords(col, row)
                     for name, col, row in cursor.fetchall()
                     if col != "NA" and row != "NA"
                 })
 
-                cursor.execute("SELECT Name, Column, Row FROM guilds")
-                self.parent.guilds_coordinates.clear()
-                self.parent.guilds_coordinates.update({
+                cursor.execute("SELECT Name, `Column`, `Row` FROM guilds")
+                parent.guilds_coordinates.clear()
+                parent.guilds_coordinates.update({
                     name: to_coords(col, row)
                     for name, col, row in cursor.fetchall()
                     if col != "NA" and row != "NA"
@@ -7461,76 +6608,231 @@ class SetDestinationDialog(QDialog):
             # Step 3: Populate UI dropdowns
             status_label.setText("Step 3: Populating dropdowns...")
             QApplication.processEvents()
-            self._populate_all_dropdowns()
 
-            self.parent.update_minimap()
+            self.populate_dropdown(self.tavern_dropdown, parent.taverns_coordinates.keys())
+            self.populate_dropdown(self.bank_dropdown, parent.banks_coordinates.keys())
+            self.populate_dropdown(self.transit_dropdown, parent.transits_coordinates.keys())
+            self.populate_dropdown(self.shop_dropdown, parent.shops_coordinates.keys())
+            self.populate_dropdown(self.guild_dropdown, parent.guilds_coordinates.keys())
+            self.populate_dropdown(self.poi_dropdown, parent.places_of_interest_coordinates.keys())
+            self.populate_dropdown(self.user_building_dropdown, parent.user_buildings_coordinates.keys())
 
+            parent.update_minimap()
+
+            # Step 4: Done
             status_label.setText("✅ Update complete.")
             QApplication.processEvents()
-            QTimer.singleShot(1500, status_dialog.accept)
+            QTimer.singleShot(2000, status_dialog.accept)
+
+            logging.info("Combo boxes updated successfully.")
 
         except Exception as e:
-            logging.exception("Failed to update combo boxes:")
+            logging.exception("Failed to update Combo boxes:")
             status_label.setText("❌ Update failed.")
             QApplication.processEvents()
-            QTimer.singleShot(2000, status_dialog.accept)
+            QTimer.singleShot(3000, status_dialog.accept)
             self.show_error_dialog("Update Failed", str(e))
 
-    # =====================================================
-    # Countdown + "Last Updated" (unchanged, but stable)
-    # =====================================================
+    def show_notification(self, message: str) -> None:
+        """Show a temporary notification."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Notification")
+        # noinspection PyUnresolvedReferences
+        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(message, dialog))
+        dialog.setFixedSize(300, 100)
+        QTimer.singleShot(5000, dialog.accept)
+        dialog.exec()
+        logging.debug(f"Notification shown: {message}")
 
-    def load_next_move_times(self) -> None:
+    def clear_destination(self) -> None:
+        """Clear the current destination for the selected character."""
+        if not self.parent:
+            logging.warning("No parent found; cannot clear destination.")
+            return
+
+        parent = cast("MainWindowType", self.parent)
+
+        if not parent.selected_character:
+            logging.warning("No character selected to clear destination")
+            return
+
+        character_id = parent.selected_character['id']
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM destinations WHERE character_id = ?", (character_id,))
+                conn.commit()
+
+            parent.destination = None
+            parent.update_minimap()
+            logging.info(f"Cleared destination for character {character_id}")
+            self.accept()
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to clear destination: {e}")
+
+    def set_destination(self) -> None:
+        """Set the selected destination for the current character."""
+        if not self.parent:
+            self.show_error_dialog("No Character", "Please select a character first")
+            return
+
+        parent = cast("MainWindowType", self.parent)
+        parent.selected_route_label = None
+
+        if not parent.selected_character:
+            self.show_error_dialog("No Character", "Please select a character first")
+            return
+
+        coords = self.get_selected_destination()
+        if not coords:
+            self.show_error_dialog("No Destination", "Please select a valid destination")
+            return
+
+        character_id = parent.selected_character['id']
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp)
+                    VALUES (?, ?, ?, datetime('now'))
+                """, (character_id, coords[0], coords[1]))
+
+                conn.commit()
+
+            # ✅ Save to recent using centralized logic
+            parent.save_to_recent_destinations(character_id, coords[0], coords[1])
+
+            # ✅ Reload destination from DB to sync to current character context
+            parent.load_last_destination_for_character(character_id)
+            parent.update_minimap()
+            logging.info(f"Set destination for character {character_id} to {coords}")
+            self.accept()
+
+        except sqlite3.Error as e:
+            logging.error(f"Failed to set destination: {e}")
+
+    def get_selected_destination(self) -> tuple[int, int] | None:
+        """Retrieve coordinates of the selected destination."""
+        if not self.parent:
+            return None
+
+        parent = cast("MainWindowType", self.parent)
+
+        if (recent := self.recent_destinations_dropdown.currentText()) != "Select a recent destination":
+            return self.recent_destinations_dropdown.currentData()
+
+        dropdowns = [
+            (self.tavern_dropdown, parent.taverns_coordinates),
+            (self.transit_dropdown, parent.transits_coordinates),
+            (self.shop_dropdown, parent.shops_coordinates),
+            (self.guild_dropdown, parent.guilds_coordinates),
+            (self.poi_dropdown, parent.places_of_interest_coordinates),
+            (self.user_building_dropdown, parent.user_buildings_coordinates),
+        ]
+        for dropdown, data in dropdowns:
+            if (sel := dropdown.currentText()) != "Select a destination":
+                return data[sel]
+
+        # Bank dropdown (custom formatted)
+        if (bank := self.bank_dropdown.currentText()) != "Select a destination":
+            try:
+                col_name, row_name = bank.split(" & ")
+                col = parent.columns.get(col_name.strip())
+                row = parent.rows.get(row_name.strip())
+                if col is not None and row is not None:
+                    return col + 1, row + 1
+            except ValueError:
+                logging.warning(f"Invalid bank format: {bank}")
+                return None
+
+        # Custom XY + direction
+        col = parent.columns.get(self.columns_dropdown.currentText())
+        row = parent.rows.get(self.rows_dropdown.currentText())
+        direction = self.directional_dropdown.currentText()
+
+        if col is not None and row is not None:
+            original_coords = (col, row)
+            if direction == "On":
+                return original_coords
+            elif direction == "East":
+                return (col + 1, row)
+            elif direction == "South":
+                return (col, row + 1)
+            elif direction == "South East":
+                return (col + 1, row + 1)
+            else:
+                logging.warning(f"Unrecognized direction: {direction}")
+                return original_coords
+
+        logging.debug("No valid destination selected")
+        return None
+
+    def set_external_destination(self, col: int, row: int, guild_name: str) -> None:
+        """Set a destination externally."""
+        self.parent().selected_route_label = None
+        self.recent_destinations_dropdown.clear()
+        self.recent_destinations_dropdown.addItem(f"{guild_name} - {col}, {row}", (col, row))
+        self.recent_destinations_dropdown.setCurrentIndex(0)  # Select the added item
+        self.set_destination()
+        logging.info(f"External destination set: {guild_name} at ({col}, {row})")
+
+    def show_error_dialog(self, title: str, message: str) -> None:
+        """Show an error dialog."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        # noinspection PyUnresolvedReferences
+        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel(message, dialog))
+        close_btn = QPushButton("Close", dialog)
+        close_btn.clicked.connect(dialog.accept)
+        layout.addWidget(close_btn)
+        dialog.setFixedSize(300, 100)
+        dialog.exec()
+        logging.debug(f"Error dialog shown: {title} - {message}")
+
+    def load_next_move_times(self):
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    """
-                    SELECT next_update, last_scraped
-                    FROM guilds
-                    WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL
-                    ORDER BY next_update ASC
-                    LIMIT 1
-                    """
-                )
-                res = cursor.fetchone()
-                self.next_guild_update = (
-                    datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                    if res else None
-                )
+                    "SELECT next_update, last_scraped FROM guilds WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL ORDER BY next_update ASC LIMIT 1")
+                result = cursor.fetchone()
+                self.next_guild_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
+                self.guild_scraped_at = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
 
                 cursor.execute(
-                    """
-                    SELECT next_update, last_scraped
-                    FROM shops
-                    WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL
-                    ORDER BY next_update ASC
-                    LIMIT 1
-                    """
-                )
-                res = cursor.fetchone()
-                self.next_shop_update = (
-                    datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                    if res else None
-                )
+                    "SELECT next_update, last_scraped FROM shops WHERE next_update IS NOT NULL AND last_scraped IS NOT NULL ORDER BY next_update ASC LIMIT 1")
+                result = cursor.fetchone()
+                self.next_shop_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
+                self.shop_scraped_at = datetime.strptime(result[1], "%Y-%m-%d %H:%M:%S").replace(
+                    tzinfo=timezone.utc) if result else None
         except Exception as e:
             logging.error(f"Failed to load next move times: {e}")
-            self.next_guild_update = None
-            self.next_shop_update = None
+            self.next_guild_update = self.guild_scraped_at = None
+            self.next_shop_update = self.shop_scraped_at = None
 
-    def update_countdown_labels(self) -> None:
+    def update_countdown_labels(self):
         now = datetime.now(timezone.utc)
 
         def format_countdown(next_time, label: QLabel, label_name: str):
             if next_time:
-                remaining = max(timedelta(0), next_time - now)
+                remaining = max(timedelta(0), next_time - now)  # simple, correct
                 days = remaining.days
                 hours, remainder = divmod(remaining.seconds, 3600)
                 minutes, seconds = divmod(remainder, 60)
+
                 label.setText(
-                    f"{label_name} move at {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')} "
-                    f"or in {days}d {hours}h {minutes}m {seconds}s"
+                    f"{label_name} move at {next_time.strftime('%Y-%m-%d %H:%M:%S UTC')} or in {days}d {hours}h {minutes}m {seconds}s"
                 )
             else:
                 label.setText(f"{label_name} move time unknown.")
@@ -7538,23 +6840,23 @@ class SetDestinationDialog(QDialog):
         format_countdown(self.next_guild_update, self.guildCountdownLabel, "Guilds")
         format_countdown(self.next_shop_update, self.shopCountdownLabel, "Shops")
 
-    def update_last_updated_label(self) -> None:
+    def update_last_updated_label(self):
+        """Update the label showing how long ago the last update occurred."""
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    """
+                cursor.execute("""
                     SELECT MAX(last_scraped) FROM (
                         SELECT last_scraped FROM guilds WHERE last_scraped IS NOT NULL
                         UNION ALL
                         SELECT last_scraped FROM shops WHERE last_scraped IS NOT NULL
                     )
-                    """
-                )
-                res = cursor.fetchone()
-                if res and res[0]:
-                    last = datetime.strptime(res[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                    delta = datetime.now(timezone.utc) - last
+                """)
+                result = cursor.fetchone()
+                if result and result[0]:
+                    last_scraped_time = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    delta = now - last_scraped_time
                     days = delta.days
                     hours, rem = divmod(delta.seconds, 3600)
                     minutes, seconds = divmod(rem, 60)
@@ -7567,637 +6869,380 @@ class SetDestinationDialog(QDialog):
             logging.warning(f"Failed to update last_updated_label: {e}")
             self.last_updated_label.setText("🕒 Location data last updated: error")
 
-    # =====================================================
-    # Misc
-    # =====================================================
-
-    def show_error_dialog(self, title: str, message: str) -> None:
-        dialog = QDialog(self)
-        dialog.setWindowTitle(title)
-        dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel(message, dialog))
-        close_btn = QPushButton("Close", dialog)
-        close_btn.clicked.connect(dialog.accept)
-        layout.addWidget(close_btn)
-        dialog.setFixedSize(360, 120)
-        dialog.exec()
-
-    def set_external_destination(self, col: int, row: int, guild_name: str) -> None:
-        """
-        Allow other dialogs (e.g., Powers) to seed a destination.
-        """
-        self.recent_destinations_dropdown.clear()
-        self.recent_destinations_dropdown.addItem(f"{guild_name} - {col}, {row}", (col, row))
-        self.recent_destinations_dropdown.setCurrentIndex(0)
-        self.set_destination()
-
 # -----------------------
-# Shopping List Tool
+# Shopping List Tools
 # -----------------------
 
 class ShoppingListTool(QDialog):
     """Tool for managing a character’s shopping list with SQLite-backed shop data."""
 
-    def __init__(
-        self,
-        character_name: str,
-        db_path: str,
-        parent=None,
-        color_mappings: dict | None = None,
-    ) -> None:
+    def __init__(self, character_name: str, db_path: str, parent=None, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-
         self.setWindowTitle("Shopping List Tool")
         self.setGeometry(100, 100, 700, 500)
-
         self.character_name = character_name
-        self.db_path = db_path
+        self.DB_PATH = db_path
         self.color_mappings = color_mappings or {}
-
-        # Internal data model (authoritative)
-        self.shopping_items: dict[str, dict[str, int]] = {}
-
         self.list_total = 0
         self.next_shop_update = None
 
-        self._open_db()
-        self._build_ui()
-
-        if self.sqlite_cursor:
-            self.populate_shop_dropdown()
-
-        self.load_shop_move_time()
-        self._start_timer()
-
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        logging.debug("ShoppingListTool initialized for %s", character_name)
-
-    # =====================================================
-    # Database
-    # =====================================================
-
-    def _open_db(self) -> None:
         try:
-            self.sqlite_connection = sqlite3.connect(self.db_path)
+            self.sqlite_connection = sqlite3.connect(self.DB_PATH)
             self.sqlite_cursor = self.sqlite_connection.cursor()
-        except sqlite3.Error as exc:
-            logging.error("Failed to connect to database: %s", exc)
+        except sqlite3.Error as e:
+            logging.error(f"Failed to connect to database: {e}")
             self.sqlite_connection = None
             self.sqlite_cursor = None
 
-    # =====================================================
-    # UI
-    # =====================================================
+        self.setup_ui()
+        if self.sqlite_connection:
+            self.populate_shop_dropdown()
 
-    def _build_ui(self) -> None:
+        self.load_shop_move_time()
+        self.shop_timer = QTimer(self)
+        self.shop_timer.timeout.connect(self.update_shop_countdown)
+        self.shop_timer.start(1000)
+
+        logging.debug(f"ShoppingListTool initialized for {character_name}")
+
+    def setup_ui(self) -> None:
         main_layout = QVBoxLayout(self)
 
-        # ---- Filters ----
+        # Top row
         filter_row = QHBoxLayout()
-
         self.shop_combobox = QComboBox()
         self.charisma_combobox = QComboBox()
-        self.charisma_combobox.addItems(
-            ["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"]
-        )
-
+        self.charisma_combobox.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
         filter_row.addWidget(QLabel("Select Shop:"))
         filter_row.addWidget(self.shop_combobox)
         filter_row.addSpacing(20)
         filter_row.addWidget(QLabel("Charisma Level:"))
         filter_row.addWidget(self.charisma_combobox)
-
         main_layout.addLayout(filter_row)
 
-        # ---- Lists ----
+        # Middle row
         list_row = QHBoxLayout()
 
+        # Available Items
+        available_layout = QVBoxLayout()
+        available_layout.addWidget(QLabel("Available Items:"))
         self.available_items_list = QListWidget()
-        self.shopping_list = QListWidget()
-
-        left = QVBoxLayout()
-        left.addWidget(QLabel("Available Items:"))
-        left.addWidget(self.available_items_list)
+        available_layout.addWidget(self.available_items_list)
         self.add_item_button = QPushButton("Add →")
-        left.addWidget(self.add_item_button)
+        available_layout.addWidget(self.add_item_button)
+        list_row.addLayout(available_layout)
 
-        right = QVBoxLayout()
-        right.addWidget(QLabel("Shopping List:"))
-        right.addWidget(self.shopping_list)
+        # Shopping List
+        shopping_layout = QVBoxLayout()
+        shopping_layout.addWidget(QLabel("Shopping List:"))
+        self.shopping_list = QListWidget()
+        shopping_layout.addWidget(self.shopping_list)
         self.remove_item_button = QPushButton("← Remove")
-        right.addWidget(self.remove_item_button)
+        shopping_layout.addWidget(self.remove_item_button)
+        list_row.addLayout(shopping_layout)
 
-        list_row.addLayout(left)
-        list_row.addLayout(right)
         main_layout.addLayout(list_row)
 
-        # ---- Totals & Countdown ----
+        # Bottom
         self.total_label = QLabel()
+        self.total_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.shop_countdown_label = QLabel()
+        self.shop_countdown_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addSpacing(10)
         main_layout.addWidget(self.total_label)
         main_layout.addWidget(self.shop_countdown_label)
 
-        # ---- Signals ----
+        self.setLayout(main_layout)
+
+        # Connect signals
         self.add_item_button.clicked.connect(self.add_item)
         self.remove_item_button.clicked.connect(self.remove_item)
         self.shop_combobox.currentIndexChanged.connect(self.load_items)
-        self.charisma_combobox.currentIndexChanged.connect(self._refresh_prices)
+        self.charisma_combobox.currentIndexChanged.connect(self._update_all)
+
+        # Apply theme
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
         self.update_total()
-
-    # =====================================================
-    # Shop / Item Loading
-    # =====================================================
 
     def populate_shop_dropdown(self) -> None:
         if not self.sqlite_cursor:
             return
         try:
-            self.sqlite_cursor.execute(
-                "SELECT DISTINCT shop_name FROM shop_items"
-            )
+            self.sqlite_cursor.execute("SELECT DISTINCT shop_name FROM shop_items")
             shops = [row[0] for row in self.sqlite_cursor.fetchall()]
             self.shop_combobox.addItems(shops)
-        except sqlite3.Error as exc:
-            logging.error("Failed to populate shop dropdown: %s", exc)
+            logging.debug(f"Populated shop dropdown with {len(shops)} shops")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to populate shop dropdown: {e}")
 
     def load_items(self) -> None:
+        if not self.sqlite_cursor or not self.shop_combobox.currentText():
+            self.available_items_list.clear()
+            return
+
         self.available_items_list.clear()
-
-        if not self.sqlite_cursor:
-            return
-
-        shop = self.shop_combobox.currentText()
-        if not shop:
-            return
-
-        price_column = self._price_column()
-
-        try:
-            self.sqlite_cursor.execute(
-                f"""
-                SELECT item_name, {price_column}
-                FROM shop_items
-                WHERE shop_name = ?
-                """,
-                (shop,),
-            )
-
-            for name, price in self.sqlite_cursor.fetchall():
-                self.available_items_list.addItem(
-                    f"{name} - {price} Coins"
-                )
-        except sqlite3.Error as exc:
-            logging.error("Failed to load items: %s", exc)
-
-    def _price_column(self) -> str:
-        return {
+        shop_name = self.shop_combobox.currentText()
+        price_column = {
             "No Charisma": "base_price",
             "Charisma 1": "charisma_level_1",
             "Charisma 2": "charisma_level_2",
-            "Charisma 3": "charisma_level_3",
+            "Charisma 3": "charisma_level_3"
         }.get(self.charisma_combobox.currentText(), "base_price")
-
-    # =====================================================
-    # Shopping List Logic (Model-driven)
-    # =====================================================
-
-    def add_item(self) -> None:
-        item = self.available_items_list.currentItem()
-        if not item:
-            return
-
-        name, price_part = item.text().split(" - ")
-        price = int(price_part.split()[0])
-
-        qty, ok = QInputDialog.getInt(
-            self, "Quantity", f"How many {name}?", 1, 1
-        )
-        if not ok:
-            return
-
-        entry = self.shopping_items.setdefault(
-            name, {"price": price, "quantity": 0}
-        )
-        entry["price"] = price
-        entry["quantity"] += qty
-
-        self._refresh_shopping_list()
-
-    def remove_item(self) -> None:
-        item = self.shopping_list.currentItem()
-        if not item:
-            return
-
-        name = item.text().split(" - ")[0]
-        entry = self.shopping_items.get(name)
-        if not entry:
-            return
-
-        qty, ok = QInputDialog.getInt(
-            self,
-            "Remove",
-            f"How many {name}?",
-            1,
-            1,
-            entry["quantity"],
-        )
-        if not ok:
-            return
-
-        entry["quantity"] -= qty
-        if entry["quantity"] <= 0:
-            del self.shopping_items[name]
-
-        self._refresh_shopping_list()
-
-    def _refresh_prices(self) -> None:
-        if not self.sqlite_cursor:
-            return
-
-        shop = self.shop_combobox.currentText()
-        if not shop or not self.shopping_items:
-            return
-
-        price_column = self._price_column()
-        names = list(self.shopping_items.keys())
 
         try:
             self.sqlite_cursor.execute(
-                f"""
-                SELECT item_name, {price_column}
-                FROM shop_items
-                WHERE shop_name = ?
-                  AND item_name IN ({",".join("?" * len(names))})
-                """,
-                (shop, *names),
+                f"SELECT item_name, {price_column} FROM shop_items WHERE shop_name = ?",
+                (shop_name,)
             )
-
             for name, price in self.sqlite_cursor.fetchall():
-                self.shopping_items[name]["price"] = price
+                self.available_items_list.addItem(f"{name} - {price} Coins")
+            logging.debug(f"Loaded {self.available_items_list.count()} items for {shop_name}")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load items: {e}")
 
-        except sqlite3.Error as exc:
-            logging.error("Failed to refresh prices: %s", exc)
+    def add_item(self) -> None:
+        if not (item := self.available_items_list.currentItem()):
+            return
 
-        self._refresh_shopping_list()
+        name, price_str = item.text().split(" - ")
+        price = int(price_str.split(" Coins")[0])
+        quantity, ok = QInputDialog.getInt(self, "Quantity", f"How many {name}?", 1, 1)
+        if not ok:
+            return
 
-    def _refresh_shopping_list(self) -> None:
-        self.shopping_list.clear()
+        for i in range(self.shopping_list.count()):
+            if (existing := self.shopping_list.item(i).text()).startswith(f"{name} - "):
+                curr_qty = int(existing.split(" - ")[2].split("x")[0])
+                self.shopping_list.item(i).setText(f"{name} - {price} Coins - {curr_qty + quantity}x")
+                self.update_total()
+                return
 
-        for name, data in self.shopping_items.items():
-            self.shopping_list.addItem(
-                f"{name} - {data['price']} Coins - {data['quantity']}x"
-            )
-
+        self.shopping_list.addItem(f"{name} - {price} Coins - {quantity}x")
         self.update_total()
+        logging.debug(f"Added {name} x{quantity} to shopping list")
 
-    # =====================================================
-    # Totals & Coins
-    # =====================================================
+    def remove_item(self) -> None:
+        if not (item := self.shopping_list.currentItem()):
+            return
+
+        name, price_str, qty_str = item.text().split(" - ")
+        price = int(price_str.split(" Coins")[0])
+        curr_qty = int(qty_str.split("x")[0])
+        qty_to_remove, ok = QInputDialog.getInt(self, "Remove", f"How many {name}?", 1, 1, curr_qty)
+        if not ok:
+            return
+
+        new_qty = curr_qty - qty_to_remove
+        if new_qty > 0:
+            item.setText(f"{name} - {price} Coins - {new_qty}x")
+        else:
+            self.shopping_list.takeItem(self.shopping_list.row(item))
+        self.update_total()
+        logging.debug(f"Removed {qty_to_remove}x {name} from shopping list")
+
+    def _update_all(self) -> None:
+        self.load_items()
+        self.update_shopping_list_prices()
+
+    def update_shopping_list_prices(self) -> None:
+        if not self.sqlite_cursor or not self.shop_combobox.currentText():
+            return
+
+        shop_name = self.shop_combobox.currentText()
+        price_column = {
+            "No Charisma": "base_price",
+            "Charisma 1": "charisma_level_1",
+            "Charisma 2": "charisma_level_2",
+            "Charisma 3": "charisma_level_3"
+        }.get(self.charisma_combobox.currentText(), "base_price")
+
+        try:
+            items = {self.shopping_list.item(i).text().split(" - ")[0]: i for i in range(self.shopping_list.count())}
+            if items:
+                self.sqlite_cursor.execute(
+                    f"SELECT item_name, {price_column} FROM shop_items WHERE shop_name = ? AND item_name IN ({','.join('?' * len(items))})",
+                    (shop_name, *items.keys())
+                )
+                for name, price in self.sqlite_cursor.fetchall():
+                    i = items[name]
+                    qty = int(self.shopping_list.item(i).text().split(" - ")[2].split("x")[0])
+                    self.shopping_list.item(i).setText(f"{name} - {price} Coins - {qty}x")
+            self.update_total()
+        except sqlite3.Error as e:
+            logging.error(f"Failed to update shopping list prices: {e}")
 
     def update_total(self) -> None:
         self.list_total = sum(
-            item["price"] * item["quantity"]
-            for item in self.shopping_items.values()
+            int(item.text().split(" - ")[1].split(" Coins")[0]) * int(item.text().split(" - ")[2].split("x")[0])
+            for item in [self.shopping_list.item(i) for i in range(self.shopping_list.count())]
         )
-
         self.total_label.setText(
-            f"<b>List total:</b> {self.list_total} Coins | "
-            f"<b>Coins in Pocket:</b> {self.coins_in_pocket()} | "
-            f"<b>Bank:</b> {self.coins_in_bank()}"
+            f"<b>List total:</b> {self.list_total} Coins | <b>Coins in Pocket:</b> {self.coins_in_pocket()} | <b>Bank:</b> {self.coins_in_bank()}"
         )
 
     def coins_in_pocket(self) -> int:
         if not self.sqlite_cursor:
             return 0
         try:
-            self.sqlite_cursor.execute(
-                """
-                SELECT pocket FROM coins
-                WHERE character_id = (
-                    SELECT id FROM characters WHERE name = ?
-                )
-                """,
-                (self.character_name,),
-            )
-            row = self.sqlite_cursor.fetchone()
-            return row[0] if row else 0
-        except sqlite3.Error:
+            self.sqlite_cursor.execute("SELECT pocket FROM coins WHERE character_id = (SELECT id FROM characters WHERE name = ?)",
+                                       (self.character_name,))
+            result = self.sqlite_cursor.fetchone()
+            return result[0] if result else 0
+        except sqlite3.Error as e:
+            logging.error(f"Failed to fetch pocket coins: {e}")
             return 0
 
     def coins_in_bank(self) -> int:
         if not self.sqlite_cursor:
             return 0
         try:
-            self.sqlite_cursor.execute(
-                """
-                SELECT bank FROM coins
-                WHERE character_id = (
-                    SELECT id FROM characters WHERE name = ?
-                )
-                """,
-                (self.character_name,),
-            )
-            row = self.sqlite_cursor.fetchone()
-            return row[0] if row else 0
-        except sqlite3.Error:
+            self.sqlite_cursor.execute("SELECT bank FROM coins WHERE character_id = (SELECT id FROM characters WHERE name = ?)",
+                                       (self.character_name,))
+            result = self.sqlite_cursor.fetchone()
+            return result[0] if result else 0
+        except sqlite3.Error as e:
+            logging.error(f"Failed to fetch bank coins: {e}")
             return 0
 
-    # =====================================================
-    # Countdown
-    # =====================================================
-
-    def _start_timer(self) -> None:
-        self.shop_timer = QTimer(self)
-        self.shop_timer.timeout.connect(self.update_shop_countdown)
-        self.shop_timer.start(1000)
-
-    def load_shop_move_time(self) -> None:
+    def load_shop_move_time(self):
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    SELECT next_update
-                    FROM shops
-                    WHERE next_update IS NOT NULL
-                    ORDER BY next_update ASC
-                    LIMIT 1
-                    """
+                    "SELECT next_update FROM shops WHERE next_update IS NOT NULL ORDER BY next_update ASC LIMIT 1"
                 )
-                row = cursor.fetchone()
-                if row:
-                    self.next_shop_update = datetime.strptime(
-                        row[0], "%Y-%m-%d %H:%M:%S"
-                    ).replace(tzinfo=timezone.utc)
-        except Exception:
+                result = cursor.fetchone()
+                if result:
+                    self.next_shop_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        except Exception as e:
+            logging.error(f"Failed to load shop move time: {e}")
             self.next_shop_update = None
 
-    def update_shop_countdown(self) -> None:
+    def update_shop_countdown(self):
         now = datetime.now(timezone.utc)
         if self.next_shop_update:
-            remaining = max(
-                timedelta(0), self.next_shop_update - now
-            )
+            remaining = max(timedelta(0), self.next_shop_update - now)
             days = remaining.days
             hours, rem = divmod(remaining.seconds, 3600)
             minutes, seconds = divmod(rem, 60)
             text = (
-                f"Shops move at "
-                f"{self.next_shop_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
+                f"Shops move at {self.next_shop_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
                 f"or in {days}d {hours}h {minutes}m {seconds}s"
             )
         else:
             text = "Shops move time unknown."
-
         self.shop_countdown_label.setText(text)
-
-    # =====================================================
-    # Cleanup
-    # =====================================================
 
     def closeEvent(self, event) -> None:
         if self.sqlite_connection:
             try:
                 self.sqlite_connection.close()
-            except sqlite3.Error:
-                pass
+                logging.debug("SQLite connection closed")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to close connection: {e}")
         event.accept()
 
 # -----------------------
 # Damage Calculator Tool
 # -----------------------
 
-from dataclasses import dataclass
-
-REQUIRED_WEAPONS = {
-    "Vial of Holy Water",
-    "Garlic Spray",
-    "Wooden Stake",
-}
-# NOTE:
-# Scrolls of Turning are intentionally excluded:
-# - probabilistic damage
-# - minor impact
-# - not guaranteed → unsuitable for deterministic planning
-
-
-@dataclass
-class Weapon:
-    name: str
-    prices: list[int]  # indexed by charisma level
-
-
 class DamageCalculator(QDialog):
     """Dialog for calculating weapons needed to reduce a target BP."""
 
-    def __init__(
-        self,
-        db_connection: sqlite3.Connection,
-        parent=None,
-        color_mappings: dict | None = None,
-    ) -> None:
-        super().__init__(parent)
+    def __init__(self, db_connection: sqlite3.Connection, parent=None, color_mappings: dict | None = None) -> None:
+        """
+        Initialize the Damage Calculator.
 
+        Args:
+            db_connection: SQLite database connection (unused currently).
+            parent: Parent widget (default is None).
+            color_mappings: Theme colors dictionary (optional).
+        """
+        super().__init__(parent)
         self.db_connection = db_connection
-        self.color_mappings = color_mappings or {}
         self.charisma_level = 0
+        self.color_mappings = color_mappings or {}
 
         self.setWindowTitle("Damage Calculator")
         self.setWindowIcon(APP_ICON)
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(400)
 
-        self._build_ui()
-        self._load_valid_shops()
+        main_layout = QVBoxLayout(self)
 
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        logging.debug("DamageCalculator initialized")
-
-    # =====================================================
-    # UI
-    # =====================================================
-
-    def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
-
-        # ---- Shop selector ----
-        shop_layout = QHBoxLayout()
-        shop_layout.addWidget(QLabel("Shop:"))
-        self.shop_dropdown = QComboBox()
-        shop_layout.addWidget(self.shop_dropdown)
-        layout.addLayout(shop_layout)
-
-        # ---- Target BP ----
+        # Target BP input
         bp_layout = QHBoxLayout()
         bp_layout.addWidget(QLabel("Target BP:"))
         self.bp_input = QLineEdit()
-        self.bp_input.setValidator(
-            PySide6.QtGui.QIntValidator(0, 100_000_000)
-        )
+        self.bp_input.setValidator(PySide6.QtGui.QIntValidator(0, 100000000))
         bp_layout.addWidget(self.bp_input)
-        layout.addLayout(bp_layout)
+        main_layout.addLayout(bp_layout)
 
-        # ---- Charisma ----
+        # Charisma dropdown
         charisma_layout = QHBoxLayout()
         charisma_layout.addWidget(QLabel("Charisma Level:"))
         self.charisma_dropdown = QComboBox()
-        self.charisma_dropdown.addItems(
-            ["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"]
-        )
-        self.charisma_dropdown.currentIndexChanged.connect(
-            self._update_charisma_level
-        )
+        self.charisma_dropdown.addItems(["No Charisma", "Charisma 1", "Charisma 2", "Charisma 3"])
+        self.charisma_dropdown.currentIndexChanged.connect(self.update_charisma_level)
         charisma_layout.addWidget(self.charisma_dropdown)
-        layout.addLayout(charisma_layout)
+        main_layout.addLayout(charisma_layout)
 
-        # ---- Results ----
+        # Output and controls
         self.result_display = QTextEdit()
         self.result_display.setReadOnly(True)
-        self.result_display.setPlaceholderText(
-            "Weapons needed will be displayed here."
-        )
-        layout.addWidget(self.result_display)
+        self.result_display.setPlaceholderText("Weapons needed will be displayed here.")
+        main_layout.addWidget(self.result_display)
 
         self.total_cost_label = QLabel("Total Cost: 0 Coins")
-        layout.addWidget(self.total_cost_label)
+        main_layout.addWidget(self.total_cost_label)
 
-        # ---- Controls ----
-        self.calc_button = QPushButton("Calculate")
-        self.calc_button.clicked.connect(self.calculate_damage)
-        layout.addWidget(self.calc_button)
+        # Calculate button
+        calc_button = QPushButton("Calculate")
+        calc_button.clicked.connect(self.calculate_damage)
+        main_layout.addWidget(calc_button)
 
-        self.setLayout(layout)
+        self.setLayout(main_layout)
 
-    # =====================================================
-    # Shop / Inventory
-    # =====================================================
+        # Apply theme if available
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
-    def _load_valid_shops(self) -> None:
-        """
-        Populate shop dropdown with only shops that sell
-        all required weapons.
-        """
-        self.shops: dict[str, dict[str, Weapon]] = {}
+        # Static prices
+        self.discount_magic_prices = {
+            "Vial of Holy Water": [1400, 1357, 1302, 1260],
+            "Garlic Spray": [700, 678, 651, 630],
+            "Wooden Stake": [2800, 2715, 2604, 2520],
+        }
+        logging.debug("DamageCalculator initialized")
 
-        try:
-            cursor = self.db_connection.cursor()
-
-            cursor.execute("SELECT DISTINCT Name FROM shops")
-            shop_names = [row[0] for row in cursor.fetchall()]
-
-            for shop in shop_names:
-                inventory = self._load_shop_inventory(cursor, shop)
-                if self._inventory_is_valid(inventory):
-                    self.shops[shop] = inventory
-
-            self.shop_dropdown.addItems(sorted(self.shops.keys()))
-
-            # Default to Discount Magic if present
-            if "Discount Magic" in self.shops:
-                self.shop_dropdown.setCurrentText("Discount Magic")
-
-            if not self.shops:
-                self.calc_button.setEnabled(False)
-                self.result_display.setText(
-                    "No shops found that sell all required weapons."
-                )
-
-            logging.debug(
-                "Loaded %d valid shops for DamageCalculator",
-                len(self.shops),
-            )
-
-        except sqlite3.Error as e:
-            logging.error("Failed to load shop data: %s", e)
-            self.calc_button.setEnabled(False)
-
-    def _load_shop_inventory(
-        self,
-        cursor: sqlite3.Cursor,
-        shop_name: str,
-    ) -> dict[str, Weapon]:
-        """
-        Load weapon prices for a shop into a Weapon map.
-        """
-        cursor.execute(
-            """
-            SELECT item_name,
-                   base_price,
-                   charisma_level_1,
-                   charisma_level_2,
-                   charisma_level_3
-            FROM shop_items
-            WHERE shop_name = ?
-            """,
-            (shop_name,),
-        )
-
-        inventory: dict[str, Weapon] = {}
-        for name, p0, p1, p2, p3 in cursor.fetchall():
-            if name in REQUIRED_WEAPONS:
-                inventory[name] = Weapon(
-                    name=name,
-                    prices=[p0, p1, p2, p3],
-                )
-        return inventory
-
-    @staticmethod
-    def _inventory_is_valid(inventory: dict[str, Weapon]) -> bool:
-        return REQUIRED_WEAPONS.issubset(inventory.keys())
-
-    # =====================================================
-    # State
-    # =====================================================
-
-    def _update_charisma_level(self) -> None:
+    def update_charisma_level(self) -> None:
+        """Update charisma level based on dropdown selection."""
         self.charisma_level = self.charisma_dropdown.currentIndex()
-
-    # =====================================================
-    # Core Calculation (absolute, deterministic)
-    # =====================================================
+        logging.debug(f"Charisma level set to {self.charisma_level}")
 
     def calculate_damage(self) -> None:
+        """Calculate weapons needed to reduce target BP to 0."""
         self.result_display.clear()
-
         try:
             target_bp = int(self.bp_input.text())
             if target_bp <= 0:
-                raise ValueError
+                raise ValueError("BP must be positive")
         except ValueError:
-            self.result_display.setText(
-                "Please enter a valid positive BP value."
-            )
+            self.result_display.setText("Please enter a valid positive BP value")
+            logging.warning("Invalid BP input")
             return
 
-        shop_name = self.shop_dropdown.currentText()
-        shop_inventory = self.shops.get(shop_name)
-
-        if not shop_inventory:
-            self.result_display.setText(
-                "Selected shop does not sell all required weapons."
-            )
-            return
-
-        vial = shop_inventory["Vial of Holy Water"]
-        spray = shop_inventory["Garlic Spray"]
-        stake = shop_inventory["Wooden Stake"]
-
-        vial_cost = vial.prices[self.charisma_level]
-        spray_cost = spray.prices[self.charisma_level]
-        stake_cost = stake.prices[self.charisma_level]
+        vial_cost = self.discount_magic_prices["Vial of Holy Water"][self.charisma_level]
+        spray_cost = self.discount_magic_prices["Garlic Spray"][self.charisma_level]
+        stake_cost = self.discount_magic_prices["Wooden Stake"][self.charisma_level]
 
         remaining_bp = target_bp
         total_cost = 0
         total_hits = 0
-        output = []
+        results = []
 
-        # ---- Vials (BP > 1350) ----
+        # Vials until BP <= 1350
         vial_hits = 0
         while remaining_bp > 1350:
             damage = math.floor(remaining_bp * 0.6)
@@ -8205,141 +7250,81 @@ class DamageCalculator(QDialog):
             vial_hits += 1
             total_cost += vial_cost
             total_hits += 1
-
         if vial_hits:
-            output.append(
-                f"{shop_name} - Vial of Holy Water - Qty: {vial_hits} - "
-                f"Total Cost: {vial_hits * vial_cost:,} coins"
-            )
+            results.append(f"Discount Magic - Vial of Holy Water - Qty: {vial_hits} - Total Cost: {vial_hits * vial_cost:,} coins")
 
-        # ---- Sprays (BP > 200) ----
+        # Sprays until BP <= 200
         spray_hits = 0
         while remaining_bp > 200:
             remaining_bp -= 75
             spray_hits += 1
             total_cost += spray_cost
             total_hits += 1
-
         if spray_hits:
-            output.append(
-                f"{shop_name} - Garlic Spray - Qty: {spray_hits} - "
-                f"Total Cost: {spray_hits * spray_cost:,} coins"
-            )
+            results.append(f"Discount Magic - Garlic Spray - Qty: {spray_hits} - Total Cost: {spray_hits * spray_cost:,} coins")
 
-        # ---- Stake (BP ≤ 200) ----
+        # Stake if BP <= 200
         if 0 < remaining_bp <= 200:
             total_cost += stake_cost
             total_hits += 1
-            output.append(
-                f"{shop_name} - Wooden Stake - Qty: 1 - "
-                f"Total Cost: {stake_cost:,} coins"
-            )
+            results.append(f"Discount Magic - Wooden Stake - Qty: 1 - Total Cost: {stake_cost:,} coins")
+            remaining_bp = 0
 
-        output.append(
-            f"Totals: Hits: {total_hits} Coins: {total_cost:,}"
-        )
-
-        self.result_display.setText("\n".join(output))
-        self.total_cost_label.setText(
-            f"Total Cost: {total_cost:,} Coins"
-        )
-
-        logging.debug(
-            "Damage calc: BP=%d shop=%s hits=%d cost=%d",
-            target_bp,
-            shop_name,
-            total_hits,
-            total_cost,
-        )
+        # Summary
+        results.append(f"Totals: Hits: {total_hits} Coins: {total_cost:,}")
+        self.result_display.setText("\n".join(results))
+        self.total_cost_label.setText(f"Total Cost: {total_cost:,} Coins")
+        logging.debug(f"Calculated for BP {target_bp}: {total_hits} hits, {total_cost} coins")
 
 # -----------------------
 # Powers Reference Tool
 # -----------------------
 
 class PowersDialog(QDialog):
-    """
-    Dialog displaying power information with destination-setting functionality.
-    """
+    """Dialog displaying power information with destination-setting functionality."""
 
-    def __init__(
-        self,
-        parent: QWidget,
-        character_x: int,
-        character_y: int,
-        db_path: str,
-        color_mappings: dict | None = None,
-    ) -> None:
+    def __init__(self, parent: QWidget, character_x: int, character_y: int, db_path: str, color_mappings: dict | None = None) -> None:
         super().__init__(parent)
-
-        self.parent = cast("MainWindowType", parent)
-        self.character_x = character_x
-        self.character_y = character_y
-        self.db_path = db_path
-        self.color_mappings = color_mappings or {}
-
         self.setWindowTitle("Powers Information")
         self.setWindowIcon(APP_ICON)
         self.setMinimumSize(600, 400)
+        self.parent = parent
+        self.character_x = character_x
+        self.character_y = character_y
+        self.DB_PATH = db_path
+        self.color_mappings = color_mappings or {}
 
-        self._open_db()
-        self._build_ui()
-
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-        self.load_powers()
-        self._load_guild_move_time()
-        self._start_timer()
-
-        logging.debug(
-            "PowersDialog initialized at (%d, %d)",
-            character_x,
-            character_y,
-        )
-
-    # =====================================================
-    # Database
-    # =====================================================
-
-    def _open_db(self) -> None:
         try:
-            self.db_connection = sqlite3.connect(self.db_path)
-        except sqlite3.Error as exc:
-            logging.error("Failed to connect to database: %s", exc)
+            self.db_connection = sqlite3.connect(db_path)
+        except sqlite3.Error as e:
+            logging.error(f"Failed to connect to database: {e}")
             self.db_connection = None
 
-    # =====================================================
-    # UI
-    # =====================================================
-
-    def _build_ui(self) -> None:
+        # Main layout
         main_layout = QHBoxLayout(self)
 
-        # ---- Power list ----
+        # Powers List
         self.powers_list = QListWidget()
         self.powers_list.itemClicked.connect(self.load_power_info)
         main_layout.addWidget(self.powers_list)
 
-        # ---- Details panel ----
+        # Details Panel
         self.details_panel = QVBoxLayout()
 
+        # --- Centered Guild Move Timer ---
         self.guild_countdown_label = QLabel("Guilds move time unknown.")
-        self.guild_countdown_label.setAlignment(Qt.AlignHCenter)
-        self.guild_countdown_label.setStyleSheet(
-            "font-size: 9pt; color: gray; margin-bottom: 4px;"
-        )
+        self.guild_countdown_label.setStyleSheet("font-size: 9pt; color: gray; margin-bottom: 4px;")
+        self.guild_countdown_label.setAlignment(Qt.AlignHCenter | Qt.AlignVCenter)
         self.details_panel.addWidget(self.guild_countdown_label)
 
-        self.power_name_label = self._create_labeled_field("Power")
-        self.guild_label = self._create_labeled_field("Guild")
-        self.cost_label = self._create_labeled_field("Cost")
-        self.quest_info_text = self._create_labeled_field(
-            "Quest Info", QTextEdit
-        )
-        self.skill_info_text = self._create_labeled_field(
-            "Skill Info", QTextEdit
-        )
+        # --- Power Info Fields ---
+        self.power_name_label: QLabel = self._create_labeled_field("Power")
+        self.guild_label: QLabel = self._create_labeled_field("Guild")
+        self.cost_label: QLabel = self._create_labeled_field("Cost")
+        self.quest_info_text: QTextEdit = self._create_labeled_field("Quest Info", QTextEdit)
+        self.skill_info_text: QTextEdit = self._create_labeled_field("Skill Info", QTextEdit)
 
+        # --- Destination Button ---
         self.set_destination_button = QPushButton("Set Destination")
         self.set_destination_button.setEnabled(False)
         self.set_destination_button.clicked.connect(self.set_destination)
@@ -8348,13 +7333,23 @@ class PowersDialog(QDialog):
         main_layout.addLayout(self.details_panel)
         self.setLayout(main_layout)
 
+        # Apply theme
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
+
+        # Load powers and initialize timer
+        if self.db_connection:
+            self.load_powers()
+        self.load_guild_move_time()
+        self.guild_timer = QTimer(self)
+        self.guild_timer.timeout.connect(self.update_guild_countdown)
+        self.guild_timer.start(1000)
+        logging.debug(f"PowersDialog initialized at ({character_x}, {character_y})")
+
     T = TypeVar("T", QLabel, QTextEdit)
 
-    def _create_labeled_field(
-        self,
-        label_text: str,
-        widget_type: Type[T] = QLabel,
-    ) -> T:
+    def _create_labeled_field(self, label_text: str, widget_type: Type[T] = QLabel) -> T:
+        """Create a labeled field with a widget."""
         label = QLabel(f"<b>{label_text}:</b>", self)
         widget = widget_type(self)
         if isinstance(widget, QTextEdit):
@@ -8363,528 +7358,318 @@ class PowersDialog(QDialog):
         self.details_panel.addWidget(widget)
         return widget
 
-    # =====================================================
-    # Power Loading
-    # =====================================================
-
     def load_powers(self) -> None:
-        if not self.db_connection:
-            return
-
+        """Load powers from the database into the list."""
         try:
-            cursor = self.db_connection.cursor()
-            cursor.execute(
-                "SELECT name FROM powers ORDER BY name ASC"
-            )
-            for (name,) in cursor.fetchall():
-                self.powers_list.addItem(name)
-            logging.debug(
-                "Loaded %d powers",
-                self.powers_list.count(),
-            )
-        except sqlite3.Error as exc:
-            logging.error("Failed to load powers: %s", exc)
-            QMessageBox.critical(
-                self,
-                "Database Error",
-                "Failed to load powers",
-            )
+            with self.db_connection:
+                cursor = self.db_connection.cursor()
+                cursor.execute("SELECT name FROM powers ORDER BY name ASC")
+                for name, in cursor.fetchall():
+                    self.powers_list.addItem(name)
+            logging.debug(f"Loaded {self.powers_list.count()} powers")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load powers: {e}")
+            QMessageBox.critical(self, "Database Error", "Failed to load powers")
 
     def load_power_info(self, item: QListWidgetItem) -> None:
+        """Display details for the selected power."""
         power_name = item.text()
-
         try:
-            cursor = self.db_connection.cursor()
-            cursor.execute(
-                """
-                SELECT name, guild, cost, quest_info, skill_info
-                FROM powers
-                WHERE name = ?
-                """,
-                (power_name,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                raise ValueError("No power details")
+            with self.db_connection:
+                cursor = self.db_connection.cursor()
+                cursor.execute(
+                    "SELECT name, guild, cost, quest_info, skill_info FROM powers WHERE name = ?",
+                    (power_name,)
+                )
+                details = cursor.fetchone()
+                if not details:
+                    raise ValueError(f"No details for {power_name}")
 
-            name, guild, cost, quest, skill = row
+                name, guild, cost, quest_info, skill_info = details
+                self.power_name_label.setText(f"<b>Power:</b> {name}")
+                self.guild_label.setText(f"<b>Guild:</b> {guild or 'Unknown'}")
+                self.cost_label.setText(f"<b>Cost:</b> {cost or 'Unknown'} coins")
+                self.quest_info_text.setPlainText(quest_info or "None")
+                self.skill_info_text.setPlainText(skill_info or "None")
 
-            self.power_name_label.setText(f"<b>Power:</b> {name}")
-            self.guild_label.setText(
-                f"<b>Guild:</b> {guild or 'Unknown'}"
-            )
-            self.cost_label.setText(
-                f"<b>Cost:</b> {cost or 'Unknown'} coins"
-            )
-            self.quest_info_text.setPlainText(quest or "None")
-            self.skill_info_text.setPlainText(skill or "None")
-
-            self._resolve_destination_for_power(name, guild)
-
-        except (sqlite3.Error, ValueError) as exc:
-            logging.error(
-                "Failed to load power info for %s: %s",
-                power_name,
-                exc,
-            )
-            QMessageBox.warning(
-                self,
-                "Error",
-                f"Failed to load details for '{power_name}'",
-            )
-
-    # =====================================================
-    # Destination Resolution
-    # =====================================================
-
-    def _resolve_destination_for_power(
-        self,
-        power_name: str,
-        guild: str | None,
-    ) -> None:
-        if power_name == "Battle Cloak":
-            self._enable_nearest_peacekeeper_mission()
-            return
-
-        if not guild:
-            self.set_destination_button.setEnabled(False)
-            return
-
-        cursor = self.db_connection.cursor()
-        cursor.execute(
-            """
-            SELECT c.Coordinate, r.Coordinate
-            FROM guilds g
-            JOIN columns c ON g.Column = c.Name
-            JOIN rows r ON g.Row = r.Name
-            WHERE g.Name = ?
-            """,
-            (guild,),
-        )
-
-        if row := cursor.fetchone():
-            self._configure_destination_button(guild, row[0], row[1])
-        else:
-            self.set_destination_button.setEnabled(False)
+                if power_name == "Battle Cloak":
+                    self._enable_nearest_peacekeeper_mission()
+                elif guild:
+                    cursor.execute("""
+                        SELECT c.Coordinate, r.Coordinate
+                        FROM guilds g
+                        JOIN columns c ON g.Column = c.Name
+                        JOIN rows r ON g.Row = r.Name
+                        WHERE g.Name = ?
+                    """, (guild,))
+                    if loc := cursor.fetchone():
+                        self._configure_destination_button(guild, loc[0], loc[1])
+                    else:
+                        self.set_destination_button.setEnabled(False)
+                else:
+                    self.set_destination_button.setEnabled(False)
+            logging.debug(f"Loaded info for {power_name}")
+        except (sqlite3.Error, ValueError) as e:
+            logging.error(f"Failed to load power info for {power_name}: {e}")
+            QMessageBox.warning(self, "Error", f"Failed to load details for '{power_name}'")
 
     def _enable_nearest_peacekeeper_mission(self) -> None:
+        """Enable destination button with the nearest Peacekeeper's Mission."""
         try:
-            cursor = self.db_connection.cursor()
-            cursor.execute(
-                """
-                SELECT c.Coordinate, r.Coordinate
-                FROM columns c
-                JOIN rows r
-                WHERE (c.Name = 'Emerald' AND r.Name IN ('67th', '33rd'))
-                   OR (c.Name = 'Unicorn' AND r.Name = '33rd')
-                """
-            )
-            missions = cursor.fetchall()
-
+            with self.db_connection:
+                cursor = self.db_connection.cursor()
+                cursor.execute(
+                    "SELECT c.`Coordinate`, r.`Coordinate` FROM `columns` c JOIN `rows` r "
+                    "WHERE (c.`Name` = 'Emerald' AND r.`Name` IN ('67th', '33rd')) "
+                    "OR (c.`Name` = 'Unicorn' AND r.`Name` = '33rd')"
+                )
+                missions = cursor.fetchall()
             if missions:
-                closest = min(
-                    missions,
-                    key=lambda m: max(
-                        abs(m[0] - self.character_x),
-                        abs(m[1] - self.character_y),
-                    ),
-                )
-                self._configure_destination_button(
-                    "Peacekeeper's Mission",
-                    closest[0],
-                    closest[1],
-                )
+                closest = min(missions, key=lambda m: max(abs(m[0] - self.character_x), abs(m[1] - self.character_y)))
+                self._configure_destination_button("Peacekeeper's Mission", closest[0], closest[1])
             else:
                 self.set_destination_button.setEnabled(False)
+                logging.debug("No Peacekeeper's Missions found")
+        except sqlite3.Error as e:
+            logging.error(f"Failed to find Peacekeeper's Mission: {e}")
 
-        except sqlite3.Error as exc:
-            logging.error(
-                "Failed to find Peacekeeper's Mission: %s",
-                exc,
-            )
-            self.set_destination_button.setEnabled(False)
-
-    def _configure_destination_button(
-        self,
-        guild: str,
-        col: int | str | None,
-        row: int | str | None,
-    ) -> None:
+    def _configure_destination_button(self, guild: str, col: str | int | None, row: str | int | None) -> None:
+        """Configure the destination button with guild location."""
         try:
-            col_val = int(col)
-            row_val = int(row)
-        except (TypeError, ValueError):
+            col_val = int(col) if col not in ("NA", None) else None
+            row_val = int(row) if row not in ("NA", None) else None
+        except (ValueError, TypeError):
+            logging.warning(f"Invalid col/row for destination: col={col}, row={row}")
             self.set_destination_button.setEnabled(False)
             return
 
-        self.set_destination_button.setEnabled(True)
-        self.set_destination_button.setProperty("guild", guild)
-        self.set_destination_button.setProperty("Column", col_val)
-        self.set_destination_button.setProperty("Row", row_val)
-
-    # =====================================================
-    # Destination Action
-    # =====================================================
+        enabled = col_val is not None and row_val is not None
+        self.set_destination_button.setEnabled(enabled)
+        if enabled:
+            self.set_destination_button.setProperty("guild", guild)
+            self.set_destination_button.setProperty("Column", col_val)
+            self.set_destination_button.setProperty("Row", row_val)
+        logging.debug(f"Destination button {'enabled' if enabled else 'disabled'} for {guild} at ({col}, {row})")
 
     def set_destination(self) -> None:
+        """Set the destination in the database and update the minimap."""
         guild = self.set_destination_button.property("guild")
         col = self.set_destination_button.property("Column")
         row = self.set_destination_button.property("Row")
 
-        if not guild or not self.parent.selected_character:
-            QMessageBox.warning(
-                self,
-                "Error",
-                "No character selected or invalid destination",
-            )
+        if not self.parent:
+            logging.warning("No parent window set; cannot update destination.")
             return
 
-        character_id = self.parent.selected_character["id"]
+        parent = cast("MainWindowType", self.parent)
 
+        if not guild or not parent.selected_character:
+            logging.warning("Missing guild or character for destination")
+            QMessageBox.warning(self, "Error", "No character selected or invalid guild")
+            return
+
+        character_id = parent.selected_character['id']
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO destinations
-                    (character_id, col, row, timestamp)
-                    VALUES (?, ?, ?, datetime('now'))
-                    """,
-                    (character_id, col, row),
+                    "INSERT OR REPLACE INTO destinations (character_id, col, row, timestamp) "
+                    "VALUES (?, ?, ?, datetime('now'))",
+                    (character_id, col, row)
                 )
                 conn.commit()
+            parent.destination = (col, row)
+            parent.update_minimap()
+            logging.info(f"Destination set for {character_id} to {guild} at ({col}, {row})")
+            # noinspection PyUnresolvedReferences
+            QMessageBox.information(self, "Success", f"Destination set to {guild} at ({col}, {row})", QMessageBox.Ok)
+        except sqlite3.Error as e:
+            logging.error(f"Failed to set destination: {e}")
+            QMessageBox.critical(self, "Database Error", "Failed to set destination")
 
-            self.parent.destination = (col, row)
-            self.parent.update_minimap()
+    def closeEvent(self, event) -> None:
+        """Close the database connection on dialog close."""
+        if self.db_connection:
+            try:
+                self.db_connection.close()
+                logging.debug("Database connection closed")
+            except sqlite3.Error as e:
+                logging.error(f"Failed to close database: {e}")
+        event.accept()
 
-            QMessageBox.information(
-                self,
-                "Success",
-                f"Destination set to {guild} at ({col}, {row})",
-            )
-
-        except sqlite3.Error as exc:
-            logging.error("Failed to set destination: %s", exc)
-            QMessageBox.critical(
-                self,
-                "Database Error",
-                "Failed to set destination",
-            )
-
-    # =====================================================
-    # Guild Timer
-    # =====================================================
-
-    def _start_timer(self) -> None:
-        self.guild_timer = QTimer(self)
-        self.guild_timer.timeout.connect(self.update_guild_countdown)
-        self.guild_timer.start(1000)
-
-    def _load_guild_move_time(self) -> None:
+    def load_guild_move_time(self):
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.DB_PATH) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    """
-                    SELECT next_update
-                    FROM guilds
-                    WHERE next_update IS NOT NULL
-                    ORDER BY next_update ASC
-                    LIMIT 1
-                    """
+                    "SELECT next_update FROM guilds WHERE next_update IS NOT NULL ORDER BY next_update ASC LIMIT 1"
                 )
-                row = cursor.fetchone()
-                if row:
-                    self.next_guild_update = datetime.strptime(
-                        row[0], "%Y-%m-%d %H:%M:%S"
-                    ).replace(tzinfo=timezone.utc)
+                result = cursor.fetchone()
+                if result:
+                    self.next_guild_update = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
                 else:
                     self.next_guild_update = None
-        except Exception:
+        except Exception as e:
+            logging.error(f"Failed to load guild move time: {e}")
             self.next_guild_update = None
 
-    def update_guild_countdown(self) -> None:
+    def update_guild_countdown(self):
         now = datetime.now(timezone.utc)
         if self.next_guild_update:
-            remaining = max(
-                timedelta(0), self.next_guild_update - now
-            )
+            remaining = max(timedelta(0), self.next_guild_update - now)
             days = remaining.days
             hours, rem = divmod(remaining.seconds, 3600)
             minutes, seconds = divmod(rem, 60)
             text = (
-                f"Guilds move at "
-                f"{self.next_guild_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
+                f"Guilds move at {self.next_guild_update.strftime('%Y-%m-%d %H:%M:%S UTC')} "
                 f"or in {days}d {hours}h {minutes}m {seconds}s"
             )
         else:
             text = "Guilds move time unknown."
-
         self.guild_countdown_label.setText(text)
-
-    # =====================================================
-    # Cleanup
-    # =====================================================
-
-    def closeEvent(self, event) -> None:
-        if self.db_connection:
-            try:
-                self.db_connection.close()
-            except sqlite3.Error:
-                pass
-        event.accept()
 
 # -----------------------
 # Log Viewer
 # -----------------------
 
 class LogViewer(QDialog):
-    """Dialog window to view and manage application log files."""
+    """A dialog window to view and optionally send application logs."""
 
-    LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
-
-    def __init__(
-        self,
-        parent: QWidget,
-        log_directory: str,
-        color_mappings: dict | None = None,
-    ):
+    def __init__(self, parent: QWidget, log_directory: str, color_mappings: dict | None = None):
         super().__init__(parent)
-
         self.setWindowTitle("Log Viewer")
         self.setWindowIcon(APP_ICON)
         self.resize(900, 600)
 
         self.color_mappings = color_mappings or {}
-        self.log_directory = log_directory
-        self.current_log_lines: list[str] = []
+        self.log_directory = LOG_DIR
+        self.current_log_lines = []
 
-        self._build_ui()
-        self._load_log_list()
-
-        if self.color_mappings:
-            apply_theme_to_widget(self, self.color_mappings)
-
-    # =====================================================
-    # UI
-    # =====================================================
-
-    def _build_ui(self) -> None:
+        # Layouts
         main_layout = QHBoxLayout(self)
-
-        # ---- Left: file list ----
         left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel("Available Logs"))
+        right_layout = QVBoxLayout()
 
+        # File List
         self.log_list = QListWidget()
         self.log_list.itemClicked.connect(self.load_log)
+        left_layout.addWidget(QLabel("Available Logs"))
         left_layout.addWidget(self.log_list)
 
-        # ---- Right: log content ----
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(QLabel("Log Contents"))
+        # Populate Log Files
+        for file in sorted(os.listdir(log_directory), reverse=True):
+            if file.endswith(".log"):
+                self.log_list.addItem(file)
 
+        # Log Viewer Text Area
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        right_layout.addWidget(self.log_text)
 
-        # ---- Filters ----
-        self.level_checkboxes: dict[str, QCheckBox] = {}
-        filter_box = QGroupBox("Log Level Filters")
-        filter_layout = QHBoxLayout()
-
-        for level in self.LOG_LEVELS:
-            cb = QCheckBox(level)
+        # Filter checkboxes
+        self.levels = {
+            "DEBUG": QCheckBox("DEBUG"),
+            "INFO": QCheckBox("INFO"),
+            "WARNING": QCheckBox("WARNING"),
+            "ERROR": QCheckBox("ERROR"),
+            "CRITICAL": QCheckBox("CRITICAL")
+        }
+        for cb in self.levels.values():
             cb.setChecked(True)
             cb.stateChanged.connect(self.apply_filter)
-            self.level_checkboxes[level] = cb
+
+        filter_box = QGroupBox("Log Level Filters")
+        filter_layout = QHBoxLayout()
+        for cb in self.levels.values():
             filter_layout.addWidget(cb)
-
         filter_box.setLayout(filter_layout)
-        right_layout.addWidget(filter_box)
 
-        # ---- Buttons ----
-        button_layout = QHBoxLayout()
-
+        # Buttons
         delete_button = QPushButton("Delete Log")
         delete_button.clicked.connect(self.delete_log)
-        button_layout.addWidget(delete_button)
-
-        button_layout.addStretch(1)
 
         close_button = QPushButton("Close")
         close_button.clicked.connect(self.close)
+
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(delete_button)
+        button_layout.addStretch(1)
         button_layout.addWidget(close_button)
 
+        # Assemble Right Layout
+        right_layout.addWidget(QLabel("Log Contents"))
+        right_layout.addWidget(self.log_text)
+        right_layout.addWidget(filter_box)
         right_layout.addLayout(button_layout)
 
-        # ---- Assemble ----
+        # Final Layout
         main_layout.addLayout(left_layout, 2)
         main_layout.addLayout(right_layout, 5)
 
-    # =====================================================
-    # Log File Management
-    # =====================================================
+        # Apply theme if provided
+        if self.color_mappings:
+            apply_theme_to_widget(self, self.color_mappings)
 
-    def _load_log_list(self) -> None:
-        self.log_list.clear()
-
-        if not os.path.isdir(self.log_directory):
-            logging.warning(
-                "Log directory does not exist: %s",
-                self.log_directory,
-            )
-            return
-
-        for filename in sorted(
-            os.listdir(self.log_directory),
-            reverse=True,
-        ):
-            if filename.endswith(".log"):
-                self.log_list.addItem(filename)
-
-    def load_log(self, item: QListWidgetItem) -> None:
-        file_path = os.path.join(
-            self.log_directory,
-            item.text(),
-        )
-
+    def load_log(self, item: QListWidgetItem):
+        file_path = os.path.join(self.log_directory, item.text())
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 self.current_log_lines = f.readlines()
             self.apply_filter()
-        except Exception as exc:
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Could not open log file:\n{exc}",
-            )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Could not open file: {e}")
 
-    # =====================================================
-    # Filtering
-    # =====================================================
-
-    def apply_filter(self) -> None:
-        if not self.current_log_lines:
-            self.log_text.clear()
-            return
-
-        enabled_levels = {
-            level
-            for level, cb in self.level_checkboxes.items()
-            if cb.isChecked()
-        }
-
-        filtered_lines = [
-            line
-            for line in self.current_log_lines
-            if self._line_matches_levels(line, enabled_levels)
+    def apply_filter(self):
+        enabled_levels = [level for level, cb in self.levels.items() if cb.isChecked()]
+        filtered = [
+            line for line in self.current_log_lines
+            if any(level in line for level in enabled_levels)
         ]
+        self.log_text.setPlainText("".join(filtered))
 
-        self.log_text.setPlainText("".join(filtered_lines))
-
-    @staticmethod
-    def _line_matches_levels(
-        line: str,
-        enabled_levels: set[str],
-    ) -> bool:
-        # Assumes log lines include level tokens (e.g. "[INFO]")
-        return any(
-            f"[{level}]" in line
-            for level in enabled_levels
-        )
-
-    # =====================================================
-    # Deletion / Clearing
-    # =====================================================
-
-    def delete_log(self) -> None:
-        item = self.log_list.currentItem()
-        if not item:
-            QMessageBox.warning(
-                self,
-                "No File Selected",
-                "Please select a log file first.",
-            )
+    def delete_log(self):
+        selected_item = self.log_list.currentItem()
+        if not selected_item:
+            QMessageBox.warning(self, "No File Selected", "Please select a log file first.")
             return
 
-        filename = item.text()
-        file_path = os.path.join(
-            self.log_directory,
-            filename,
-        )
+        filename = selected_item.text()
+        file_path = os.path.join(self.log_directory, filename)
 
         confirm = QMessageBox.warning(
-            self,
-            "WARNING!",
-            "Are you sure you want to delete this log file?\n\n"
-            "This cannot be undone.",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No,
+            self, "WARNING!",
+            "Are you sure you want to delete this log file?\n\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
 
         if confirm != QMessageBox.StandardButton.Yes:
             return
 
-        if self._try_delete_file(file_path):
-            self._remove_log_from_ui(item, filename)
-            return
-
-        # Fallback: clear contents if deletion fails
-        if self._try_clear_file(file_path):
-            self.current_log_lines = []
+        try:
+            os.remove(file_path)
+            self.log_list.takeItem(self.log_list.currentRow())
             self.log_text.clear()
-            QMessageBox.information(
-                self,
-                "Cleared Instead",
-                f"'{filename}' could not be deleted, "
-                "so its contents were cleared.",
-            )
-            return
+            self.current_log_lines = []
+            # noinspection PyUnresolvedReferences
+            QMessageBox.information(self, "Deleted", f"Successfully deleted: {filename}", QMessageBox.Ok)
 
-        QMessageBox.critical(
-            self,
-            "Error",
-            f"Failed to delete or clear '{filename}'.",
-        )
+        except Exception as delete_error:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.truncate(0)
+                self.current_log_lines = []
+                self.log_text.clear()
+                # noinspection PyUnresolvedReferences
+                QMessageBox.information(
+                    self, "Cleared Instead",
+                    f"Could not delete '{filename}' (in use), so its contents were cleared instead.",QMessageBox.Ok
+                )
+            except Exception as clear_error:
+                QMessageBox.critical(
+                    self, "Error",
+                    f"Failed to delete or clear the log file:\n{delete_error}\n\nAlso failed to clear contents:\n{clear_error}"
+                )
 
-    @staticmethod
-    def _try_delete_file(path: str) -> bool:
-        try:
-            os.remove(path)
-            return True
-        except Exception:
-            return False
-
-    @staticmethod
-    def _try_clear_file(path: str) -> bool:
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.truncate(0)
-            return True
-        except Exception:
-            return False
-
-    def _remove_log_from_ui(
-        self,
-        item: QListWidgetItem,
-        filename: str,
-    ) -> None:
-        self.log_list.takeItem(self.log_list.row(item))
-        self.log_text.clear()
-        self.current_log_lines = []
-        QMessageBox.information(
-            self,
-            "Deleted",
-            f"Successfully deleted: {filename}",
-        )
-
-    # =====================================================
-    # Utilities
-    # =====================================================
-
-    @staticmethod
-    def copy_log_file_to_clipboard(file_path: str) -> None:
+    def copy_log_file_to_clipboard(self, file_path: str):
         mime_data = QMimeData()
         mime_data.setUrls([QUrl.fromLocalFile(file_path)])
         QApplication.clipboard().setMimeData(mime_data)
@@ -8894,285 +7679,154 @@ class LogViewer(QDialog):
 # -----------------------
 
 class DiscordServerDialog(QDialog):
-    """
-    Read-only dialog listing community Discord servers.
-
-    Each entry opens the server invite link in the default browser.
-    """
-
-    def __init__(
-        self,
-        parent: QWidget | None = None,
-        db_path: str = DB_PATH,
-        color_mappings: dict | None = None,
-    ):
+    def __init__(self, parent=None, color_mappings: dict | None = None):
         super().__init__(parent)
-
-        self.db_path = db_path
-        self.color_mappings = color_mappings or {}
-
         self.setWindowTitle("Community Discord Servers")
         self.setMinimumSize(400, 300)
-        self.setWindowIcon(APP_ICON)
+        self.color_mappings = color_mappings or {}
 
-        self._build_ui()
-        self._load_servers()
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name, invite_link FROM discord_servers")
+                servers = cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Failed to load Discord servers: {e}")
+            QMessageBox.critical(self, "Database Error", "Unable to load server list.")
+            servers = []
+
+        for name, link in servers:
+            btn = QPushButton(name)
+            btn.clicked.connect(lambda _, url=link: webbrowser.open(url))
+            layout.addWidget(btn)
 
         if self.color_mappings:
             apply_theme_to_widget(self, self.color_mappings)
-
-    # =====================================================
-    # UI
-    # =====================================================
-
-    def _build_ui(self) -> None:
-        self.layout = QVBoxLayout(self)
-
-        self.info_label = QLabel(
-            "Click a server name to open its Discord invite link."
-        )
-        self.layout.addWidget(self.info_label)
-
-        self.button_container = QVBoxLayout()
-        self.layout.addLayout(self.button_container)
-
-        self.layout.addStretch(1)
-
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(self.close)
-        self.layout.addWidget(close_btn)
-
-    # =====================================================
-    # Data Loading
-    # =====================================================
-
-    def _load_servers(self) -> None:
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT name, invite_link FROM discord_servers ORDER BY name ASC"
-                )
-                servers = cursor.fetchall()
-
-        except sqlite3.Error as exc:
-            logging.error(
-                "Failed to load Discord servers: %s",
-                exc,
-            )
-            QMessageBox.critical(
-                self,
-                "Database Error",
-                "Unable to load Discord server list.",
-            )
-            servers = []
-
-        if not servers:
-            self._show_empty_state()
-            return
-
-        for name, link in servers:
-            self._add_server_button(name, link)
-
-    # =====================================================
-    # Helpers
-    # =====================================================
-
-    def _add_server_button(self, name: str, invite_link: str) -> None:
-        btn = QPushButton(name)
-        btn.setToolTip(invite_link)
-        btn.clicked.connect(
-            lambda _, url=invite_link: self._open_link(url)
-        )
-        self.button_container.addWidget(btn)
-
-    @staticmethod
-    def _open_link(url: str) -> None:
-        try:
-            webbrowser.open(url)
-        except Exception as exc:
-            logging.error("Failed to open URL %s: %s", url, exc)
-
-    def _show_empty_state(self) -> None:
-        label = QLabel(
-            "No Discord servers are currently configured."
-        )
-        label.setAlignment(Qt.AlignHCenter)
-        label.setStyleSheet("color: gray;")
-        self.button_container.addWidget(label)
 
 # -----------------------
 # Compass Overlay
 # -----------------------
 
-from dataclasses import dataclass
-
-
-@dataclass
-class CompassRoute:
-    label: str
-    ap_cost: int
-    description: str
-    path: list
-    bg_color: PySide6.QtGui.QColor
-    text_color: PySide6.QtGui.QColor
-
-
 class CompassOverlay(QDialog):
     """
-    Floating compass window showing Direct and Transit routes,
-    sorted by AP cost.
+    A floating compass window that shows both Direct and Transit routes to a destination,
+    sorted by AP cost. Color-coded: Green = Direct, Purple = Transit.
     """
 
     def __init__(self, direct_route_info, transit_route_info, parent=None):
         """
         Args:
-            direct_route_info: (ap_cost, description, path)
-            transit_route_info: (ap_cost, description, path)
+            direct_route_info (tuple): (int ap_cost, str description)
+            transit_route_info (tuple): (int ap_cost, str description)
         """
         super().__init__(parent)
-
         self.setWindowTitle("Compass Routes")
         self.setFixedSize(200, 150)
-        self.setWindowFlags(
-            self.windowFlags() | Qt.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
 
-        self.routes: list[CompassRoute] = []
-        self._build_routes(direct_route_info, transit_route_info)
-        self._build_ui()
+        self.direct_route_info = direct_route_info
+        self.transit_route_info = transit_route_info
 
-    # =====================================================
-    # Route Construction
-    # =====================================================
+        self._init_ui()
 
-    def _build_routes(self, direct, transit) -> None:
-        self.routes = [
-            CompassRoute(
-                label="Direct Route",
-                ap_cost=direct[0],
-                description=direct[1],
-                path=direct[2],
-                bg_color=PySide6.QtGui.QColor("green"),
-                text_color=PySide6.QtGui.QColor("white"),
-            ),
-            CompassRoute(
-                label="Transit Route",
-                ap_cost=transit[0],
-                description=transit[1],
-                path=transit[2],
-                bg_color=PySide6.QtGui.QColor(128, 0, 128),
-                text_color=PySide6.QtGui.QColor("white"),
-            ),
-        ]
-
-        self.routes.sort(key=lambda r: r.ap_cost)
-
-    # =====================================================
-    # UI
-    # =====================================================
-
-    def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
+    def _init_ui(self):
+        layout = QVBoxLayout()
 
         header = QLabel("Shortest Available Route:")
-        header.setStyleSheet(
-            "font-weight: bold; font-size: 14px;"
-        )
+        header.setStyleSheet("font-weight: bold; font-size: 14px;")
         layout.addWidget(header)
 
         self.route_list = QListWidget()
         self.route_list.setFrameShape(QFrame.NoFrame)
+
+        # Track route data
+        self.route_mapping = {}
+
+        routes = [
+            ("Direct Route", self.direct_route_info[0], self.direct_route_info[1], PySide6.QtGui.QColor("green"), PySide6.QtGui.QColor("white")),
+            ("Transit Route", self.transit_route_info[0], self.transit_route_info[1], PySide6.QtGui.QColor(128, 0, 128), PySide6.QtGui.QColor("white")),  # dark purple
+        ]
+        routes.sort(key=lambda r: r[1])  # sort by AP cost
+
+        for label, cost, desc, bg_color, text_color in routes:
+            item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
+            item.setBackground(bg_color)
+            item.setForeground(text_color)
+            self.route_list.addItem(item)
+            path = self.direct_route_info[2] if label == "Direct Route" else self.transit_route_info[2]
+            self.route_mapping[label] = (cost, desc, path)
+
+        self.route_list.itemClicked.connect(self.route_selected)  # ✅ Hook click signal
         layout.addWidget(self.route_list)
 
-        self._populate_route_list()
-
-        self.route_list.itemClicked.connect(
-            self._route_selected
-        )
-
         btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.close)
+        btn_layout.addStretch()
         btn_layout.addWidget(close_btn)
-
         layout.addLayout(btn_layout)
 
-    def _populate_route_list(self) -> None:
-        self.route_list.clear()
+        self.setLayout(layout)
 
-        for route in self.routes:
-            item = QListWidgetItem(
-                f"{route.label} — {route.ap_cost} AP\n{route.description}"
-            )
-            item.setBackground(route.bg_color)
-            item.setForeground(route.text_color)
-            item.setData(Qt.UserRole, route)
+    def refresh(self, direct_route_info, transit_route_info):
+        """
+        Update the overlay with new route data.
+        """
+        self.direct_route_info = direct_route_info
+        self.transit_route_info = transit_route_info
+
+        self.route_list.clear()
+        self.route_mapping = {}  # ✅ Reset once outside the loop
+
+        # Unpack only ap + desc, exclude path (3rd element), just like in _init_ui
+        routes = [
+            ("Direct Route", self.direct_route_info[0], self.direct_route_info[1], PySide6.QtGui.QColor("green"), PySide6.QtGui.QColor("white")),
+            ("Transit Route", self.transit_route_info[0], self.transit_route_info[1], PySide6.QtGui.QColor(128, 0, 128), PySide6.QtGui.QColor("white")),
+        ]
+        routes.sort(key=lambda r: r[1])  # Sort by AP
+
+        for label, cost, desc, bg_color, text_color in routes:
+            item = QListWidgetItem(f"{label} — {cost} AP\n{desc}")
+            item.setBackground(bg_color)
+            item.setForeground(text_color)
             self.route_list.addItem(item)
 
-    # =====================================================
-    # Refresh
-    # =====================================================
+            # ✅ Preserve path too for selection support
+            path = self.direct_route_info[2] if label == "Direct Route" else self.transit_route_info[2]
+            self.route_mapping[label] = (cost, desc, path)
 
-    def refresh(self, direct_route_info, transit_route_info) -> None:
-        """
-        Update overlay with new route data.
-        """
-        self._build_routes(
-            direct_route_info,
-            transit_route_info,
-        )
-        self._populate_route_list()
-
-    # =====================================================
-    # Selection
-    # =====================================================
-
-    def _route_selected(self, item: QListWidgetItem) -> None:
-        route: CompassRoute = item.data(Qt.UserRole)
-
-        if route and self.parent():
-            self.parent().set_compass_display_from_overlay(
-                route.label,
-                (route.ap_cost, route.description, route.path),
-            )
+    def route_selected(self, item):
+        label_text = item.text().split("—")[0].strip()
+        route_info = self.route_mapping.get(label_text)
+        if route_info and self.parent():
+            self.parent().set_compass_display_from_overlay(label_text, route_info)
 
 # -----------------------
 # Main Entry Point
 # -----------------------
 
+# Main Entry Point
+
 def main() -> None:
+    global APP_ICON
     app = QApplication(sys.argv)
+    APP_ICON = PySide6.QtGui.QIcon('./images/favicon.ico')
+    app.setWindowIcon(APP_ICON)
 
-    # Resolve base paths safely (works in dev and packaged builds)
-    base_dir = Path(__file__).resolve().parent
-    images_dir = base_dir / "images"
-
-    app_icon = PySide6.QtGui.QIcon(str(images_dir / "favicon.ico"))
-    app.setWindowIcon(app_icon)
-
-    splash = SplashScreen(str(images_dir / "loading.png"))
+    splash = SplashScreen("images/loading.png")
     splash.show()
     splash.show_message("Starting up...")
 
-    try:
-        main_window = RBCCommunityMap(splash=splash)
-        main_window.show()
-        splash.finish(main_window)
-    except Exception as exc:
-        logging.critical("Fatal startup error", exc_info=exc)
-        splash.close()
-        QMessageBox.critical(
-            None,
-            "Startup Error",
-            "The application failed to start.\n\n"
-            "Please check the log files for details.",
-        )
-        sys.exit(1)
+    # Pass splash into the constructor
+    main_window = RBCCommunityMap(splash=splash)
+
+    main_window.show()
+    splash.finish(main_window)
 
     sys.exit(app.exec())
-
 
 if __name__ == "__main__":
     main()
