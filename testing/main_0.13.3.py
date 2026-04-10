@@ -1703,7 +1703,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (107, "The Ailios Asylum", "Amethyst", "36th"),
             (108, "The Belly of the Whale", "Amethyst", "2nd"),
             (109, "The Calignite", "Eagle", "16th"),
-            (110, "The COVE", "Knowteed", "51st"),
+            (110, "The COVE", "Knotweed", "51st"),
             (111, "The Dragons Lair Club", "Vervain", "39th"),
             (112, "The Eternal Spiral", "Anguish", "69th"),
             (113, "The goatsucker's lair", "Yak", "13th"),
