@@ -22,14 +22,14 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v0.13.2)
+RBC City Map Application (v0.13.3.1)
 =================================
 
 This application provides an interactive mapping and character management tool
 for the browser-based vampire RPG **Vampires! The Dark Alleyway**, set in the
 fictional RavenBlack City.
 
-Version 0.13.2 represents a security and robustness update on v0.13.1.
+Version 0.13.3.1 represents a persistence and database migration update on v0.13.3.
 While still packaged as a single file, upgrades include safer JavaScript login
 injection, initial request timeout handling, and removal of runtime pip
 auto-install behavior (packagers should provide dependencies).
@@ -55,11 +55,11 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v0.13.2:
--------------------
-- Replaced runtime pip auto-install with fail-fast dependency reporting.
-- Introduced initial request timeout handling for external HTTP calls.
-- Hardened JavaScript login injection using safe string construction.
+Updated in v0.13.3.1:
+---------------------
+- Prevents startup defaults from overwriting persisted user settings.
+- Uses versioned database migration for targeted reference-data corrections.
+- Avoids full initial-data reseeding when an existing database already contains seed data.
 
 Modules Used:
 -------------
@@ -129,7 +129,7 @@ REQUIRED_DIRECTORIES = [
     IMAGES_DIR,
 ]
 
-VERSION_NUMBER = "0.13.2"
+VERSION_NUMBER = "0.13.3.1"
 
 # -----------------------
 # Logging Configuration
@@ -652,7 +652,9 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
     cursor = conn.cursor()
     initial_data = [
-        ("REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
+        # Use INSERT OR IGNORE for default settings so persisted user choices
+        # are not overwritten every time the application starts.
+        ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
             ('keybind_config', 1),
             ('css_profile', 'Default'),
             ('log_level', str(DEFAULT_LOG_LEVEL))
@@ -1703,7 +1705,7 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
             (107, "The Ailios Asylum", "Amethyst", "36th"),
             (108, "The Belly of the Whale", "Amethyst", "2nd"),
             (109, "The Calignite", "Eagle", "16th"),
-            (110, "The COVE", "Knowteed", "51st"),
+            (110, "THE COVE", "Knotweed", "51st"),
             (111, "The Dragons Lair Club", "Vervain", "39th"),
             (112, "The Eternal Spiral", "Anguish", "69th"),
             (113, "The goatsucker's lair", "Yak", "13th"),
@@ -1770,6 +1772,7 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
     - v1 -> v2: Fixes custom_css, guilds, and shops tables.
     - v2 -> v3: Adds active_cookie column to characters table.
     - v3 -> v4: Adds last_scraped column to guilds and shops tables.
+    - v4 -> v5: Applies targeted data corrections for seeded reference data.
     """
     cursor = conn.cursor()
     cursor.execute("PRAGMA user_version")
@@ -1922,6 +1925,30 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
             conn.rollback()
             raise
 
+    if version < 5:
+        logging.info("Applying schema migration: v4 → v5 (reference data corrections)")
+
+        try:
+            # Keep this migration targeted so corrected reference records
+            # are updated for existing databases without reseeding everything.
+            cursor.execute(
+                """
+                UPDATE userbuildings
+                SET Name = 'THE COVE',
+                    `Column` = 'Knotweed'
+                WHERE ID = 110
+                """
+            )
+
+            conn.execute("PRAGMA user_version = 5")
+            conn.commit()
+            logging.info("Migration to v5 complete.")
+
+        except sqlite3.Error as e:
+            logging.error(f"Migration v5 failed: {e}")
+            conn.rollback()
+            raise
+
 def initialize_database(db_path: str = DB_PATH) -> bool:
     """
     Initialize the SQLite database with the required schema and data.
@@ -1937,7 +1964,14 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
             conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key support
             create_tables(conn)                       # Fist create missing tables
             migrate_schema(conn)                      # Then migrate schema
-            insert_initial_data(conn)                 # THEN populate defaults
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM `columns` LIMIT 1")
+            has_seed_data = cursor.fetchone() is not None
+
+            if has_seed_data:
+                logging.info("Initial reference data already present; skipping reseed.")
+            else:
+                insert_initial_data(conn)             # Populate first-run defaults/data only
             logging.info(f"Database initialized successfully at {db_path}")
             return True
     except sqlite3.Error as e:
