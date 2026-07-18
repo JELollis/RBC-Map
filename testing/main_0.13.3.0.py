@@ -131,6 +131,9 @@ REQUIRED_DIRECTORIES = [
 
 VERSION_NUMBER = "0.13.3.0"
 
+# Default timeout (seconds) for outbound HTTP calls made on the UI thread.
+HTTP_REQUEST_TIMEOUT = 10
+
 # -----------------------
 # Logging Configuration
 # -----------------------
@@ -2190,7 +2193,7 @@ except sqlite3.Error:
         "Database load failed. Falling back to empty runtime data."
     )
 
-    columns = rows = {}
+    columns, rows = {}, {}
     banks_coordinates = {}
     taverns_coordinates = {}
     transits_coordinates = {}
@@ -2211,6 +2214,26 @@ except sqlite3.Error:
 # -----------------------
 # Webview Cookie Database
 # -----------------------
+
+def redact_cookie_value(name: str, value: str) -> str:
+    """Return a log-safe version of a cookie value.
+
+    The RavenBlack 'ip' cookie is 'username#password'. We never want the
+    password written to the on-disk logs, but the login/logout distinction is
+    important when troubleshooting: a login cookie carries a password portion
+    while a logout cookie does not. So we keep the username and the '#'
+    separator and mask only the password characters:
+
+        login  -> "username#####"   (password present, obfuscated)
+        logout -> "username#"        (no password portion)
+
+    Non-'ip' cookies are returned unchanged.
+    """
+    if name == 'ip' and '#' in value:
+        username, password = value.split('#', 1)
+        return f"{username}#{'#####' if password else ''}"
+    return value
+
 
 def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
     """
@@ -3110,7 +3133,10 @@ class RBCCommunityMap(QMainWindow):
                 existing = cursor.fetchone()
 
                 if existing:
-                    logging.debug(f"Duplicate cookie '{name}' for value '{value}' not saved.")
+                    logging.debug(
+                        f"Duplicate cookie '{name}' for value "
+                        f"'{redact_cookie_value(name, value)}' not saved."
+                    )
                     return
 
                 # Insert new cookie
@@ -5597,7 +5623,7 @@ class RBCCommunityMap(QMainWindow):
         dialog = SetDestinationDialog(self)
 
         # Execute dialog and check for acceptance
-        if dialog.exec() == QDialog.accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             # Load the newly set destination from the database
             self.load_destination()
 
@@ -6035,7 +6061,10 @@ class RBCCommunityMap(QMainWindow):
 
         try:
             # Step 1: Request a one-time token
-            token_response = requests.get("https://lollis-home.ddns.net/api/request-token.py")
+            token_response = requests.get(
+                "https://lollis-home.ddns.net/api/request-token.py",
+                timeout=HTTP_REQUEST_TIMEOUT,
+            )
             token_response.raise_for_status()
             token = token_response.text.strip()
 
@@ -6043,7 +6072,7 @@ class RBCCommunityMap(QMainWindow):
 
             # Step 2: Trigger the update using the token
             trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
-            trigger_response = requests.get(trigger_url)
+            trigger_response = requests.get(trigger_url, timeout=HTTP_REQUEST_TIMEOUT)
             trigger_response.raise_for_status()
 
             logging.info("Bot scrape triggered. Waiting 5 seconds for update to complete...")
@@ -6051,7 +6080,7 @@ class RBCCommunityMap(QMainWindow):
 
             # Step 3: Fetch the updated JSON
             json_url = "https://lollis-home.ddns.net/api/locations.json"
-            json_response = requests.get(json_url)
+            json_response = requests.get(json_url, timeout=HTTP_REQUEST_TIMEOUT)
             json_response.raise_for_status()
             data = json_response.json()
 
