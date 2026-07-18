@@ -134,6 +134,11 @@ VERSION_NUMBER = "0.13.3.0"
 # Default timeout (seconds) for outbound HTTP calls made on the UI thread.
 HTTP_REQUEST_TIMEOUT = 10
 
+# Endpoints for the bot-driven location update flow (token -> trigger -> fetch).
+UPDATE_TOKEN_URL = "https://lollis-home.ddns.net/api/request-token.py"
+UPDATE_TRIGGER_URL = "https://lollis-home.ddns.net/api/trigger-update.py"
+UPDATE_LOCATIONS_URL = "https://lollis-home.ddns.net/api/locations.json"
+
 # -----------------------
 # Logging Configuration
 # -----------------------
@@ -2440,6 +2445,55 @@ configure_qtwebengine_environment()
 # Startup Data Fetch
 # -----------------------
 
+def fetch_location_update(
+    sleep_seconds: float = 10,
+    timeout: int = HTTP_REQUEST_TIMEOUT,
+    log_prefix: str = "",
+) -> dict:
+    """Run the secure token -> trigger -> wait -> fetch flow for locations.json.
+
+    Requests a one-time token, triggers a fresh bot scrape with it, waits for
+    the scrape to land, then fetches and parses the locations JSON. Shared by
+    the startup worker and the manual "Update Data" action so the two paths
+    cannot drift apart.
+
+    Args:
+        sleep_seconds: how long to wait after triggering before fetching.
+        timeout: per-request timeout in seconds.
+        log_prefix: prefix for log lines (e.g. "[Startup] ").
+
+    Returns:
+        The parsed locations JSON as a dict.
+
+    Raises:
+        requests.RequestException: on any network/HTTP error.
+        ValueError: if the token is empty or the JSON body is invalid.
+    """
+    logging.info("%sRequesting secure token...", log_prefix)
+    token_response = requests.get(UPDATE_TOKEN_URL, timeout=timeout)
+    token_response.raise_for_status()
+    token = token_response.text.strip()
+    if not token:
+        raise ValueError("Empty token received from server")
+    logging.info("%sToken received", log_prefix)
+
+    trigger_url = f"{UPDATE_TRIGGER_URL}?token={token}"
+    trigger_response = requests.get(trigger_url, timeout=timeout)
+    trigger_response.raise_for_status()
+    logging.info("%sBot scrape triggered; waiting %ss for data", log_prefix, sleep_seconds)
+
+    # Synchronous delay so the bot has time to finish scraping. The caller's
+    # thread context decides whether this blocks the UI (see update_data).
+    time.sleep(sleep_seconds)
+
+    json_response = requests.get(UPDATE_LOCATIONS_URL, timeout=timeout)
+    json_response.raise_for_status()
+    try:
+        return json_response.json()
+    except ValueError as exc:
+        raise ValueError("Invalid JSON received from locations endpoint") from exc
+
+
 class StartupUpdateWorker(QObject):
     started = Signal()
     finished = Signal(bool, str)  # (ok, message)
@@ -2455,46 +2509,11 @@ class StartupUpdateWorker(QObject):
         self.started.emit()
 
         try:
-            logging.info("[Startup] Requesting secure token...")
-
-            token_response = requests.get(
-                "https://lollis-home.ddns.net/api/request-token.py",
+            data = fetch_location_update(
+                sleep_seconds=10,
                 timeout=self.REQUEST_TIMEOUT,
+                log_prefix="[Startup] ",
             )
-            token_response.raise_for_status()
-
-            token = token_response.text.strip()
-            if not token:
-                raise ValueError("Empty token received from server")
-
-            logging.info("[Startup] Token received successfully")
-
-            trigger_url = (
-                "https://lollis-home.ddns.net/api/trigger-update.py"
-                f"?token={token}"
-            )
-
-            trigger_response = requests.get(
-                trigger_url,
-                timeout=self.REQUEST_TIMEOUT,
-            )
-            trigger_response.raise_for_status()
-
-            logging.info("[Startup] Bot scrape triggered; waiting for data availability")
-
-            # Controlled delay — still synchronous, but explicit
-            time.sleep(10)
-
-            json_response = requests.get(
-                "https://lollis-home.ddns.net/api/locations.json",
-                timeout=self.REQUEST_TIMEOUT,
-            )
-            json_response.raise_for_status()
-
-            try:
-                data = json_response.json()
-            except ValueError as exc:
-                raise ValueError("Invalid JSON received from locations endpoint") from exc
 
             self.app.update_database_with_json(data)
 
@@ -6057,34 +6076,10 @@ class RBCCommunityMap(QMainWindow):
         Securely triggers the bot to update locations.json using the token-based API flow,
         waits for completion, and then updates the local database.
         """
-        logging.info("Requesting secure token...")
-
         try:
-            # Step 1: Request a one-time token
-            token_response = requests.get(
-                "https://lollis-home.ddns.net/api/request-token.py",
-                timeout=HTTP_REQUEST_TIMEOUT,
-            )
-            token_response.raise_for_status()
-            token = token_response.text.strip()
-
-            logging.info(f"Token received: {token}")
-
-            # Step 2: Trigger the update using the token
-            trigger_url = f"https://lollis-home.ddns.net/api/trigger-update.py?token={token}"
-            trigger_response = requests.get(trigger_url, timeout=HTTP_REQUEST_TIMEOUT)
-            trigger_response.raise_for_status()
-
-            logging.info("Bot scrape triggered. Waiting 5 seconds for update to complete...")
-            time.sleep(5)
-
-            # Step 3: Fetch the updated JSON
-            json_url = "https://lollis-home.ddns.net/api/locations.json"
-            json_response = requests.get(json_url, timeout=HTTP_REQUEST_TIMEOUT)
-            json_response.raise_for_status()
-            data = json_response.json()
-
-            # Step 4: Update local DB from JSON
+            # Runs on the UI thread, so the flow's internal delay briefly
+            # blocks the window; kept short (5s) for the manual action.
+            data = fetch_location_update(sleep_seconds=5)
             self.update_database_with_json(data)
 
         except requests.exceptions.RequestException as e:
