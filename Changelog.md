@@ -837,3 +837,32 @@ Version 0.13.0 introduces substantial internal changes while retaining a monolit
 
 > This is the final monolithic version before future potential modularization or mobile/packaged deployment revisions.
 
+---
+## Unreleased (post-0.13.2 hardening)
+
+Security, robustness, and cleanup work carried on the `testing/` development
+build ahead of the next release. Version number to be finalized (0.13.3 vs.
+0.14.0) based on the final scope.
+
+### 🛡️ Security & Robustness
+- 🔒 **Credential redaction in logs**: the `ip` cookie's password portion is now
+  masked (`user#####`) before being written to the on-disk debug logs. The
+  login-vs-logout distinction is preserved for troubleshooting (logout logs as
+  `user#`); cookie storage and login injection are unchanged.
+- ⏱️ **Request timeouts on manual update**: the "Update Data" action now applies
+  a timeout to all outbound HTTP calls, so a dead or slow network can no longer
+  hang the UI thread indefinitely.
+
+### 🐛 Bug Fixes
+- Fixed `SetDestinationDialog` acceptance check that compared against a Qt
+  signal (`QDialog.accepted`) instead of the enum (`QDialog.DialogCode.Accepted`),
+  which left the post-dialog refresh block dead.
+- Fixed a fallback path that aliased two runtime dictionaries to a single object
+  (`columns = rows = {}`).
+
+### 🧹 Internal Cleanup
+- De-duplicated the token → trigger → wait → fetch update flow into a single
+  shared `fetch_location_update()` helper used by both the startup worker and
+  the manual "Update Data" action, so the two paths can no longer drift.
+- Added a `requirements.txt` mirroring the in-code dependency validation map.
+
