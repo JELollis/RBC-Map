@@ -145,10 +145,18 @@ VERSION_NUMBER = "0.13.3.1"
 # Default timeout (seconds) for outbound HTTP calls made on the UI thread.
 HTTP_REQUEST_TIMEOUT = 10
 
-# Endpoints for the bot-driven location update flow (token -> trigger -> fetch).
+# Endpoints for the bot-driven location update flow.
+# Preferred path is the tokenless /refresh endpoint; the token URLs below are
+# retained only for the legacy fallback used against older API servers.
+UPDATE_REFRESH_URL = "https://lollis-home.ddns.net/api/refresh"
 UPDATE_TOKEN_URL = "https://lollis-home.ddns.net/api/request-token.py"
 UPDATE_TRIGGER_URL = "https://lollis-home.ddns.net/api/trigger-update.py"
 UPDATE_LOCATIONS_URL = "https://lollis-home.ddns.net/api/locations.json"
+
+# After triggering a scrape we poll locations.json until its "last_updated"
+# field advances (i.e. the bot finished), instead of a fixed blind sleep.
+REFRESH_POLL_MAX_SECONDS = 20.0
+REFRESH_POLL_INTERVAL_SECONDS = 1.5
 
 # -----------------------
 # Logging Configuration
@@ -2456,29 +2464,64 @@ configure_qtwebengine_environment()
 # Startup Data Fetch
 # -----------------------
 
-def fetch_location_update(
-    sleep_seconds: float = 10,
-    timeout: int = HTTP_REQUEST_TIMEOUT,
-    log_prefix: str = "",
-) -> dict:
-    """Run the secure token -> trigger -> wait -> fetch flow for locations.json.
+def _fetch_locations_json(timeout: int) -> dict:
+    """GET and parse locations.json, raising ValueError on invalid JSON."""
+    json_response = requests.get(UPDATE_LOCATIONS_URL, timeout=timeout)
+    json_response.raise_for_status()
+    try:
+        return json_response.json()
+    except ValueError as exc:
+        raise ValueError("Invalid JSON received from locations endpoint") from exc
 
-    Requests a one-time token, triggers a fresh bot scrape with it, waits for
-    the scrape to land, then fetches and parses the locations JSON. Shared by
-    the startup worker and the manual "Update Data" action so the two paths
-    cannot drift apart.
 
-    Args:
-        sleep_seconds: how long to wait after triggering before fetching.
-        timeout: per-request timeout in seconds.
-        log_prefix: prefix for log lines (e.g. "[Startup] ").
+def _fetch_location_update_v2(timeout: int, log_prefix: str, poll_max_seconds: float) -> dict:
+    """Tokenless refresh flow: trigger via /refresh, then poll for fresh data.
 
-    Returns:
-        The parsed locations JSON as a dict.
+    Asks the API to refresh (cooldown-gated, no token round-trip). If the API
+    reports it actually triggered a scrape, poll locations.json until its
+    ``last_updated`` field advances past the pre-trigger value, so we return
+    genuinely fresh data instead of guessing with a fixed sleep. If the API
+    reports it is cooling down, the data is already fresh and we fetch it
+    immediately. Any other status is treated as a failure rather than silently
+    accepting whatever is on disk (which would rewrite last_scraped and make
+    stale data look current).
 
-    Raises:
-        requests.RequestException: on any network/HTTP error.
-        ValueError: if the token is empty or the JSON body is invalid.
+    ``poll_max_seconds`` bounds how long we wait for a triggered scrape to land;
+    callers on the UI thread pass a small budget to stay responsive.
+    """
+    logging.info("%sRequesting map refresh...", log_prefix)
+    resp = requests.post(UPDATE_REFRESH_URL, timeout=timeout)
+    resp.raise_for_status()
+    info = resp.json()
+
+    baseline = info.get("last_updated")
+    status = info.get("status")
+
+    if status == "cooldown":
+        # Bot scraped within the cooldown window; data is already current.
+        logging.info("%sData already fresh (cooldown); fetching current locations", log_prefix)
+        return _fetch_locations_json(timeout)
+
+    if status != "triggered":
+        # Unknown / error status: do not accept it as fresh data.
+        raise ValueError(f"Unexpected /refresh status: {status!r}")
+
+    logging.info("%sScrape triggered; polling up to %ss for fresh data", log_prefix, poll_max_seconds)
+    deadline = time.monotonic() + poll_max_seconds
+    latest = _fetch_locations_json(timeout)
+    while latest.get("last_updated") == baseline and time.monotonic() < deadline:
+        time.sleep(REFRESH_POLL_INTERVAL_SECONDS)
+        latest = _fetch_locations_json(timeout)
+
+    if latest.get("last_updated") == baseline:
+        logging.warning("%sTimed out waiting for fresh data; using latest available", log_prefix)
+    return latest
+
+
+def _fetch_location_update_legacy(sleep_seconds: float, timeout: int, log_prefix: str) -> dict:
+    """Legacy token -> trigger -> blind-sleep -> fetch flow.
+
+    Retained as a fallback for older API servers that do not expose /refresh.
     """
     logging.info("%sRequesting secure token...", log_prefix)
     token_response = requests.get(UPDATE_TOKEN_URL, timeout=timeout)
@@ -2497,12 +2540,49 @@ def fetch_location_update(
     # thread context decides whether this blocks the UI (see update_data).
     time.sleep(sleep_seconds)
 
-    json_response = requests.get(UPDATE_LOCATIONS_URL, timeout=timeout)
-    json_response.raise_for_status()
+    return _fetch_locations_json(timeout)
+
+
+def fetch_location_update(
+    sleep_seconds: float = 10,
+    timeout: int = HTTP_REQUEST_TIMEOUT,
+    log_prefix: str = "",
+    poll_max_seconds: float = REFRESH_POLL_MAX_SECONDS,
+) -> dict:
+    """Refresh locations.json from the bot and return it parsed.
+
+    Prefers the tokenless /refresh endpoint (:func:`_fetch_location_update_v2`),
+    which polls for the scrape to actually land rather than blind-sleeping. If
+    the server does not expose /refresh yet (older deployments respond 404/405),
+    transparently falls back to the legacy token flow. Shared by the startup
+    worker and the manual "Update Data" action so the two paths cannot drift.
+
+    Args:
+        sleep_seconds: blind wait used only by the legacy fallback path.
+        timeout: per-request timeout in seconds.
+        log_prefix: prefix for log lines (e.g. "[Startup] ").
+        poll_max_seconds: max time to poll for a triggered scrape to land.
+            Callers on the UI thread (manual "Update Data") pass a small value
+            so the window does not freeze on a slow scrape; the startup worker
+            runs off-thread and can use the full default budget.
+
+    Returns:
+        The parsed locations JSON as a dict.
+
+    Raises:
+        requests.RequestException: on any network/HTTP error.
+        ValueError: if the token is empty, the JSON body is invalid, or the
+            server returns an unrecognized /refresh status.
+    """
     try:
-        return json_response.json()
-    except ValueError as exc:
-        raise ValueError("Invalid JSON received from locations endpoint") from exc
+        return _fetch_location_update_v2(timeout, log_prefix, poll_max_seconds)
+    except requests.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        if status not in (404, 405):
+            raise
+        logging.info("%s/refresh unavailable (%s); using legacy token flow", log_prefix, status)
+
+    return _fetch_location_update_legacy(sleep_seconds, timeout, log_prefix)
 
 
 class StartupUpdateWorker(QObject):
@@ -6100,9 +6180,10 @@ class RBCCommunityMap(QMainWindow):
         waits for completion, and then updates the local database.
         """
         try:
-            # Runs on the UI thread, so the flow's internal delay briefly
-            # blocks the window; kept short (5s) for the manual action.
-            data = fetch_location_update(sleep_seconds=5)
+            # Runs on the UI thread, so cap both the legacy blind wait and the
+            # v2 poll budget to ~5s; a slow scrape must not freeze the window
+            # (the startup path runs on a worker and uses the full budget).
+            data = fetch_location_update(sleep_seconds=5, poll_max_seconds=5)
             self.update_database_with_json(data)
 
         except requests.exceptions.RequestException as e:
