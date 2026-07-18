@@ -838,13 +838,62 @@ Version 0.13.0 introduces substantial internal changes while retaining a monolit
 > This is the final monolithic version before future potential modularization or mobile/packaged deployment revisions.
 
 ---
-## Unreleased (post-0.13.2 hardening)
+## Version 0.13.1
 
-Security, robustness, and cleanup work carried on the `testing/` development
-build ahead of the next release. Version number to be finalized (0.13.3 vs.
-0.14.0) based on the final scope.
+### 🩹 Minimap & Stability Fixes
 
-### 🛡️ Security & Robustness
+A small maintenance release on top of 0.13.0's monolithic rewrite, focused on
+minimap rendering correctness and general cleanup.
+
+### ✅ Key Changes in v0.13.1
+- 🗺️ **Minimap rendering fix**: corrected label/grid drawing issues that could
+  appear at certain zoom levels.
+- 🧹 Iterative fixes and `.gitignore` housekeeping across the testing build.
+
+> 0.13.1 is the baseline the subsequent 0.13.2 security work builds on.
+
+---
+## Version 0.13.2
+
+### 🛡️ Security & Robustness Update
+
+Version 0.13.2 is a small security and robustness update on v0.13.1, still
+packaged as a single file.
+
+### ✅ Key Changes in v0.13.2
+- 🔒 **Safer login injection**: login form JavaScript is now built with
+  `json.dumps`, preventing accidental/unsafe JS string construction from
+  character names or passwords.
+- ⏱️ **Request timeouts**: external HTTP calls use a default 10s timeout so a
+  slow or dead endpoint can no longer block background threads.
+- 📦 **Fail-fast dependencies**: removed runtime pip auto-install; missing
+  dependencies are now reported clearly and packagers must provide them.
+
+### 💡 Notable Internal Work
+- Refactored imports and reorganized SQLite table/data setup.
+- Updated Qt color usage and tightened type hints in the main script.
+- Cleaned up external API URLs (removed the `/wsgi/` path segment).
+
+---
+## Version 0.13.3.0
+
+### 🔒 Security & Robustness (testing line)
+
+Version 0.13.3.0 continues the 0.13.2 security and robustness posture in the
+`testing/` development line, still as a single file. It carries forward the
+safe login injection, request-timeout handling, and fail-fast dependency
+reporting introduced in 0.13.2.
+
+---
+## Version 0.13.3.1
+
+### 🛡️ Security, Bug Fixes & Cleanup
+
+A security, bugfix, and cleanup iteration on 0.13.3.0 in the `testing/` line.
+`main_0.13.3.0.py` is preserved unchanged as the prior point-in-time; this work
+lives in `main_0.13.3.1.py`.
+
+#### 🛡️ Security & Robustness
 - 🔒 **Credential redaction in logs**: the `ip` cookie's password portion is now
   masked (`user#####`) before being written to the on-disk debug logs. The
   login-vs-logout distinction is preserved for troubleshooting (logout logs as
@@ -853,14 +902,14 @@ build ahead of the next release. Version number to be finalized (0.13.3 vs.
   a timeout to all outbound HTTP calls, so a dead or slow network can no longer
   hang the UI thread indefinitely.
 
-### 🐛 Bug Fixes
-- Fixed `SetDestinationDialog` acceptance check that compared against a Qt
+#### 🐛 Bug Fixes
+- Fixed the `SetDestinationDialog` acceptance check that compared against a Qt
   signal (`QDialog.accepted`) instead of the enum (`QDialog.DialogCode.Accepted`),
   which left the post-dialog refresh block dead.
 - Fixed a fallback path that aliased two runtime dictionaries to a single object
   (`columns = rows = {}`).
 
-### 🧹 Internal Cleanup
+#### 🧹 Internal Cleanup
 - De-duplicated the token → trigger → wait → fetch update flow into a single
   shared `fetch_location_update()` helper used by both the startup worker and
   the manual "Update Data" action, so the two paths can no longer drift.
