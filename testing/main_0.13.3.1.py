@@ -74,7 +74,7 @@ Carried over from v0.13.3.0 / v0.13.2:
 Modules Used:
 -------------
 - **sys, os**: Core system integration and path handling.
-- **HTTP client**: Fetches external JSON data (`locations.json`) from the update service.
+- **requests**: Fetches external JSON data (`locations.json`) from the update service.
 - **re**: Regex for parsing and name normalization.
 - **datetime**: Countdown and timestamp calculations.
 - **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
@@ -87,11 +87,12 @@ Modules Used:
 Installation Instructions
 =================================
 
-For development environments, ensure the following dependencies are available:
+For development environments, install the dependencies listed in
+``requirements.txt`` (kept in sync with the in-code ``required_modules`` map):
 
-- PySide6
-- PySide6-WebEngine
+- PySide6 (bundles the Qt WebEngine modules used by the embedded browser)
 - beautifulsoup4
+- requests
 
 Packaged builds (e.g., Nuitka executables) include all required dependencies.
 
@@ -2505,6 +2506,13 @@ def fetch_location_update(
 
 
 class StartupUpdateWorker(QObject):
+    """Fetches fresh location data on startup, off the UI thread.
+
+    Runs :func:`fetch_location_update` inside a ``QThread`` and reports progress
+    through the ``started``/``finished`` signals, so the blocking network calls
+    and inter-request delay never freeze the main window.
+    """
+
     started = Signal()
     finished = Signal(bool, str)  # (ok, message)
 
@@ -2516,6 +2524,7 @@ class StartupUpdateWorker(QObject):
 
     @pyqtSlot()
     def run(self) -> None:
+        """Fetch location data and write it to the DB, emitting result signals."""
         self.started.emit()
 
         try:
@@ -4092,13 +4101,16 @@ class RBCCommunityMap(QMainWindow):
             logging.error(f"Failed to switch character '{character_name}': {e}")
 
     def login_selected_character(self) -> None:
-        """
-        Auto-login via JS injection (existing behavior), but with a safe default
-        for auto_login_enabled so refactors don't crash.
+        """Auto-fill and submit the RavenBlack login form for the selected character.
+
+        Injects a small JavaScript snippet into the loaded page that populates the
+        username/password fields and submits the login form. Values are embedded
+        with ``json.dumps`` so a name or password cannot break out of the JS string
+        literals. No-ops safely when auto-login is disabled, no character is
+        selected, or the webview is not ready.
         """
         try:
-            # Default to True to preserve the current 0.13.3 behavior
-            # (your log shows JS injection is happening successfully).
+            # Default to True so a missing attribute doesn't silently disable login.
             if not getattr(self, "auto_login_enabled", True):
                 logging.info("Auto-login disabled; skipping login injection.")
                 return
@@ -4111,8 +4123,6 @@ class RBCCommunityMap(QMainWindow):
                 logging.debug("website_frame not ready; skipping login.")
                 return
 
-            # ---- Your existing JS injection logic should remain below ----
-            # Keep whatever you already have for safe JS construction (json.dumps, etc.)
             logging.debug("Logging in selected character via JS injection...")
 
             name = self.selected_character.get("name")
@@ -4122,8 +4132,8 @@ class RBCCommunityMap(QMainWindow):
                 logging.debug("Selected character missing name/password; skipping login.")
                 return
 
-            # If you already have a helper that builds JS, keep using it.
-            # Below is a safe generic pattern; replace with your existing script if different.
+            # Embed credentials via json.dumps so they are always valid, escaped
+            # JS string literals (guards against quotes/backslashes in the values).
             import json
             js = f"""
             (function() {{
@@ -4876,7 +4886,7 @@ class RBCCommunityMap(QMainWindow):
         s = (s or "").strip()
         s = re.sub(r"\s+", " ", s)
         s = s.replace("’", "'").replace("`", "'")
-        # If you already have nickname→canon mapping, use it:
+        # Apply the nickname->canonical mapping when the app provides one.
         if hasattr(self, "_nickname_to_canon"):
             try:
                 return self._nickname_to_canon(s)
@@ -4932,11 +4942,14 @@ class RBCCommunityMap(QMainWindow):
         return False
 
     def _report_discovered_location(self, cls: str, name: str, col: str, row: str) -> None:
+        """Reporting hook for newly discovered buildings (brand-new shops/guilds only).
+
+        Intentionally a no-op: the app currently receives location data from the
+        Discord bot's ``locations.json`` rather than pushing discoveries back out.
+        Left in place as an extension point should an upstream report endpoint be
+        added later.
         """
-        Placeholder for your Discord/AVITD reporting (only called on brand‑new shops/guilds).
-        Safe to leave as no‑op until your API endpoint exists.
-        """
-        # Example (when ready):
+        # Example, if an upstream endpoint is added:
         # try:
         #     requests.post(BOT_URL, json={"kind": cls, "name": name, "col": col, "row": row}, timeout=3)
         # except Exception as e:
@@ -5962,7 +5975,7 @@ class RBCCommunityMap(QMainWindow):
             QMessageBox.critical(self, "Error", f"Error opening Database Viewer: {e}")
 
     def open_log_viewer(self):
-        self.log_viewer = LogViewer(self, LOG_DIR)  # or pass None if you want it fully standalone
+        self.log_viewer = LogViewer(self, LOG_DIR)
         self.log_viewer.show()
 
     def fetch_table_data(self, cursor, table_name):
@@ -6075,7 +6088,7 @@ class RBCCommunityMap(QMainWindow):
         self.selected_route_path = path_coords
         self.ap_direction_label.setText(f"Compass: {direction_desc}")
 
-        # Close the overlay if you want to force refresh focus
+        # Close the compass overlay so focus returns to the main window.
         if hasattr(self, 'compass_overlay'):
             self.compass_overlay.close()
 
