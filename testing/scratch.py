@@ -2457,6 +2457,18 @@ def configure_qtwebengine_environment() -> None:
             "/tmp",
         )
 
+    elif platform_name.startswith("win"):
+        # Windows: force software rendering. Without this the Chromium render
+        # process can crash immediately on startup on some GPU / driver / Qt
+        # combinations (RenderProcessTerminationStatus.AbnormalTermination,
+        # exit code 18), leaving the webview permanently blank. Neither 0.13.2
+        # nor 0.13.3.x previously set any flag here, so this was uncovered.
+        os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
+        os.environ.setdefault(
+            "QTWEBENGINE_CHROMIUM_FLAGS",
+            "--disable-gpu",
+        )
+
 
 # Apply environment configuration immediately at import time
 configure_qtwebengine_environment()
@@ -4490,16 +4502,28 @@ class RBCCommunityMap(QMainWindow):
         """Log and recover from a QtWebEngine render-process crash.
 
         Without this handler a native render-process crash exits silently and
-        appears as the whole app 'just closing'. Here we record the termination
-        status/exit code and attempt a single reload so the view recovers.
+        appears as the whole app 'just closing'. We log the termination status /
+        exit code and retry a bounded number of times. If the crash is
+        deterministic (e.g. a GPU/driver issue), we stop retrying instead of
+        respawning a doomed render process forever.
         """
+        self._render_crash_count = getattr(self, "_render_crash_count", 0) + 1
         logging.error(
-            "WebEngine render process terminated: status=%s exit_code=%s",
-            status, exit_code,
+            "WebEngine render process terminated: status=%s exit_code=%s (crash #%d)",
+            status, exit_code, self._render_crash_count,
         )
+        if self._render_crash_count > 3:
+            logging.error(
+                "Render process crashed %d times; giving up on auto-reload. "
+                "This usually means a GPU/driver issue — see the Windows "
+                "--disable-gpu flag in configure_qtwebengine_environment().",
+                self._render_crash_count,
+            )
+            self._set_status("⚠️ Page renderer keeps crashing — see logs (likely GPU).")
+            return
         self._set_status("⚠️ Page renderer crashed — reloading…")
         # Reload shortly after so we're not re-entering during the termination signal.
-        QTimer.singleShot(1500, lambda: self.website_frame.setUrl(
+        QTimer.singleShot(2000, lambda: self.website_frame.setUrl(
             QUrl('https://quiz.ravenblack.net/blood.pl')
         ))
 
@@ -4513,6 +4537,7 @@ class RBCCommunityMap(QMainWindow):
             return
 
         logging.info("Webpage loaded successfully.")
+        self._render_crash_count = 0  # a good load clears the crash-retry budget
         self.website_frame.page().toHtml(self.process_html)
         css = self.load_current_css()
         self.apply_custom_css(css)
