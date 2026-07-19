@@ -3285,6 +3285,11 @@ class RBCCommunityMap(QMainWindow):
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
         self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+        # Catch native QtWebEngine render-process crashes so they are logged and
+        # recovered from instead of silently taking the whole app down.
+        self.website_frame.page().renderProcessTerminated.connect(
+            self.on_render_process_terminated
+        )
 
         # Add Keybindings
         self.setup_keybindings()
@@ -4481,10 +4486,30 @@ class RBCCommunityMap(QMainWindow):
         self.website_frame.page().runJavaScript(script)
         logging.debug("Custom CSS applied.")
 
+    def on_render_process_terminated(self, status, exit_code):
+        """Log and recover from a QtWebEngine render-process crash.
+
+        Without this handler a native render-process crash exits silently and
+        appears as the whole app 'just closing'. Here we record the termination
+        status/exit code and attempt a single reload so the view recovers.
+        """
+        logging.error(
+            "WebEngine render process terminated: status=%s exit_code=%s",
+            status, exit_code,
+        )
+        self._set_status("⚠️ Page renderer crashed — reloading…")
+        # Reload shortly after so we're not re-entering during the termination signal.
+        QTimer.singleShot(1500, lambda: self.website_frame.setUrl(
+            QUrl('https://quiz.ravenblack.net/blood.pl')
+        ))
+
     def on_webview_load_finished(self, success):
         if not success:
-            logging.error("Failed to load the webpage.")
-            QMessageBox.critical(self, "Error", "Failed to load the webpage. You may be moving too fast.")
+            # Transient failures are common at startup (the game rate-limits
+            # rapid requests). Log and surface a non-blocking status instead of a
+            # modal dialog, which is disruptive and fragile during startup.
+            logging.warning("Webpage failed to load (possibly rate-limited / 'moving too fast').")
+            self._set_status("⚠️ Page didn't load — you may be moving too fast. It will retry.")
             return
 
         logging.info("Webpage loaded successfully.")
