@@ -120,6 +120,7 @@ import math
 import os
 import platform
 import re
+import shutil
 import sqlite3
 import sys
 import time
@@ -135,18 +136,40 @@ from PySide6 import QtCore
 # Global Constants
 # -----------------------
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent  # install dir: bundled assets, may be read-only
 
-LOG_DIR = BASE_DIR / "logs"
-SESSIONS_DIR = BASE_DIR / "sessions"
-IMAGES_DIR = BASE_DIR / "images"
+
+def _user_data_dir() -> Path:
+    """Per-user, always-writable location for app data.
+
+    Storing the database, cookies, and logs here (instead of next to the script)
+    makes the app independent of both its launch directory and the install
+    folder's permissions. That way a bad working directory (e.g. being launched
+    with cwd = C:\\Windows\\System32) or churned folder ACLs can no longer break
+    character/cookie persistence.
+    """
+    if sys.platform.startswith("win"):
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    if base:
+        return Path(base) / "RBC-Map"
+    return BASE_DIR  # last-resort fallback: alongside the script (legacy behavior)
+
+
+DATA_DIR = _user_data_dir()
+
+LOG_DIR = DATA_DIR / "logs"
+SESSIONS_DIR = DATA_DIR / "sessions"
+IMAGES_DIR = BASE_DIR / "images"  # bundled asset, read next to the script
 
 DB_PATH = SESSIONS_DIR / "rbc_map_data.db"
 
 REQUIRED_DIRECTORIES = [
     LOG_DIR,
     SESSIONS_DIR,
-    IMAGES_DIR,
 ]
 
 VERSION_NUMBER = "0.13.3.1"
@@ -1972,11 +1995,35 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
         logging.error(f"Failed to initialize database at {db_path}: {e}")
         return False
 
+def migrate_legacy_data_dir() -> None:
+    """One-time copy of data from the old script-relative location to DATA_DIR.
+
+    Earlier builds stored the database next to the script. If a database exists
+    there but not yet in the new per-user location, copy it (with any SQLite
+    WAL/SHM sidecars) so characters, cookies, and settings carry forward on the
+    first run of this build.
+    """
+    legacy_db = BASE_DIR / "sessions" / "rbc_map_data.db"
+    if DB_PATH.exists() or not legacy_db.exists():
+        return
+    try:
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        for suffix in ("", "-wal", "-shm"):
+            src = legacy_db.with_name(legacy_db.name + suffix)
+            if src.exists():
+                shutil.copy2(src, SESSIONS_DIR / src.name)
+        logging.info("Migrated legacy database %s -> %s", legacy_db, DB_PATH)
+    except Exception as exc:
+        logging.warning("Legacy data migration skipped: %s", exc)
+
+
 # Call database initialization
 if not ensure_directories_exist():  # Ensure directories exist first
     logging.error("Required directories could not be created. Aborting database initialization.")
-elif not initialize_database(DB_PATH):
-    logging.warning("Database initialization failed. Application may encounter issues.")
+else:
+    migrate_legacy_data_dir()  # carry an existing DB forward before init creates a fresh one
+    if not initialize_database(DB_PATH):
+        logging.warning("Database initialization failed. Application may encounter issues.")
 
 # -----------------------
 # Load Data from Database
