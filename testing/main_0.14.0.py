@@ -747,12 +747,16 @@ def insert_initial_data(conn: sqlite3.Connection) -> None:
     """Insert initial data into the database."""
     cursor = conn.cursor()
     initial_data = [
-        ("REPLACE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
+        # INSERT OR IGNORE (not REPLACE): these are user-mutable rows. This runs
+        # on every startup, so REPLACE would reset the user's chosen CSS profile,
+        # keybinds and theme colors to defaults on each launch. Seed only when a
+        # fresh DB is missing the row.
+        ("INSERT OR IGNORE INTO settings (setting_name, setting_value) VALUES (?, ?)", [
             ('keybind_config', 1),
             ('css_profile', 'Default'),
             ('log_level', str(DEFAULT_LOG_LEVEL))
         ]),
-        ("REPLACE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
+        ("INSERT OR IGNORE INTO color_mappings (id, type, color) VALUES (?, ?, ?)", [
             (1, 'bank', '#0000ff'),
             (2, 'tavern', '#887700'),
             (3, 'transit', '#880000'),
@@ -2458,14 +2462,17 @@ class RBCCommunityMap(QMainWindow):
 
         self.map_icons = {
             "bank": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "bank.png")),
-            "tavern": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "saloon.png")),
+            "tavern": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "tavern.png")),
             "transit": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "transit.png")),
-            "user_building": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "castle.png")),
+            "user_building": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "lair.png")),
             "guild": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "guild.png")),
             "shop": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "shop.png")),
             "graveyard": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "graveyard.png")),
-            "hall_binding": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "binding.png")),
-            "hall_severance": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "severance.png")),
+            "arena": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "arena.png")),
+            "alchemy": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "alchemy.png")),
+            "placesofinterest": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "place_of_interest.png")),
+            "hall_binding": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "hall_binding.png")),
+            "hall_severance": PySide6.QtGui.QPixmap(str(IMAGES_DIR / "hall_severance.png")),
         }
 
     @splash_message(lambda self: self.splash, "Loading characters")
@@ -2972,6 +2979,15 @@ class RBCCommunityMap(QMainWindow):
         self.color_mappings["text_color"] = text
         self.color_mappings["accent"] = accent
         self.color_mappings["button_color"] = self._blend(bg, text, 0.20)
+        # User overrides win over the CSS/default UI palette (same store the
+        # minimap uses), so a hand-picked background/text/button/accent sticks.
+        overrides = getattr(self, "minimap_css_overrides", None) or {}
+        for key in ("background", "text_color", "button_color", "accent",
+                    "button_border_color", "button_hover_color", "button_pressed_color"):
+            if key in overrides:
+                qc = PySide6.QtGui.QColor(overrides[key])
+                if qc.isValid():
+                    self.color_mappings[key] = qc
 
     @staticmethod
     def _poi_style_key(name: str) -> str:
@@ -3027,15 +3043,26 @@ class RBCCommunityMap(QMainWindow):
             btn = self.color_mappings.get("button_color", PySide6.QtGui.QColor("#444444"))
             accent = self.color_mappings.get("accent", PySide6.QtGui.QColor("#ff0000"))
 
+            # Button border: subtle by default (a shade lifted from the bg);
+            # only an explicit user override uses a bold color. Accent is kept
+            # for hover, not the resting outline.
+            border = self.color_mappings.get("button_border_color") or self._blend(bg, text, 0.35)
+
             bg_color, text_color, btn_color, acc = bg.name(), text.name(), btn.name(), accent.name()
+            border_h = border.name()
             btn_text = self._readable_text(btn).name()
             acc_text = self._readable_text(accent).name()
             field_bg = self._blend(bg, text, 0.10).name()
+            # A slightly stronger line than the button border, used to outline
+            # the main panels so the minimap edge reads distinctly from the app.
+            section_border = self._blend(bg, text, 0.55).name()
 
             stylesheet = (
                 f"QWidget {{ background-color: {bg_color}; color: {text_color}; }}"
+                f"QFrame#leftFrame, QFrame#minimapFrame, QFrame#infoFrame, QFrame#characterFrame {{"
+                f" border: 1px solid {section_border}; }}"
                 f"QPushButton {{ background-color: {btn_color}; color: {btn_text};"
-                f" border: 1px solid {acc}; border-radius: 4px; padding: 3px 8px; }}"
+                f" border: 1px solid {border_h}; border-radius: 4px; padding: 3px 6px; }}"
                 f"QPushButton:hover {{ background-color: {acc}; color: {acc_text}; }}"
                 f"QLabel {{ color: {text_color}; }}"
                 f"QMenuBar, QMenu {{ background-color: {bg_color}; color: {text_color}; }}"
@@ -3350,12 +3377,14 @@ class RBCCommunityMap(QMainWindow):
         # Left layout containing the minimap and control buttons
         left_layout = QVBoxLayout()
         left_frame = QFrame()
+        left_frame.setObjectName("leftFrame")
         left_frame.setFrameShape(QFrame.Shape.Box)
         left_frame.setFixedWidth(300)
         left_frame.setLayout(left_layout)
 
         # Minimap setup
         minimap_frame = QFrame()
+        minimap_frame.setObjectName("minimapFrame")
         minimap_frame.setFrameShape(QFrame.Shape.Box)
         minimap_frame.setFixedSize(self.minimap_size, self.minimap_size)
         minimap_layout = QVBoxLayout()
@@ -3371,6 +3400,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Information frame to display nearest locations and AP costs
         info_frame = QFrame()
+        info_frame.setObjectName("infoFrame")
         info_frame.setFrameShape(QFrame.Shape.Box)
         info_frame.setFixedHeight(260)
         info_layout = QVBoxLayout()
@@ -3485,22 +3515,31 @@ class RBCCommunityMap(QMainWindow):
 
         left_layout.addLayout(combo_go_layout)
 
-        # Zoom and action buttons
-        zoom_layout = QHBoxLayout()
-        button_size = (self.minimap_size - 10) // 3
+        # Zoom and action buttons. Each expands to share the panel width evenly
+        # (so a long label like "Set Destination" is not clipped) and uses a
+        # slightly smaller point size to fit three-across in the 300px column.
+        def _make_action_button(label: str) -> QPushButton:
+            btn = QPushButton(label)
+            btn.setFixedHeight(25)
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            f = btn.font()
+            f.setPointSize(8)
+            btn.setFont(f)
+            return btn
 
-        zoom_in_button = QPushButton('Zoom in')
-        zoom_in_button.setFixedSize(button_size, 25)
+        zoom_layout = QHBoxLayout()
+        zoom_layout.setContentsMargins(0, 0, 0, 0)
+        zoom_layout.setSpacing(4)
+
+        zoom_in_button = _make_action_button('Zoom in')
         zoom_in_button.clicked.connect(self.zoom_in)
         zoom_layout.addWidget(zoom_in_button)
 
-        zoom_out_button = QPushButton('Zoom out')
-        zoom_out_button.setFixedSize(button_size, 25)
+        zoom_out_button = _make_action_button('Zoom out')
         zoom_out_button.clicked.connect(self.zoom_out)
         zoom_layout.addWidget(zoom_out_button)
 
-        set_destination_button = QPushButton('Set Destination')
-        set_destination_button.setFixedSize(button_size, 25)
+        set_destination_button = _make_action_button('Set Destination')
         set_destination_button.clicked.connect(self.open_SetDestinationDialog)
         zoom_layout.addWidget(set_destination_button)
 
@@ -3508,19 +3547,18 @@ class RBCCommunityMap(QMainWindow):
 
         # Layout for refresh, discord, and website buttons
         action_layout = QHBoxLayout()
+        action_layout.setContentsMargins(0, 0, 0, 0)
+        action_layout.setSpacing(4)
 
-        refresh_button = QPushButton('Refresh')
-        refresh_button.setFixedSize(button_size, 25)
+        refresh_button = _make_action_button('Refresh')
         refresh_button.clicked.connect(lambda: self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl')))
         action_layout.addWidget(refresh_button)
 
-        discord_button = QPushButton('Discord')
-        discord_button.setFixedSize(button_size, 25)
+        discord_button = _make_action_button('Discord')
         discord_button.clicked.connect(self.open_discord)
         action_layout.addWidget(discord_button)
 
-        website_button = QPushButton('Website')
-        website_button.setFixedSize(button_size, 25)
+        website_button = _make_action_button('Website')
         website_button.clicked.connect(self.open_website)
         action_layout.addWidget(website_button)
 
@@ -3528,6 +3566,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Character list frame
         character_frame = QFrame()
+        character_frame.setObjectName("characterFrame")
         character_frame.setFrameShape(QFrame.Shape.Box)
         character_layout = QVBoxLayout()
         character_frame.setLayout(character_layout)
@@ -5094,11 +5133,55 @@ class RBCCommunityMap(QMainWindow):
 
                 painter.drawLine(cx1, cy1, cx2, cy2)
 
+        icon_for_style = {
+            "bank": "bank", "tavern": "tavern", "transit": "transit",
+            "user_building": "user_building", "shop": "shop", "guild": "guild",
+            "arena": "arena", "grave": "graveyard", "alchemy": "alchemy",
+            "bind": "hall_binding", "sever": "hall_severance",
+            "placesofinterest": "placesofinterest",
+        }
+
         def draw_label_box(x, y, width, base_height, bg_color, text, style_key=None):
             """
-            Draws a text label box with a background color, white border, and properly formatted text.
-            Allows wrapped text to grow to 2 lines in zoom 5 and 7.
+            Draws a building marker. When an icon exists for ``style_key`` the
+            cell shows the building artwork with the name as a caption strip;
+            otherwise (intersections, or a missing icon) it falls back to the
+            classic colored text box.
             """
+            icon_key = icon_for_style.get(style_key)
+            pixmap = self.map_icons.get(icon_key) if icon_key else None
+            if pixmap is not None and not pixmap.isNull():
+                # Caption uses a small font and wraps long names onto up to two
+                # lines; the icon shrinks to give the caption whatever height it
+                # needs (never more than half the cell).
+                cfont = painter.font()
+                cfont.setPointSize(max(4, min(8, width // 8)))
+                painter.setFont(cfont)
+                fm = PySide6.QtGui.QFontMetrics(cfont)
+                line_h = fm.height()
+                wrapped = fm.boundingRect(
+                    QRect(0, 0, max(1, width - 4), line_h * 2 + 2),
+                    Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap,
+                    text,
+                )
+                max_cap = max(line_h + 3, block_size // 2)
+                cap_h = max(line_h + 3, min(wrapped.height() + 4, line_h * 2 + 4, max_cap))
+                icon_area = max(1, block_size - cap_h)
+                scaled = pixmap.scaled(
+                    width, icon_area,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+                painter.drawPixmap(x + (width - scaled.width()) // 2, y, scaled)
+                cap_y = y + block_size - cap_h
+                painter.fillRect(QRect(x, cap_y, width, cap_h), bg_color)
+                painter.setPen(self.minimap_border_colors.get(style_key, PySide6.QtGui.QColor('white')))
+                painter.drawRect(QRect(x, cap_y, width, cap_h))
+                painter.setPen(self.minimap_text_colors.get(style_key, PySide6.QtGui.QColor('white')))
+                painter.drawText(QRect(x + 1, cap_y + 1, max(1, width - 2), cap_h - 2),
+                                 Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap,
+                                 text)
+                return
             # Set font based on zoom level
             font = painter.font()
             if self.zoom_level == 3:
