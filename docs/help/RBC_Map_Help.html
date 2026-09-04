@@ -268,7 +268,7 @@ pre {
 <li>Quick access for debugging or verifying app state.</li>
 </ul>
 <h3>Note:</h3>
-<p>This dialog is <strong>read-only</strong>. For advanced editing, you can open <code>rbc_map_data.db</code> (located in: <code>C:\Program Files (x86)\RBC Community Map\sessions\</code>) using tools like <a href="https://sqlitebrowser.org/" target="_blank">DB Browser for SQLite</a>. Be sure to back up the file before making any external changes.</p>
+<p>This dialog is <strong>read-only</strong>. For advanced editing, you can open <code>rbc_map_data.db</code> (located in: <code>%LOCALAPPDATA%\RBC-Map\sessions\</code>) using tools like <a href="https://sqlitebrowser.org/" target="_blank">DB Browser for SQLite</a>. Be sure to back up the file before making any external changes.</p>
 </section>
 <section id="FileMenu" style="display: none;">
 <h2>File Menu</h2>
@@ -370,7 +370,7 @@ pre {
 </ul>
 <h3>Additional Info:</h3>
 <ul>
-<li>Log files are stored in the <code>C:\Program Files(x86)\RBC Community Map\logs\</code> folder alongside the app.</li>
+<li>Log files are stored in the <code>%LOCALAPPDATA%\RBC-Map\logs\</code> folder.</li>
 <li>Logs are created new every day and will log all messages based on the selected log level in the <a href="#SettingsMenu">Settings Menu</a>.</li>
 </ul>
 <p>This viewer gives you transparent access to behind-the-scenes activity, helping you troubleshoot or track changes across sessions.</p>
@@ -509,9 +509,7 @@ pre {
 <p>When reporting a problem, please include the following:</p>
 <ul>
 <li><strong>Your log file</strong> – Found at: 
-    <a href="file:///C:/Program Files (x86)/RBC Community Map/logs/" target="_blank">
-      C:\Program Files (x86)\RBC Community Map\logs\
-    </a>
+    <code>%LOCALAPPDATA%\RBC-Map\logs\</code>
 </li>
 <li><strong>A screenshot</strong> if the issue is visual or UI-related.</li>
 <li><strong>Steps to reproduce</strong> the issue — this is essential for recreating the problem.</li>
@@ -534,7 +532,7 @@ What did you expect to happen instead?
 
 **Log File:**
 (Attach the log file from: 
-C:\Program Files (x86)\RBC Community Map\logs\ )
+%LOCALAPPDATA%\RBC-Map\logs\ )
 
 **System Info:**
 - OS (Windows 10/11, Linux via Wine, etc.):
