@@ -129,18 +129,32 @@ from PySide6 import QtCore
 # Global Constants
 # -----------------------
 
-BASE_DIR = Path(__file__).resolve().parent
+def _application_dir() -> Path:
+    """Return the directory containing the source or packaged executable."""
+    if getattr(sys, "frozen", False) or "__compiled__" in globals():
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
 
-LOG_DIR = BASE_DIR / "logs"
-SESSIONS_DIR = BASE_DIR / "sessions"
-IMAGES_DIR = BASE_DIR / "images"
+
+APP_DIR = _application_dir()
+
+if os.name == "nt":
+    _local_data_root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+else:
+    _local_data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+
+DATA_DIR = _local_data_root / "RBC-Map"
+BASE_DIR = DATA_DIR
+
+LOG_DIR = DATA_DIR / "logs"
+SESSIONS_DIR = DATA_DIR / "sessions"
+IMAGES_DIR = APP_DIR / "images"
 
 DB_PATH = SESSIONS_DIR / "rbc_map_data.db"
 
 REQUIRED_DIRECTORIES = [
     LOG_DIR,
     SESSIONS_DIR,
-    IMAGES_DIR,
 ]
 
 VERSION_NUMBER = "1.0.0"
@@ -9479,9 +9493,7 @@ class CompassOverlay(QDialog):
 def main() -> None:
     app = QApplication(sys.argv)
 
-    # Resolve base paths safely (works in dev and packaged builds)
-    base_dir = Path(__file__).resolve().parent
-    images_dir = base_dir / "images"
+    images_dir = APP_DIR / "images"
 
     app_icon = PySide6.QtGui.QIcon(str(images_dir / "favicon.ico"))
     app.setWindowIcon(app_icon)
