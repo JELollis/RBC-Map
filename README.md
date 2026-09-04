@@ -1,5 +1,7 @@
 # RBC Community Map Application
 
+Current release: **1.0.0**
+
 This project is an attempt to create an interactive map coded in Python for use with **Vampires! The Dark Alleyway**, located at [RavenBlack City](https://quiz.ravenblack.net/blood.pl).
 
 ![Main Application](Screenshots/Main%20Application.png "Main Application")
@@ -24,6 +26,9 @@ This project is an attempt to create an interactive map coded in Python for use 
 - **Customizable Themes**: Personalize the minimap and interface themes for a more customized experience.
 - **Rendering Fixes**: Improved fallback minimap rendering and stability in zoomed views.
 - **Auto-Refreshing Dropdowns**: Destination list updates dynamically when the dialog is opened.
+- **Community Location Updates**: Syncs current guild and shop movement data and merges community-supplied buildings, places of interest, arenas, alchemy locations, lairs, and halls into the local map.
+- **Opt-In Location Reporting**: Contribute newly discovered non-moving locations anonymously through the **Contribute Discovered Locations** setting. Reporting can be disabled at any time.
+- **Offline-Friendly Local Data**: Previously synchronized community locations remain available in the local database if the update service is unavailable.
 
 ![Minimap Theme](Screenshots/Minimap%20Theme.png "Minimap Theme")
 
@@ -33,7 +38,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 - **Quick Switch**: Store login credentials to quickly and easily switch between characters.
 - **Local Data Storage**:
   - User data is securely stored in a local SQLite database.
-  - No user data is stored on external servers.
+  - Login credentials and session data remain local; only opted-in discovered-location reports are sent to the community update service.
 - **Session Persistence**: Destination, theme, and other settings are restored across sessions.
 
 ![New User Dialog](Screenshots/New%20User%20Dialog.png "New User Dialog")
@@ -51,7 +56,7 @@ This project is an attempt to create an interactive map coded in Python for use 
 - Create and manage shopping lists for in-game items.
 - Automatically calculate total costs for required items.
 - View available coins and plan purchases accordingly.
-- **Countdown Timer**: Displays time until the next shop update based on AVITD scrape.
+- **Countdown Timer**: Displays time until the next shop update based on synchronized community data.
 
 ![Shopping List Tool](Screenshots/Shopping%20List%20Tool.png "Shopping List Tool")
 
