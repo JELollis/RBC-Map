@@ -95,7 +95,7 @@ pre {
 </style>
 </head>
 <body>
-<nav><h2>Help Topics</h2><details><summary>Overview</summary><a href="#Overview">Overview</a></details><details><summary>User Interface</summary><a href="#UI_Overview">UI Overview</a><a href="#Identifying_UI_Parts">Identifying UI Parts</a></details><details><summary>Menu Items</summary><details><summary>File Menu</summary><a href="#FileMenu">FileMenu</a></details><details><summary>Settings Menu</summary><a href="#SettingsMenu">SettingsMenu</a><a href="#Theme_Customization">Theme Customization</a><a href="#CSS_Customization">CSS Customization</a></details><details><summary>Tools Menu</summary><a href="#ToolsMenu">ToolsMenu</a><a href="#DatabaseViewer">DatabaseViewer</a><a href="#PowerReference">PowerReference</a><a href="#ShoppingList">ShoppingList</a><a href="#Damage_Calculator">Damage Calculator</a><a href="#LogViewer">LogViewer</a></details><details><summary>Resources Menu</summary><a href="#ResourcesMenu">ResourcesMenu</a></details><details><summary>Help Menu</summary><a href="#HelpMenu">HelpMenu</a><a href="#Reporting_an_Issue">Reporting an Issue</a></details></details><details><summary>Minimap and Information Bars</summary><a href="#Minimap_and_Information_Bars">Minimap and Information Bars</a><a href="#MinimapControls">MinimapControls</a><a href="#Navigating_the_Minimap">Navigating the Minimap</a><a href="#SetDestination">SetDestination</a><a href="#InfoBars">InfoBars</a></details><details><summary>Character Management</summary><a href="#Character_Management">Character Management</a><a href="#Adding_Modifying_and_Removing_Characters">Adding Modifying and Removing Characters</a></details></nav>
+<nav><h2>Help Topics</h2><details><summary>Overview</summary><a href="#Overview">Overview</a><a href="#Version_1_0_0">What's New in 1.0.0</a></details><details><summary>User Interface</summary><a href="#UI_Overview">UI Overview</a><a href="#Identifying_UI_Parts">Identifying UI Parts</a></details><details><summary>Menu Items</summary><details><summary>File Menu</summary><a href="#FileMenu">FileMenu</a></details><details><summary>Settings Menu</summary><a href="#SettingsMenu">SettingsMenu</a><a href="#Theme_Customization">Theme Customization</a><a href="#CSS_Customization">CSS Customization</a></details><details><summary>Tools Menu</summary><a href="#ToolsMenu">ToolsMenu</a><a href="#DatabaseViewer">DatabaseViewer</a><a href="#PowerReference">PowerReference</a><a href="#ShoppingList">ShoppingList</a><a href="#Damage_Calculator">Damage Calculator</a><a href="#LogViewer">LogViewer</a></details><details><summary>Resources Menu</summary><a href="#ResourcesMenu">ResourcesMenu</a></details><details><summary>Help Menu</summary><a href="#HelpMenu">HelpMenu</a><a href="#Reporting_an_Issue">Reporting an Issue</a></details></details><details><summary>Minimap and Information Bars</summary><a href="#Minimap_and_Information_Bars">Minimap and Information Bars</a><a href="#MinimapControls">MinimapControls</a><a href="#Navigating_the_Minimap">Navigating_the_Minimap</a><a href="#SetDestination">SetDestination</a><a href="#InfoBars">InfoBars</a></details><details><summary>Character Management</summary><a href="#Character_Management">Character Management</a><a href="#Adding_Modifying_and_Removing_Characters">Adding Modifying and Removing Characters</a></details></nav>
 <main>
 <section id="Adding_Modifying_and_Removing_Characters" style="display: none;">
 <h2>Adding, Modifying, and Removing Characters</h2>
@@ -291,6 +291,7 @@ pre {
 <li><strong>FAQ:</strong> Opens the in-game <em>Frequently Asked Questions</em> page in your system's default browser.</li>
 <li><strong>How to Play:</strong> Opens the in-game "How to play" page in your browser.</li>
 <li><strong>About:</strong> Displays the current RBCMap version and licensing information in a dialog window.</li>
+<li><strong>Contribute Discovered Locations:</strong> Enables or disables anonymous reporting of newly discovered community locations. This option is enabled by default for new installations and can be changed at any time.</li>
 <li><strong>Credits:</strong> Rolls a short in-app credits screen showing developers, contributors, testers, and special thanks.</li>
 <li><strong><a href="#Reporting_an_Issue">Report an Issue</a>:</strong> Opens a link to submit a bug or feature request via GitHub. (See separate help entry for details.)</li>
 <li><strong>Help:</strong> Opens this Help File (CHM) from within the app. You can also press <code>F1</code> at any time to access it.</li>
@@ -455,6 +456,24 @@ pre {
 </ul>
 <p>Each section above includes links to additional features, dialogs, and tools. Use the navigation panel or search to dive deeper into what RBCMap can do for you.</p>
 </section>
+<section id="Version_1_0_0" style="display: none;">
+<h2>What's New in 1.0.0</h2>
+<p>Version 1.0.0 introduces community-powered location updates while improving privacy, reliability, and the way location data is synchronized.</p>
+<h3>Community Location Updates</h3>
+<ul>
+<li><strong>Automatic location sync:</strong> On startup and when requested from <strong>Set Destination</strong>, the app retrieves the latest guild and shop movement data from the update service.</li>
+<li><strong>More location categories:</strong> Community-supplied banks, taverns, transit stops, places of interest, user buildings, alchemy locations, arenas, lairs, and halls can appear on the minimap and in destination lists.</li>
+<li><strong>Opt-in reporting:</strong> When enabled, the app can anonymously report newly discovered non-moving locations so they can be shared with other players. The setting is available in the <strong>Settings</strong> menu and can be disabled at any time.</li>
+<li><strong>Local data remains available:</strong> Community locations are merged into the local database and can be used even when the update service is temporarily unavailable.</li>
+</ul>
+<h3>Privacy and Reliability</h3>
+<ul>
+<li>Login cookie passwords are redacted from debug logs.</li>
+<li>Network requests use timeouts so a slow or unavailable service does not block the interface.</li>
+<li>The update workflow is shared by startup synchronization and manual updates, keeping both paths consistent.</li>
+</ul>
+<p>For bugs or feature requests, use <a href="#Reporting_an_Issue">Reporting an Issue</a>. For questions about community location sharing, include the app version, operating system, and the relevant log file without including account passwords.</p>
+</section>
 <section id="PowerReference" style="display: none;">
 <h2>Powers Reference</h2>
 <p>The <strong>Powers Reference</strong> dialog provides detailed information on every power available in the game, regardless of whether your vampire currently possesses it. It allows you to review power effects, guild source, coin cost, quest requirements, and—if the guild's location is known—set it as your destination.</p>
@@ -518,7 +537,7 @@ C:\Program Files (x86)\RBC Community Map\logs\ )
 
 **System Info:**
 - OS (Windows 10/11, Linux via Wine, etc.):
-- RBCMap Version (e.g., 0.12.1):
+- RBCMap Version (e.g., 1.0.0):
 </pre>
 <p>Thank you for helping make RBCMap better!</p>
 </section>
@@ -573,7 +592,7 @@ C:\Program Files (x86)\RBC Community Map\logs\ )
 <ul>
 <li><strong>Set:</strong> Sets the chosen destination and updates the minimap path.</li>
 <li><strong>Clear:</strong> Removes the current destination.</li>
-<li><strong>Update Data:</strong> Updates shop and guild data from A View in the Dark (AVITD).</li>
+<li><strong>Update Data:</strong> Requests the latest community location data from the update service, including moving guilds and shops.</li>
 <li><strong>Cancel:</strong> Closes the dialog without applying changes.</li>
 </ul>
 <p>This dialog gives you full control over navigation and route planning, with support for both structured selection and custom street targeting.</p>
