@@ -2013,8 +2013,12 @@ def configure_qtwebengine_environment() -> None:
         os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
         os.environ.setdefault(
             "QTWEBENGINE_CHROMIUM_FLAGS",
-            "--disable-software-rasterizer",
+            "--disable-gpu --disable-gpu-compositing",
         )
+        # Virtual machines frequently expose an incomplete GLX/GBM stack.
+        # Let Chromium use software rendering instead of failing during view
+        # initialization when the host GPU cannot provide a scanout buffer.
+        os.environ.setdefault("QT_XCB_GL_INTEGRATION", "none")
 
     elif platform_name == "darwin":
         # macOS (notably VMware / Parallels GPU instability)
