@@ -2018,7 +2018,11 @@ def configure_qtwebengine_environment() -> None:
         # Virtual machines frequently expose an incomplete GLX/GBM stack.
         # Let Chromium use software rendering instead of failing during view
         # initialization when the host GPU cannot provide a scanout buffer.
-        os.environ.setdefault("QT_XCB_GL_INTEGRATION", "none")
+        # Keep Qt Quick usable when the VM has no working GLX/EGL context.
+        # Disabling the XCB integration entirely also prevents the app's own
+        # Qt widgets from rendering, so use Qt's software backend instead.
+        os.environ.setdefault("QT_QUICK_BACKEND", "software")
+        os.environ.setdefault("QT_OPENGL", "software")
 
     elif platform_name == "darwin":
         # macOS (notably VMware / Parallels GPU instability)
@@ -2405,6 +2409,13 @@ class RBCCommunityMap(QMainWindow):
             icon_path = IMAGES_DIR / "favicon.ico"
             self.setWindowIcon(PySide6.QtGui.QIcon(str(icon_path)))
             self.setWindowTitle("RBC Community Map")
+            # Explicitly request standard window-manager controls.  Some
+            # Linux desktop/VM configurations omit maximize/restore unless
+            # these hints are present on the top-level window.
+            self.setWindowFlag(Qt.WindowType.WindowMinimizeButtonHint, True)
+            self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
+            self.setWindowFlag(Qt.WindowType.WindowSystemMenuHint, True)
+            self.setMinimumSize(900, 600)
             self.setGeometry(100, 100, 1200, 800)
             self.load_theme_settings()
             self.apply_theme()
