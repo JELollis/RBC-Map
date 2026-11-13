@@ -996,3 +996,19 @@ under 0.14.0, plus:
 
 ### 📘 Documentation
 - Refreshed the README, help documentation, and screenshots for the release.
+
+---
+
+## Unreleased — on `dev`
+
+### 🐛 Bug fixes
+- **Saved data carried over on upgrade:** 1.0.0 moved the database and session
+  data to the per-user data folder but never copied the old data, so upgrading
+  users started with no saved characters, settings, or logins. On launch, the
+  app now copies `sessions/` (or `testing/sessions/`) from next to the script
+  into the data folder when the new database is missing or has no saved
+  characters. Originals are left untouched, a replaced empty database is kept
+  as `rbc_map_data.db.pre-migration`, and a failed copy is retried next launch.
+- **Help:** "Update Data" is now described as requesting shop, guild, and
+  community building locations from the update service, not from A View in the
+  Dark.
