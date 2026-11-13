@@ -17,7 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.0.py"
-WANTED = {"_count_characters", "_copy_if_absent", "migrate_legacy_data"}
+WANTED = {"_connect_read_only", "_count_characters", "_mark_migration_done",
+          "_copy_if_absent", "migrate_legacy_data"}
 
 
 def load_functions():
@@ -27,7 +28,8 @@ def load_functions():
     # Default arguments reference module globals; bind placeholders, tests pass real values.
     ns = {"Path": Path, "os": os, "shutil": shutil, "sqlite3": sqlite3,
           "SESSIONS_DIR": Path("unused"), "LEGACY_SESSIONS_DIRS": [],
-          "LEGACY_DB_NAME": "rbc_map_data.db"}
+          "LEGACY_DB_NAME": "rbc_map_data.db",
+          "LEGACY_MIGRATION_MARKER": ".legacy-migration-done"}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(MAIN), "exec"), ns)
     return ns["migrate_legacy_data"], ns["_count_characters"]
 
@@ -136,6 +138,53 @@ def failure_leaves_no_partial_db(t: Path):
     assert not (t / "new/rbc_map_data.db.migrating").exists()
 
 
+def delete_characters(path: Path):
+    conn = sqlite3.connect(path)
+    conn.execute("DELETE FROM characters")
+    conn.commit()
+    conn.close()
+
+
+def deleted_characters_stay_deleted(t: Path):
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    migrate(t / "new", [t / "app/sessions"])
+    delete_characters(t / "new/rbc_map_data.db")
+    assert migrate(t / "new", [t / "app/sessions"]) is None
+    assert names(t / "new/rbc_map_data.db") == [], "deleted characters came back"
+
+
+def populated_target_settles_migration(t: Path):
+    # Characters created in 1.0.0 before this fix, later all deleted.
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    make_db(t / "new/rbc_map_data.db", ["Bob"])
+    assert migrate(t / "new", [t / "app/sessions"]) is None
+    assert (t / "new/.legacy-migration-done").is_file()
+    delete_characters(t / "new/rbc_map_data.db")
+    assert migrate(t / "new", [t / "app/sessions"]) is None
+    assert names(t / "new/rbc_map_data.db") == []
+
+
+def unreadable_target_is_kept(t: Path):
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    (t / "new").mkdir()
+    (t / "new/rbc_map_data.db").write_bytes(b"not a database" * 100)
+    assert migrate(t / "new", [t / "app/sessions"]) is None
+    assert (t / "new/rbc_map_data.db").read_bytes().startswith(b"not a database")
+
+
+def reserved_characters_in_paths(t: Path):
+    legacy = t / "app #1 %20/sessions"
+    make_db(legacy / "rbc_map_data.db", ["Alice"])
+    msg = migrate(t / "new #2 %3F", [legacy])
+    assert msg and "Migrated" in msg, msg
+    assert names(t / "new #2 %3F/rbc_map_data.db") == ["Alice"]
+    assert not (t / "app").exists(), "URI fragment created a stray file"
+    # A populated target under a reserved name must be read correctly and kept.
+    make_db(t / "tgt #3/rbc_map_data.db", ["Bob"])
+    assert migrate(t / "tgt #3", [legacy]) is None
+    assert names(t / "tgt #3/rbc_map_data.db") == ["Bob"]
+
+
 def empty_legacy_does_not_replace_new_db(t: Path):
     make_db(t / "app/sessions/rbc_map_data.db", [])
     make_db(t / "new/rbc_map_data.db", [])
@@ -146,6 +195,8 @@ for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_leg
              replaces_empty_new_db_with_backup, keeps_existing_profile_files,
              keeps_populated_new_db, second_run_is_noop,
              same_dir_is_ignored, failure_leaves_no_partial_db,
+             deleted_characters_stay_deleted, populated_target_settles_migration,
+             unreadable_target_is_kept, reserved_characters_in_paths,
              empty_legacy_does_not_replace_new_db]:
     run(case.__name__, case)
 print("all legacy-migration checks passed")

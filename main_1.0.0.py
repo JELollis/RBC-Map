@@ -525,18 +525,33 @@ LEGACY_SESSIONS_DIRS = [
     APP_DIR / "testing" / "sessions",
 ]
 LEGACY_DB_NAME = "rbc_map_data.db"
+# Written once the legacy question is settled; after that, never migrate again.
+LEGACY_MIGRATION_MARKER = ".legacy-migration-done"
 
 
-def _count_characters(db_path: Path) -> int:
-    """Return the number of saved characters in *db_path*, or 0 if unreadable."""
+def _connect_read_only(db_path: Path) -> sqlite3.Connection:
+    """Open *db_path* read-only via an encoded file URI (safe for '#', '?', '%')."""
+    return sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+
+
+def _count_characters(db_path: Path) -> int | None:
+    """Return the number of saved characters in *db_path*, or None if unreadable."""
     try:
-        conn = sqlite3.connect(f"file:{db_path.as_posix()}?mode=ro", uri=True)
+        conn = _connect_read_only(db_path)
         try:
             return conn.execute("SELECT COUNT(*) FROM characters").fetchone()[0]
         finally:
             conn.close()
     except sqlite3.Error:
-        return 0
+        return None
+
+
+def _mark_migration_done(sessions_dir: Path, note: str) -> None:
+    """Persist that legacy migration is settled; best effort."""
+    try:
+        (sessions_dir / LEGACY_MIGRATION_MARKER).write_text(note + "\n", encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _copy_if_absent(src: str, dst: str) -> str:
@@ -559,6 +574,11 @@ def migrate_legacy_data(
     files already present in *sessions_dir* are kept; only missing ones are
     copied.
 
+    A marker file records when the question is settled: after a successful
+    migration, or when the new database already holds characters (or cannot
+    be read). Once it exists the migration never runs again, so deleting all
+    characters later cannot bring the legacy accounts back.
+
     Legacy files are only read, never modified. The database is copied last,
     through a temporary file and an atomic rename, so a failed migration leaves
     no partial database and is retried on the next launch.
@@ -570,6 +590,8 @@ def migrate_legacy_data(
         legacy_dirs = LEGACY_SESSIONS_DIRS
 
     target_db = sessions_dir / LEGACY_DB_NAME
+    if (sessions_dir / LEGACY_MIGRATION_MARKER).exists():
+        return None
     candidates = [
         d for d in legacy_dirs
         if (d / LEGACY_DB_NAME).is_file() and d.resolve() != sessions_dir.resolve()
@@ -580,8 +602,14 @@ def migrate_legacy_data(
     source_db = source_dir / LEGACY_DB_NAME
 
     if target_db.exists():
-        if _count_characters(target_db) > 0 or _count_characters(source_db) == 0:
-            return None  # the new location already holds the user's data
+        target_count = _count_characters(target_db)
+        if target_count is None or target_count > 0:
+            # The new location holds the user's data (or can't be checked
+            # safely): keep it and settle the question for good.
+            _mark_migration_done(sessions_dir, f"kept existing data; legacy at {source_dir}")
+            return None
+        if not _count_characters(source_db):
+            return None  # nothing worth bringing over
 
     temp_db = target_db.with_name(LEGACY_DB_NAME + ".migrating")
     try:
@@ -596,7 +624,7 @@ def migrate_legacy_data(
             copy_function=_copy_if_absent,
         )
         temp_db.unlink(missing_ok=True)
-        src = sqlite3.connect(f"file:{source_db.as_posix()}?mode=ro", uri=True)
+        src = _connect_read_only(source_db)
         try:
             dst = sqlite3.connect(temp_db)
             try:
@@ -616,6 +644,7 @@ def migrate_legacy_data(
             pass
         return f"Legacy data migration from {source_dir} failed; will retry next launch: {exc}"
 
+    _mark_migration_done(sessions_dir, f"migrated from {source_dir}")
     return f"Migrated saved data from {source_dir} to {sessions_dir}"
 
 

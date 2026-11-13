@@ -1010,6 +1010,8 @@ under 0.14.0, plus:
   characters. Originals are left untouched, browser-profile files already in
   the data folder are kept, a replaced empty database is kept
   as `rbc_map_data.db.pre-migration`, and a failed copy is retried next launch.
+  The migration happens at most once (recorded by `.legacy-migration-done` in
+  the sessions folder), so deleting characters later never brings old ones back.
 - **Help:** "Update Data" is now described as requesting shop, guild, and
   community building locations from the update service, not from A View in the
   Dark.
