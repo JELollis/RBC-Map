@@ -1,70 +1,39 @@
-# RBC Community Map Application
+# RBC Community Map — 0.11.3
 
-**Current documented release: 1.0.0** · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+> **Archived snapshot.** This branch preserves version 0.11.3 for reference; it is not maintained.
+> For current use, see the latest release, [1.0.0](https://github.com/JELollis/RBC-Map/tree/version/1.0.0),
+> or the [`dev`](https://github.com/JELollis/RBC-Map/tree/dev) branch for ongoing development.
 
-RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
+RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in
+[RavenBlack City](https://quiz.ravenblack.net/blood.pl).
 
-![Main application](Screenshots/Main%20Application.png)
+## About 0.11.3: Final pre-refactor polish
 
-## Features
+**Changes:**
 
-### Interactive minimap
-- Follow the character's current position using the game's right-hand frame.
-- Show routes to the nearest **transit station** (red), **bank** (blue), and **pub** (orange).
-- Choose a **3×3** (default), **5×5**, **7×7**, or **9×9** view.
-- Recenter by clicking a map cell or choosing a location from the dropdowns and selecting **Go**.
-- Use **Set Destination** to mark a destination and display its route in green.
-- Customize the minimap theme; fallback rendering helps maintain usability in zoomed views.
-- Refresh destination choices when the destination dialog opens.
+Tightened the internal module structure ahead of the 0.12.0 refactor.
 
-![Minimap theme](Screenshots/Minimap%20Theme.png)
+Logging messages refined, paths shortened to use relative sessions/, logs/, etc.
 
-### Community location data
-- Synchronize guild and shop movements and community-supplied buildings, points of interest, arenas, alchemy locations, lairs, and halls.
-- Optionally enable **Contribute Discovered Locations** to report newly discovered non-moving locations anonymously. You can turn this setting off at any time.
-- Continue using previously synchronized local location data when the update service is unavailable.
+Final patch before major 0.12.0 directory and architecture shift.
 
-### Characters and controls
-- Store character login details locally and switch between characters.
-- Restore destinations, themes, and other preferences between sessions.
-- Choose **WASD** or **arrow keys** for movement; movement shortcuts are suppressed while typing into input fields.
+🧼 Focused on cleanup and refactor readiness.
 
-![New user dialog](Screenshots/New%20User%20Dialog.png)
+See the [Changelog](Changelog.md#version-0113--final-pre-refactor-polish) for details and earlier history.
 
-### Planning and reference tools
+## Requirements
 
-| Tool | What it does |
-| --- | --- |
-| **Shopping list** | Build item lists, calculate total cost, compare against available coins, and view the countdown to the next shop update. |
-| **Damage calculator** | Estimate damage required to bring a target to staking level and compare item combinations. |
-| **Power information** | Review game powers, descriptions, costs, effects, and the countdown to the next guild move. |
-| **Database viewer** | Inspect and manage underlying data tables (intended for advanced users). |
+- Python 3
+- UI toolkit: PySide6 (Qt 6)
 
-![Shopping list tool](Screenshots/Shopping%20List%20Tool.png)
-![Damage calculator](Screenshots/Damage%20Calculator.png)
-![Power information](Screenshots/Power%20Information.png)
-![Database viewer](Screenshots/Database%20Viewer.png)
-
-### Appearance customization
-- Customize interface and minimap themes.
-- Use the CSS customization tool for styling, including fonts, box shadows, and background images, with a live preview.
-
-![CSS customization tool](Screenshots/CSS%20Customization%20Dialog.png)
-![Interface theme](Screenshots/Interface%20Theme.png)
-
-## Getting started
-
-### Requirements
-The Python runtime dependencies listed in [`requirements.txt`](requirements.txt) are:
-- PySide6 (including the Qt WebEngine components used by the embedded browser)
+Third-party packages (also listed in [`requirements.txt`](requirements.txt)):
+- PySide6
 - beautifulsoup4
 - requests
 
-A working Python 3 installation and an environment capable of running a Qt desktop application are required. Supported Python versions and platform-specific packaging instructions should be verified against the release you intend to run.
+## Run
 
-### Install dependencies
-
-From a checkout of the repository, create and activate a virtual environment, then install the declared dependencies:
+Create and activate a virtual environment, then install the dependencies:
 
 ```bash
 python -m venv .venv
@@ -82,36 +51,11 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions. The appropriate application entry point may vary by version; consult the selected release's documentation rather than running an archived script from `Version Control/`.
+```bash
+python main_0.11.3.py
+```
 
-## Data and privacy
-
-Character information, credentials, session state, and application preferences are stored in a local SQLite database. The documented community reporting feature is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
-
-## Documentation, support, and contributions
-
-- [Changelog](Changelog.md) — release history.
-- [Help documentation](docs/help/RBC_Map_Help.html) — application help topics.
-- [GitHub issues](https://github.com/JELollis/RBC-Map/issues) — report bugs and suggest improvements.
-- [Community Discord](https://discord.gg/rKamEZvK6X) — community discussion (the server has a joining process).
-
-Contributions and feedback are welcome. When reporting a problem, include the application version, operating system, steps to reproduce, and relevant error details; do not include passwords or session credentials.
 
 ## License
 
-The project is documented as licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-## Contributors
-
-**Development team**
-- **Windows compatibility:** Jonathan Lollis (Nesmuth), Justin Solivan
-- **macOS compatibility:** Joseph Lemois
-- **Linux compatibility:** Josh "Blaskewitts" Corse, Fern Lovebond
-- **Design and layout:** Shuvi, Blair Wilson (Ikunnaprinsess)
-
-**Special thanks**
-- [LIAM²](http://liam2.leprichaunproductions.com/home.php) by Cain "Leprechaun" McBride — inspiration for this project.
-- [A View in the Dark](https://aviewinthedark.net/) by Cliff Burton — shop and guild data.
-- [RavenBlack Wiki](https://ravenblack.city/) contributors.
-- Anders — RBNav and ongoing support.
-- [Vespertine's City Crawler](https://vampires.terrible.engineering/) — additional shop and guild data.
+Licensed under the [Apache License 2.0](License.txt). See [Contributors.md](Contributors.md) for credits.
