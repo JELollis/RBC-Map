@@ -34,6 +34,16 @@ While still packaged as a single file, it redacts credentials from logs, adds
 request timeouts to the manual data update, fixes two latent bugs, and
 consolidates the location-update flow into a single shared code path.
 
+Map Coordinate Convention:
+--------------------------
+Use screen coordinates (a top-left-origin, Y-down coordinate system) for the
+map. X increases to the right/east and Y increases downward/south; moving
+left/west decreases X and moving up/north decreases Y. Treat the map origin
+as the upper-left reference, preserving existing grid offsets and street
+numbering. Use this convention consistently for map data, rendering,
+navigation, and coordinate conversions; do not assume Cartesian positive-Y-up
+coordinates. Viewport panning changes the visible area, not these directions.
+
 Key Features:
 -------------
 - **WASD Minimap Navigation**: Move across the city grid using familiar keyboard controls.
@@ -5119,6 +5129,14 @@ class RBCCommunityMap(QMainWindow):
         """
         Draws the minimap with various features such as special locations and lines to nearest locations,
         with cell lines and dynamically scaled text size.
+
+        Use top-left-origin, Y-down screen coordinates: columns/X increase
+        right/east and rows/Y increase down/south. Convert map coordinates to
+        viewport pixels with x = (column - column_start) * block_size and
+        y = (row - row_start) * block_size. Thus (column_start, row_start)
+        maps to the minimap's top-left pixel (0, 0); do not invert the Y axis
+        as in Cartesian positive-Y-up coordinates. Preserve existing street
+        and building offsets when applying these conversions.
         """
         pixmap = PySide6.QtGui.QPixmap(self.minimap_size, self.minimap_size)
         painter = PySide6.QtGui.QPainter(pixmap)
