@@ -1,12 +1,25 @@
-### Changelog for RBC City Map Application
+# Changelog — RBC Community Map
 
-## Version 0.1.0
+Release history for the RBC Community Map application, oldest first.
 
-### 💡 Summary
-## Version 0.1.0 of the RBCMap app is a functional prototype built with tkinter, focusing on a minimap interface and manual street navigation using dropdowns and zooming. This version is highly procedural and uses no class-based structure.
+- **This branch:** release 1.0.0, `main_1.0.0.py`.
+- **Development:** continues on the [`dev`](https://github.com/JELollis/RBC-Map/tree/dev) branch.
+- **Earlier versions:** each is preserved on its own `version/<number>` branch
+  as `main_<number>.py`.
 
+Entries for versions before 0.12.0 were reconstructed from the archived source
+files and are less detailed than later entries.
 
-### 🧩 Key Features in 0.1.0
+---
+
+## Version 0.1.0 — Tkinter prototype
+
+**💡 Summary**
+
+Version 0.1.0 of the RBCMap app is a functional prototype built with tkinter, focusing on a minimap interface and manual street navigation using dropdowns and zooming. This version is highly procedural and uses no class-based structure.
+
+**🧩 Key Features in 0.1.0**
+
 🗺️ Minimap
 Grid-style minimap rendered using a Canvas.
 
@@ -26,7 +39,6 @@ Dropdowns for selecting a specific N-S and E-W intersection.
 
 “Go” button jumps the map to that location via go_to_location().
 
-
 📌 Map Refresh & Extra Buttons
 Buttons included:
 
@@ -36,18 +48,18 @@ Buttons included:
 
 “Modify Buildings” – placeholder for webpage/editor.
 
+**📦 Placeholder Functions**
 
-### 📦 Placeholder Functions
 Functions like open_webpage(), open_discord(), and set_destination() exist but are unimplemented — suggesting planned features like building editing, community integration, and character destination logic.
 
+**🛠️ Utilities**
 
-### 🛠️ Utilities
 generate_ew_streets() builds E-W street names from 1st to 100th with ordinal suffixes.
 
 Static N-S street list contains both natural and thematic naming (e.g., “Pine”, “Torment”, “Despair”).
 
+**🧱 Technical Notes**
 
-### 🧱 Technical Notes
 Hardcoded GUI using absolute grid placements.
 
 Pure procedural code — no object-oriented design.
@@ -58,10 +70,10 @@ Initial zoom logic and bounds checking are in place for stability.
 
 ---
 
-## Version 0.2.0
-🚀 Summary
-## Version 0.2.0 introduces data-driven enhancements to the map rendering logic and begins to externalize key configuration data, indicating a move toward modularity and semantic enrichment of the map. It remains procedural and GUI-based, using tkinter, but introduces data overlay logic and better street metadata.
+## Version 0.2.0 — Data-driven landmark overlays
 
+🚀 Summary
+Version 0.2.0 introduces data-driven enhancements to the map rendering logic and begins to externalize key configuration data, indicating a move toward modularity and semantic enrichment of the map. It remains procedural and GUI-based, using tkinter, but introduces data overlay logic and better street metadata.
 
 📌 Key Enhancements Over 0.1.0
 1. Landmark Overlays
@@ -89,7 +101,6 @@ Changed alley color from blue → black, clearly separating structural roads fro
 
 Cleaned up layout by switching label order in dropdowns to N-S first, then E-W (likely for readability).
 
-
 🧠 Architectural Implications
 Although still not object-oriented, this update clearly shows domain-aware thinking — streets are now data-bearing, not just labels.
 
@@ -104,8 +115,9 @@ Placeholder functions (set_destination, open_discord, open_webpage) still do not
 
 ---
 
-0.3.0 – Initial Refactor (Tkinter OOP)
-**Key **Changes:****
+## Version 0.3.0 — Initial refactor (Tkinter OOP)
+
+**Key changes:**
 
 First version to introduce class-based design with CityMapApp.
 
@@ -125,9 +137,11 @@ Uses rows and columns dicts for grid logic.
 
 > **Assessment:** Experimental OO version, still using tkinter, but paving the way for future Qt refactor.
 
+---
 
-### 🧱 0.3.1 – Partial Rework + Abstracted Map Logic
-**Key **Changes:****
+## Version 0.3.1 — Partial rework + abstracted map logic
+
+**Key changes:**
 
 Introduced a Map class encapsulating core minimap data (zoom, center).
 
@@ -139,9 +153,11 @@ Suggests a transitional stage from 0.3.0 to something Qt-based.
 
 > **Assessment:** Attempt to modularize backend (Map class) before a full GUI transition.
 
+---
 
-### 💼 0.3.2 – PyQt5 Migration Begins
-**Key **Changes:****
+## Version 0.3.2 — PyQt5 migration begins
+
+**Key changes:**
 
 Switched GUI toolkit from tkinter to PyQt5.
 
@@ -165,8 +181,11 @@ Map rendering was still placeholder (load_minimap()), no actual drawing logic.
 
 > **Assessment:** Foundation of the modern UI — PyQt5 layout, modular widgets, and QWebEngine for in-game site.
 
-🧭 0.3.3 – Minimap Rendering Engine Implemented
-**Key **Changes:****
+---
+
+## Version 0.3.3 — Minimap rendering engine implemented
+
+**Key changes:**
 
 Fully functional minimap drawing using QPainter on QPixmap.
 
@@ -186,9 +205,11 @@ Combo box to go to a specific location using street names.
 
 > **Assessment:** This version solidified the interactive PyQt-based minimap engine, replacing prior tkinter logic.
 
+---
 
-### 🧩 0.3.4 – Enhanced Qt Layout + Post-Load Coordination
-**Key **Changes:****
+## Version 0.3.4 — Enhanced Qt layout + post-load coordination
+
+**Key changes:**
 
 Live HTML parsing from embedded WebView using BeautifulSoup.
 
@@ -202,9 +223,9 @@ Map render logic abstracted to draw_minimap(), coordinates validated, text cente
 
 ---
 
+## Version 0.4.0 — Enhanced HTML integration & drawing logic
 
-### 🧱 0.4.0 – Enhanced HTML Integration & Drawing Logic
-**Key **Changes:****
+**Key changes:**
 
 Adds extract_coordinates_from_html() using BeautifulSoup.
 
@@ -220,24 +241,26 @@ Color-coded special locations (banks, pubs, transits, user buildings)
 
 Destination setting stub added (Set Destination button).
 
-
 ✅ Introduced web-integrated positioning and a persistent GUI foundation.
 
-💥 0.4.1 – Nearest-Location Line Drawing (with caveat)
-**Key **Additions:****
+---
+
+## Version 0.4.1 — Nearest-location line drawing
+
+**Key additions:**
 
 Draws lines to 1st/2nd/3rd closest banks, pubs, and transits from center.
 
 Implements closest_level logic tied to three new buttons.
 
-
 ☠️ Bug note: Selecting closest levels other than 1 causes stack buffer overflow.
-
 
 ⚠️ Functionally ambitious but structurally unstable. Good idea, flawed execution.
 
+---
 
-🔧 0.4.2 – Stability Rework, Feature Isolation
+## Version 0.4.2 — Stability rework, feature isolation
+
 **Changes:**
 
 Removed interactive closest-location levels due to instability.
@@ -254,12 +277,13 @@ Zoom and go-to logic
 
 Prepared code for restoring closest_level logic later.
 
-
 🔁 Rollback and cleanup patch, focusing on reliability and readiness for persistence.
 
+---
 
-✅ 0.4.3 – Destination Logic & Visual Feedback
-Major **Additions:**
+## Version 0.4.3 — Destination logic & visual feedback
+
+**Major additions:**
 
 Implements:
 
@@ -273,7 +297,6 @@ Adds find_nearest_*() logic to draw paths to closest pub, bank, transit.
 
 Maintains full parsing/rendering integrity from earlier versions.
 
-
 🎯 Feature complete version for:
 
 Destination persistence
@@ -282,11 +305,10 @@ Full nearest-location visual feedback
 
 Refined GUI controls
 
---
+---
 
+## Version 0.5.0 — First database-driven release
 
-### 🧱 0.5.0 – 
-### 🧩 First Database-Driven Release
 **Highlights:**
 
 Introduced connect_to_database() with fallback to remote host.
@@ -295,13 +317,14 @@ Loaded columns, rows, banks, taverns, transits, user buildings, and color_mappin
 
 draw_minimap() adjusted to reflect color mappings from DB (color_map).
 
-HTML extraction now pulls from <span class='intersect'>.
-
+HTML extraction now pulls from `<span class='intersect'>`.
 
 ✅ First integration of live data from a structured MySQL schema.
 
+---
 
-### 🛠️ 0.5.1 – 🌈 Qt Color Fix & Code Clarity
+## Version 0.5.1 — Qt color fix & code clarity
+
 **Changes:**
 
 Converts color strings from DB directly into QColor objects in color_map.
@@ -310,11 +333,12 @@ Ensures all dynamic visual updates (e.g. edges, alleys, etc.) honor the loaded p
 
 Renamed color_map -> self.color_map inside the class for scope clarity.
 
-
 🧠 Improved visual configuration and reduced hardcoded rendering logic.
 
+---
 
-🔁 0.5.2 – 🛍️ Shops & Guilds Integrated
+## Version 0.5.2 — Shops & guilds integrated
+
 **Additions:**
 
 Loads shops and guilds from the database.
@@ -325,26 +349,28 @@ Includes logic for rendering shop/guild icons on minimap.
 
 Drawn using same draw_location() routine with new categories.
 
-
 🎯 Adds merchant and faction overlays with live update hooks (timestamp support).
 
+---
 
-### 📅 0.5.3 – 🔍 Improved HTML Coordinate Extraction
+## Version 0.5.3 — Improved HTML coordinate extraction
+
 **Enhancements:**
 
 Improved fallback HTML parsing:
 
-Now checks for <input name="x"> and <input name="y"> if <span class='intersect'> is missing.
+Now checks for `<input name="x">` and `<input name="y">` if `<span class='intersect'>` is missing.
 
-Alternative fallback: parses <td class='street'> block with embedded <form>.
+Alternative fallback: parses `<td class='street'>` block with embedded `<form>`.
 
 More robust against A View in the Dark HTML variations.
 
 🛡️ Enhanced HTML fault tolerance in response to inconsistent site markup.
 
+---
 
-🧠 0.5.4 – 
-### 📊 Data Scraper & Next-Update Forecasting
+## Version 0.5.4 — Data scraper & next-update forecasting
+
 Major New Logic:
 
 Adds scrape_avitd_data():
@@ -363,13 +389,12 @@ update_guilds(), update_shops()
 
 get_next_update_times() exposed for use in UI/notifications.
 
-
-### 🔄 Fully automated sync of key game structures to app backend via web scraping.
+**🔄 Fully automated sync of key game structures to app backend via web scraping.**
 
 ---
 
-0.6.0 – 
-### 🧬 Modular Cleanup + Persistence Prep
+## Version 0.6.0 — Modular cleanup + persistence prep
+
 **Changes:**
 
 Cleaned database schema queries, including color_mappings, shops, and guilds with next_update.
@@ -380,9 +405,10 @@ get_next_update_times() pulls guilds and shops update cycles.
 
 🔗 Reliable DB-backed backend with clean data type safety.
 
+---
 
-### 🧪 0.6.1 – 
-### 📊 Added placesofinterest & Fault-Resilient DB Reads
+## Version 0.6.1 — placesofinterest & fault-resilient DB reads
+
 Improvements:
 
 Integrated placesofinterest table from DB.
@@ -393,10 +419,11 @@ Reduced potential for GUI crashes from missing data.
 
 🛡️ Adds soft failure protections in data loading.
 
+---
 
-### 🧩 0.6.2 – 
-### 🛠️ Setup Scripts & AP Cost UI
-**Key **Additions:****
+## Version 0.6.2 — Setup scripts & AP cost UI
+
+**Key additions:**
 
 Added automatic module installation prompt (pip install) with delay-based relaunch (great for first-time users).
 
@@ -404,59 +431,58 @@ load_characters() tied into dropdown, allowing users to select, add, or remove c
 
 Minor GUI tweaks for padding and layout alignment.
 
+**📦 Packs usability improvements and setup streamlining.**
 
-### 📦 Packs usability improvements and setup streamlining.
+---
 
+## Version 0.6.3 — Character login + logging system
 
-### 🔥 0.6.3 – 
-🧠 Intelligent Character Login + Logging System
-Major **Upgrades:**
+**Major upgrades:**
 
 🔑 Character login/logout via in-game site using QWebEngineView JS injection.
 
 Logs out current character → injects name/password → logs back in
 
-
-## 🧾 Logging system added:
+**🧾 Logging system added:**
 
 logs/rbc_YYYY-MM-DD.log
 
 Uses logging.debug, info, warning, error
 
-
-### 🗃 Character list transitioned from QComboBox → QListWidget for better interactivity.
-
+**🗃 Character list transitioned from QComboBox → QListWidget for better interactivity.**
 
 🎨 GUI polish: Highlighted labels (banks, taverns, destination), “Coming Soon” website dialog.
 
-
-### 📁 Added ensure_directories_exist() to create logs/ and sessions/ if missing.
-
+**📁 Added ensure_directories_exist() to create logs/ and sessions/ if missing.**
 
 🧠 Smart automation, session persistence, and robust logging define this release.
 
 ---
 
+## Version 0.7.0 — Final PyQt5 build
 
-### 🧱 0.7.0 – 🚀 Migration to PySide6
-Key Shifts:
+The last release on PyQt5. It refines the A View in the Dark scraping
+helpers (`update_guilds()`, `update_shops()`) and the "Coming Soon" website
+dialog ahead of the toolkit change.
 
-Fully switched from PyQt5 → PySide6.
+> **Correction:** earlier copies of this changelog listed the PySide6
+> migration under 0.7.0. The archived `main_0.7.0.py` still imports PyQt5;
+> the switch to PySide6 shipped in 0.7.1.
 
-Introduced:
+---
 
-QWebEngineProfile for persistent cookies
+## Version 0.7.1 — Migration to PySide6, theme customization & persistent cookies
 
-Modularized HTML, database, and logging setup
+**Toolkit migration:**
 
-Introduced persistent character management with fallback if no characters exist.
+Switched from PyQt5 to PySide6.
 
+Introduced QWebEngineProfile for persistent cookies.
 
-🧠 This version modernizes the foundation and boosts future-proofing.
+Modularized HTML, database, and logging setup.
 
+Persistent character management with a fallback when no characters exist.
 
-🧠 0.7.1 – 
-🎨 Theme Customization + Persistent Cookies
 **New Features:**
 
 Added load_theme_settings() and apply_theme() for UI color theming.
@@ -469,11 +495,12 @@ Load/save cookies via pickle
 
 Auto-reapply cookies to quiz.ravenblack.net
 
-
 🎨 Theming + 🍪 cookies = UX enhancement and session persistency.
 
+---
 
-### 📦 0.7.2 – 📋 SQLite Cookie Storage & Character Persistence
+## Version 0.7.2 — SQLite cookie storage & character persistence
+
 **Upgrades:**
 
 Replaced pickle-based cookies with SQLite-backed cookie DB (cookies.db).
@@ -488,9 +515,10 @@ AVITDScraper integrated into app load to update DB automatically.
 
 💾 First use of SQLite local state. Better for scaling.
 
+---
 
-🔧 0.7.3 – 
-### 🧩 Componentization, Multi-Dialog System, JS Injection
+## Version 0.7.3 — Componentization, multi-dialog system, JS injection
+
 Massive Refactor:
 
 App now includes:
@@ -507,13 +535,12 @@ Supports reading JS console logs from WebView.
 
 Expanded load_data() to include new POIs.
 
-
-### 🧱 RBCMap becomes a modular, maintainable toolkit, not just a map viewer.
+**🧱 RBCMap becomes a modular, maintainable toolkit, not just a map viewer.**
 
 ---
 
+## Version 0.8.0 — SQLite conversion & persistent UX foundation
 
-### 🧱 0.8.0 – 🗄️ SQLite Conversion & Persistent UX Foundation
 **Changes:**
 
 Fully transitioned backend from MySQL to SQLite for offline and portable deployment.
@@ -530,12 +557,12 @@ initialize_coins_db()
 
 initialize_database() with full schema validation.
 
+**🔄 Major pivot from cloud-bound to standalone desktop-first architecture.**
 
-### 🔄 Major pivot from cloud-bound to standalone desktop-first architecture.
+---
 
+## Version 0.8.1 — Secure state, schema checking & expanded dialogs
 
-### 🔐 0.8.1 – 
-### 🔐 Secure State, Schema Checking, and Expanded Dialog Logic
 **New Features:**
 
 Full schema validation and column-type checking added to initialize_database().
@@ -552,11 +579,13 @@ SetDestinationDialog
 
 Database settings, cookies, and theme colors now stored securely and validated at launch.
 
+**🧱 Hardened the foundation with encryption + full schema introspection logic.**
 
-### 🧱 Hardened the foundation with encryption + full schema introspection logic.
+---
 
-💥 0.8.2 – ⚔️ Damage Calculator & Extended POI Coverage
-Major **Additions:**
+## Version 0.8.2 — Damage calculator & extended POI coverage
+
+**Major additions:**
 
 New DamageCalculator dialog tool:
 
@@ -578,15 +607,13 @@ shop_items pricing with charisma scaling
 
 Live coin balance integration per character
 
-
 🎯 Adds gameplay planning tools, bridging map navigation with action economics.
 
 ---
 
+## Version 0.9.0 — Encrypted local state & database formalization
 
-### 🧱 0.9.0 – 
-### 🔐 Encrypted Local State & Database Formalization
-Key **Enhancements:**
+**Key enhancements:**
 
 Switched to fully encrypted storage for sensitive data (e.g., character passwords) using cryptography.Fernet.
 
@@ -602,12 +629,13 @@ initialize_database() builds all tables with INSERT OR IGNORE seeding.
 
 Extensive documentation headers added to all sections.
 
+**🧱 Formalized DB schema, added encryption, and enhanced modular infrastructure.**
 
-### 🧱 Formalized DB schema, added encryption, and enhanced modular infrastructure.
+---
 
+## Version 0.9.1 — Full class registry + role documentation
 
-🧠 0.9.1 – 📖 Full-Class Registry + Role Documentation
-Structural & UX **Enhancements:**
+**Structural & UX enhancements:**
 
 Refined class/module documentation throughout:
 
@@ -619,14 +647,12 @@ Bundled all primary features into top-level main.py docstring (great for onboard
 
 Expanded installer safety: checks module availability at runtime and exits cleanly if missing.
 
-
-### 📘 Offers full application self-documentation, onboarding ease, and structural transparency.
+**📘 Offers full application self-documentation, onboarding ease, and structural transparency.**
 
 ---
 
+## Version 0.10.0 — Unified application structure
 
-### 🧱 0.10.0 – 
-### 💼 Unified Application Structure
 **Highlights:**
 
 Refactored RBCCommunityMap into a comprehensive, class-based application core.
@@ -651,13 +677,12 @@ Database Viewer
 
 Powers and Guilds UI
 
+🎯 Sets the gold standard structure for all major features in a centralized GUI shell
 
-🎯 Sets the gold standard structure for all major features in a centralized GUI shell​
-.
+---
 
+## Version 0.10.1 — Debugging and display refinement
 
-### 🧪 0.10.1 – 
-### 🧪 Debugging and Display Refinement
 **Changes:**
 
 Introduced fine-grained JavaScript console logging hooks via QWebChannel.
@@ -666,12 +691,12 @@ Improved load-time handling for coin balances and minimap center recalculations.
 
 Fixed redundant/inactive menu entries (e.g., go back/forward).
 
+🔧 Focused on event hooks, cleanup, and edge-case polish
 
-🔧 Focused on event hooks, cleanup, and edge-case polish​
-.
+---
 
-🔍 0.10.2 – 
-### 📊 Metadata Extraction and Info Frame Enhancements
+## Version 0.10.2 — Metadata extraction & info frame enhancements
+
 **Enhancements:**
 
 Added update_info_frame() showing:
@@ -684,14 +709,13 @@ Dynamically calculates movement costs using calculate_ap_cost().
 
 Expanded extract_coins_from_html() to support deeper page parsing for accurate balance updates.
 
+🔁 Reinforces app’s value as a real-time tracker and planner
 
-🔁 Reinforces app’s value as a real-time tracker and planner​
-.
+---
 
+## Version 0.10.3 — Feature polishing & schema finalization
 
-### 🔐 0.10.3 – 
-### 🔐 Final Feature Polishing & Schema Finalization
-Final **Additions:**
+**Final additions:**
 
 Hardened initialize_database() with:
 
@@ -703,13 +727,12 @@ check_required_modules() now validates environment dependencies at launch.
 
 Fully documented top-level application, classes, and methods (self-contained docset).
 
-
-### 🧱 Locked in a fully seeded local database, supports upgrades without manual user intervention​.
+**🧱 Locked in a fully seeded local database, supports upgrades without manual user intervention.**
 
 ---
 
+## Version 0.11.0 — Feature consolidation & keyboard navigation
 
-### 🧱 0.11.0 – 🧭 Feature Consolidation & Keyboard Navigation
 **Additions:**
 
 Introduced WASD keybindings with database-configurable modes.
@@ -724,12 +747,12 @@ Major module imports refactored into clean sections for readability.
 
 Documentation headers massively improved.
 
+📌 Solidifies RBCMap as a full-featured modular app
 
-📌 Solidifies RBCMap as a full-featured modular app​
-.
+---
 
+## Version 0.11.1 — Visual and table coverage patch
 
-### 🧪 0.11.1 – 🪛 Patch for Visuals and Table Coverage
 **Enhancements:**
 
 Fixes inconsistencies in theme customization (widget padding, font scaling).
@@ -738,13 +761,12 @@ UI consistency polish: spacing and alignment adjusted in dialogs.
 
 Expanded create_tables() to include css_profiles, custom_css, and several migration-safe defaults.
 
+**🧱 Focused on visual polish and database table consistency**
 
-### 🧱 Focused on visual polish and database table consistency​
-.
+---
 
+## Version 0.11.2 — Splash screen & loading feedback
 
-🧠 0.11.2 – 
-### 🖥 Splash Screen & Loading Visual Feedback
 **New Features:**
 
 Added SplashScreen class using QSplashScreen, visually indicating loading status.
@@ -755,27 +777,25 @@ Ensured compatibility of web engine initialization on slower machines (fixes som
 
 First version where startup dependencies are shown as "loading..." at splash.
 
+🎨 First steps toward full UX onboarding flow and startup feedback
 
-🎨 First steps toward full UX onboarding flow and startup feedback​
-.
+---
 
-🧹 0.11.3 – 🧽 Final Pre-Refactor Polish
+## Version 0.11.3 — Final pre-refactor polish
+
 **Changes:**
 
-Tightened file structure for modules — preparation for 0.12’s multi-folder modular split.
+Tightened the internal module structure ahead of the 0.12.0 refactor.
 
 Logging messages refined, paths shortened to use relative sessions/, logs/, etc.
 
 Final patch before major 0.12.0 directory and architecture shift.
 
-🧼 Focused on cleanup and refactor readiness​.
+🧼 Focused on cleanup and refactor readiness.
 
 ---
 
-
-## Version 0.12.0
-
-### 🧱 Monolithic Architecture with Enhanced Modularity
+## Version 0.12.0 — Monolithic architecture with enhanced modularity
 
 - **Monolithic structure** retained in `main_0.12.0.py` with improved internal modularity for maintainability.
 - **`create_tables()` and `insert_initial_data()`** define and seed all SQLite tables, eliminating manual pre-seeding.
@@ -808,9 +828,25 @@ Final patch before major 0.12.0 directory and architecture shift.
 - Tables seeded with default data using `INSERT OR IGNORE` for first-time installs and upgrade-safe bootstrapping.
 
 ---
-## Version 0.13.0
 
-### 🚀 Major Internal Refactor (Monolithic Final Form)
+## Version 0.12.1 — Compass overlay, move countdowns & character switching
+
+This entry was missing from earlier copies of the changelog; it was reconstructed
+from the archived `main_0.12.1.py`.
+
+### ✅ Key changes in v0.12.1
+- 🧭 **Compass overlay**: a new `CompassOverlay` dialog lists routes to
+  destinations with direction arrows and AP-cost labels.
+- ⏳ **Move countdowns**: countdown labels for the next guild and shop moves.
+- 👥 **Character switching**: switching characters now sets the login cookie
+  and logs in directly (replacing the separate logout step), and restores each
+  character's last destination.
+- 🎨 **Theming**: themes can be applied to individual widgets and dialogs.
+- ✅ **Dialog validation**: dialogs validate input before accepting.
+
+---
+
+## Version 0.13.0 — Major internal refactor
 
 Version 0.13.0 introduces substantial internal changes while retaining a monolithic file structure. All location scraping logic has been **fully removed** and replaced with a modern system that pulls shop and guild data from a live Discord bot-powered JSON endpoint (`locations.json`).
 
@@ -838,9 +874,8 @@ Version 0.13.0 introduces substantial internal changes while retaining a monolit
 > This is the final monolithic version before future potential modularization or mobile/packaged deployment revisions.
 
 ---
-## Version 0.13.1
 
-### 🩹 Minimap & Stability Fixes
+## Version 0.13.1 — Minimap & stability fixes
 
 A small maintenance release on top of 0.13.0's monolithic rewrite, focused on
 minimap rendering correctness and general cleanup.
@@ -853,9 +888,8 @@ minimap rendering correctness and general cleanup.
 > 0.13.1 is the baseline the subsequent 0.13.2 security work builds on.
 
 ---
-## Version 0.13.2
 
-### 🛡️ Security & Robustness Update
+## Version 0.13.2 — Security & robustness update
 
 Version 0.13.2 is a small security and robustness update on v0.13.1, still
 packaged as a single file.
@@ -875,43 +909,89 @@ packaged as a single file.
 - Cleaned up external API URLs (removed the `/wsgi/` path segment).
 
 ---
-## Version 0.13.3.0
 
-### 🔒 Security & Robustness (testing line)
+## Version 0.13.3.0 — Security & robustness continued
 
-Version 0.13.3.0 continues the 0.13.2 security and robustness posture in the
-`testing/` development line, still as a single file. It carries forward the
-safe login injection, request-timeout handling, and fail-fast dependency
-reporting introduced in 0.13.2.
+Version 0.13.3.0 continues the 0.13.2 security and robustness work, still
+packaged as a single file. It was developed in the former `testing/` folder
+and carries forward the safe login injection, request-timeout handling, and
+fail-fast dependency reporting introduced in 0.13.2.
+
+> 0.13.3.0 is the starting point of the 0.14.0 development line.
 
 ---
-## Version 0.13.3.1
 
-### 🛡️ Security, Bug Fixes & Cleanup
+## Version 0.14.0 — Pre-release development line (formerly 0.13.3.1)
 
-A security, bugfix, and cleanup iteration on 0.13.3.0 in the `testing/` line.
-`main_0.13.3.0.py` is preserved unchanged as the prior point-in-time; this work
-lives in `main_0.13.3.1.py`.
+The development line that became release 1.0.0. It began as 0.13.3.1 in the
+former `testing/` folder and was renamed to 0.14.0. It was never released on its
+own and has no `version/0.14.0` branch; `main_1.0.0.py` replaced
+`main_0.14.0.py` on `dev`.
 
-#### 🛡️ Security & Robustness
-- 🔒 **Credential redaction in logs**: the `ip` cookie's password portion is now
-  masked (`user#####`) before being written to the on-disk debug logs. The
-  login-vs-logout distinction is preserved for troubleshooting (logout logs as
-  `user#`); cookie storage and login injection are unchanged.
-- ⏱️ **Request timeouts on manual update**: the "Update Data" action now applies
-  a timeout to all outbound HTTP calls, so a dead or slow network can no longer
-  hang the UI thread indefinitely.
+### 🛡️ Security & robustness
+- 🔒 **Credential redaction in logs:** the `ip` cookie's password portion is
+  masked (`user#####`) before it is written to the on-disk debug logs. Login
+  and logout remain distinguishable (logout logs as `user#`); cookie storage
+  and login injection are unchanged.
+- ⏱️ **Request timeouts on manual update:** the "Update Data" action applies a
+  timeout to all outbound HTTP calls, so a dead or slow network can no longer
+  hang the UI thread.
 
-#### 🐛 Bug Fixes
-- Fixed the `SetDestinationDialog` acceptance check that compared against a Qt
-  signal (`QDialog.accepted`) instead of the enum (`QDialog.DialogCode.Accepted`),
-  which left the post-dialog refresh block dead.
-- Fixed a fallback path that aliased two runtime dictionaries to a single object
+### 🗺️ Location data
+- All server-owned map locations (banks, taverns, transits, user buildings and
+  places of interest, plus guilds and shops) are synchronized from the update
+  service at launch and reconciled against the local database.
+- Updates use a tokenless `/refresh` request and poll until fresh data arrives;
+  the response status is validated, the manual-update poll budget is bounded,
+  and polled data is accepted only when `last_updated` strictly advances.
+- **Contribute Discovered Locations** (opt-in, with a first-run prompt): newly
+  discovered non-moving locations can be reported anonymously, with a cooldown
+  guard and a skip-list for curated points of interest. Community building data
+  is pulled from `community_buildings.json` and `buildings_seed.json`.
+
+### 🎨 Appearance
+- Minimap colors and the whole-app theme are derived from the active game CSS,
+  with `blood.css` defaults. Fixed a color/background-color parsing issue that
+  hid some labels.
+- Tile and building artwork for future minimap tiling is staged under
+  `images/`; it is not yet used by the app.
+
+### 🐛 Bug fixes
+- Fixed the `SetDestinationDialog` acceptance check, which compared against a
+  Qt signal (`QDialog.accepted`) instead of `QDialog.DialogCode.Accepted` and
+  left the post-dialog refresh unreachable.
+- Fixed a fallback path that aliased two runtime dictionaries to one object
   (`columns = rows = {}`).
 
-#### 🧹 Internal Cleanup
-- De-duplicated the token → trigger → wait → fetch update flow into a single
-  shared `fetch_location_update()` helper used by both the startup worker and
-  the manual "Update Data" action, so the two paths can no longer drift.
-- Added a `requirements.txt` mirroring the in-code dependency validation map.
+### 🧹 Internal cleanup
+- De-duplicated the token → trigger → wait → fetch update flow into a shared
+  `fetch_location_update()` helper used by the startup worker and the manual
+  "Update Data" action.
+- Added `requirements.txt`, mirroring the in-code dependency validation map.
 
+---
+
+## Version 1.0.0 — First stable release
+
+The first 1.0 release, built from the 0.14.0 development line and archived on
+the `version/1.0.0` branch as `main_1.0.0.py`. It includes everything listed
+under 0.14.0, plus:
+
+### 📁 Per-user data directory
+- Logs, sessions, and the SQLite database are stored in a per-user directory
+  instead of next to the script:
+  - Windows: `%LOCALAPPDATA%\RBC-Map`
+  - macOS / Linux: `$XDG_DATA_HOME/RBC-Map` (default `~/.local/share/RBC-Map`)
+- Bundled assets (such as `images/`) are resolved next to the executable in
+  packaged (Nuitka) builds and next to the script otherwise.
+
+### 🐧 Linux
+- Software-rendering fallback for virtual machines with incomplete GPU
+  support: Chromium GPU compositing is disabled and Qt Quick / OpenGL use
+  software rendering, so the embedded browser and app widgets still draw.
+- The main window explicitly requests minimize, maximize, and system-menu
+  controls, and has a minimum size of 900×600, for desktops that otherwise
+  omit them.
+
+### 📘 Documentation
+- Refreshed the README, help documentation, and screenshots for the release.
