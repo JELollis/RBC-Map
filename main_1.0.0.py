@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_0.14.0
+# Filename: main_1.0.0
 
 """
 ======================
@@ -22,14 +22,14 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v0.14.0)
+RBC City Map Application (v1.0.0)
 =================================
 
 This application provides an interactive mapping and character management tool
 for the browser-based vampire RPG **Vampires! The Dark Alleyway**, set in the
 fictional RavenBlack City.
 
-Version 0.14.0 moves all server-owned map locations to launch-time API sync.
+Version 1.0.0 moves all server-owned map locations to launch-time API sync.
 While still packaged as a single file, it redacts credentials from logs, adds
 request timeouts to the manual data update, fixes two latent bugs, and
 consolidates the location-update flow into a single shared code path.
@@ -65,7 +65,7 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v0.14.0:
+Updated in v1.0.0:
 -------------------
 - Redacted the 'ip' cookie password portion in debug logs (login/logout state
   is still distinguishable) so credentials no longer reach on-disk logs.
@@ -139,21 +139,35 @@ from PySide6 import QtCore
 # Global Constants
 # -----------------------
 
-BASE_DIR = Path(__file__).resolve().parent
+def _application_dir() -> Path:
+    """Return the directory containing the source or packaged executable."""
+    if getattr(sys, "frozen", False) or "__compiled__" in globals():
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
 
-LOG_DIR = BASE_DIR / "logs"
-SESSIONS_DIR = BASE_DIR / "sessions"
-IMAGES_DIR = BASE_DIR / "images"
+
+APP_DIR = _application_dir()
+
+if os.name == "nt":
+    _local_data_root = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+else:
+    _local_data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+
+DATA_DIR = _local_data_root / "RBC-Map"
+BASE_DIR = DATA_DIR
+
+LOG_DIR = DATA_DIR / "logs"
+SESSIONS_DIR = DATA_DIR / "sessions"
+IMAGES_DIR = APP_DIR / "images"
 
 DB_PATH = SESSIONS_DIR / "rbc_map_data.db"
 
 REQUIRED_DIRECTORIES = [
     LOG_DIR,
     SESSIONS_DIR,
-    IMAGES_DIR,
 ]
 
-VERSION_NUMBER = "0.14.0"
+VERSION_NUMBER = "1.0.0"
 
 # Default timeout (seconds) for outbound HTTP calls made on the UI thread.
 HTTP_REQUEST_TIMEOUT = 10
@@ -2009,8 +2023,16 @@ def configure_qtwebengine_environment() -> None:
         os.environ.setdefault("QTWEBENGINE_DISABLE_SANDBOX", "1")
         os.environ.setdefault(
             "QTWEBENGINE_CHROMIUM_FLAGS",
-            "--disable-software-rasterizer",
+            "--disable-gpu --disable-gpu-compositing",
         )
+        # Virtual machines frequently expose an incomplete GLX/GBM stack.
+        # Let Chromium use software rendering instead of failing during view
+        # initialization when the host GPU cannot provide a scanout buffer.
+        # Keep Qt Quick usable when the VM has no working GLX/EGL context.
+        # Disabling the XCB integration entirely also prevents the app's own
+        # Qt widgets from rendering, so use Qt's software backend instead.
+        os.environ.setdefault("QT_QUICK_BACKEND", "software")
+        os.environ.setdefault("QT_OPENGL", "software")
 
     elif platform_name == "darwin":
         # macOS (notably VMware / Parallels GPU instability)
@@ -2397,6 +2419,13 @@ class RBCCommunityMap(QMainWindow):
             icon_path = IMAGES_DIR / "favicon.ico"
             self.setWindowIcon(PySide6.QtGui.QIcon(str(icon_path)))
             self.setWindowTitle("RBC Community Map")
+            # Explicitly request standard window-manager controls.  Some
+            # Linux desktop/VM configurations omit maximize/restore unless
+            # these hints are present on the top-level window.
+            self.setWindowFlag(Qt.WindowType.WindowMinimizeButtonHint, True)
+            self.setWindowFlag(Qt.WindowType.WindowMaximizeButtonHint, True)
+            self.setWindowFlag(Qt.WindowType.WindowSystemMenuHint, True)
+            self.setMinimumSize(900, 600)
             self.setGeometry(100, 100, 1200, 800)
             self.load_theme_settings()
             self.apply_theme()
@@ -6377,7 +6406,7 @@ class RBCCommunityMap(QMainWindow):
                                    )
 
                 # All building locations, including curated POIs, are
-                # server-owned in 0.14. Reconcile the complete snapshot.
+                # server-owned in 0.14.0. Reconcile the complete snapshot.
                 server_buildings = data.get("buildings", {})
                 if isinstance(server_buildings, dict):
                     for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest"):
@@ -9497,9 +9526,7 @@ class CompassOverlay(QDialog):
 def main() -> None:
     app = QApplication(sys.argv)
 
-    # Resolve base paths safely (works in dev and packaged builds)
-    base_dir = Path(__file__).resolve().parent
-    images_dir = base_dir / "images"
+    images_dir = APP_DIR / "images"
 
     app_icon = PySide6.QtGui.QIcon(str(images_dir / "favicon.ico"))
     app.setWindowIcon(app_icon)
