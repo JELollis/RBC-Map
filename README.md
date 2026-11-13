@@ -1,137 +1,117 @@
 # RBC Community Map Application
 
-Current release: **1.0.0**
+**Current documented release: 1.0.0** · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
 
-This project is an attempt to create an interactive map coded in Python for use with **Vampires! The Dark Alleyway**, located at [RavenBlack City](https://quiz.ravenblack.net/blood.pl).
+RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
 
-![Main Application](Screenshots/Main%20Application.png "Main Application")
-
----
+![Main application](Screenshots/Main%20Application.png)
 
 ## Features
 
-### 1) Minimap Features
-- **Track Current Location**: Automatically track the current location based on the game’s right frame.
-- **Nearest Points of Interest**:
-  - **Red Line**: Drawn to the nearest transit station.
-  - **Blue Line**: Drawn to the nearest bank.
-  - **Orange Line**: Drawn to the nearest pub.
-- **Zoom Levels**: Display a 3x3 (default), 5x5, 7x7, or 9x9 grid around the player’s position.
-- **Manual Centering**:
-  - **Click to Center**: Click on a square in the minimap grid to center it.
-  - **Dropdown Selection**: Select a location using the dropdowns below the map and click "Go" to center the minimap on that location.
-- **Destination Tracking**:
-  - **Set Destination**: Click "Set Destination" to mark the destination on the map.
-  - **Green Line**: Paints a green line on the map to the destination.
-- **Customizable Themes**: Personalize the minimap and interface themes for a more customized experience.
-- **Rendering Fixes**: Improved fallback minimap rendering and stability in zoomed views.
-- **Auto-Refreshing Dropdowns**: Destination list updates dynamically when the dialog is opened.
-- **Community Location Updates**: Syncs current guild and shop movement data and merges community-supplied buildings, places of interest, arenas, alchemy locations, lairs, and halls into the local map.
-- **Opt-In Location Reporting**: Contribute newly discovered non-moving locations anonymously through the **Contribute Discovered Locations** setting. Reporting can be disabled at any time.
-- **Offline-Friendly Local Data**: Previously synchronized community locations remain available in the local database if the update service is unavailable.
+### Interactive minimap
+- Follow the character's current position using the game's right-hand frame.
+- Show routes to the nearest **transit station** (red), **bank** (blue), and **pub** (orange).
+- Choose a **3×3** (default), **5×5**, **7×7**, or **9×9** view.
+- Recenter by clicking a map cell or choosing a location from the dropdowns and selecting **Go**.
+- Use **Set Destination** to mark a destination and display its route in green.
+- Customize the minimap theme; fallback rendering helps maintain usability in zoomed views.
+- Refresh destination choices when the destination dialog opens.
 
-![Minimap Theme](Screenshots/Minimap%20Theme.png "Minimap Theme")
+![Minimap theme](Screenshots/Minimap%20Theme.png)
 
----
+### Community location data
+- Synchronize guild and shop movements and community-supplied buildings, points of interest, arenas, alchemy locations, lairs, and halls.
+- Optionally enable **Contribute Discovered Locations** to report newly discovered non-moving locations anonymously. You can turn this setting off at any time.
+- Continue using previously synchronized local location data when the update service is unavailable.
 
-### 2) Character Management
-- **Quick Switch**: Store login credentials to quickly and easily switch between characters.
-- **Local Data Storage**:
-  - User data is securely stored in a local SQLite database.
-  - Login credentials and session data remain local; only opted-in discovered-location reports are sent to the community update service.
-- **Session Persistence**: Destination, theme, and other settings are restored across sessions.
+### Characters and controls
+- Store character login details locally and switch between characters.
+- Restore destinations, themes, and other preferences between sessions.
+- Choose **WASD** or **arrow keys** for movement; movement shortcuts are suppressed while typing into input fields.
 
-![New User Dialog](Screenshots/New%20User%20Dialog.png "New User Dialog")
+![New user dialog](Screenshots/New%20User%20Dialog.png)
 
----
+### Planning and reference tools
 
-### 3) Keybinding Support (NEW in v0.10.3)
-- **WASD and Arrow Key Movement**: Toggle between **WASD** and **Arrow Key** navigation.
-- **Persistent Settings**: Keybinding configuration is stored in SQLite for consistency across sessions.
-- **Input Protection**: Movement keys are disabled when typing in input fields to avoid accidental moves.
+| Tool | What it does |
+| --- | --- |
+| **Shopping list** | Build item lists, calculate total cost, compare against available coins, and view the countdown to the next shop update. |
+| **Damage calculator** | Estimate damage required to bring a target to staking level and compare item combinations. |
+| **Power information** | Review game powers, descriptions, costs, effects, and the countdown to the next guild move. |
+| **Database viewer** | Inspect and manage underlying data tables (intended for advanced users). |
 
----
+![Shopping list tool](Screenshots/Shopping%20List%20Tool.png)
+![Damage calculator](Screenshots/Damage%20Calculator.png)
+![Power information](Screenshots/Power%20Information.png)
+![Database viewer](Screenshots/Database%20Viewer.png)
 
-### 4) Shopping List Tool
-- Create and manage shopping lists for in-game items.
-- Automatically calculate total costs for required items.
-- View available coins and plan purchases accordingly.
-- **Countdown Timer**: Displays time until the next shop update based on synchronized community data.
+### Appearance customization
+- Customize interface and minimap themes.
+- Use the CSS customization tool for styling, including fonts, box shadows, and background images, with a live preview.
 
-![Shopping List Tool](Screenshots/Shopping%20List%20Tool.png "Shopping List Tool")
+![CSS customization tool](Screenshots/CSS%20Customization%20Dialog.png)
+![Interface theme](Screenshots/Interface%20Theme.png)
 
----
+## Getting started
 
-### 5) CSS Customization Tool (Updated in v0.10.3)
-- **Modify Interface Styling**: Customize the UI with CSS modifications.
-- **New Features**: **Box Shadow, Font Selection, and Background Image Support**.
-- **Live Preview**: See CSS changes in real-time before applying them.
+### Requirements
+The Python runtime dependencies listed in [`requirements.txt`](requirements.txt) are:
+- PySide6 (including the Qt WebEngine components used by the embedded browser)
+- beautifulsoup4
+- requests
 
-![CSS Customization Tool](Screenshots/CSS%20Customization%20Dialog.png "CSS Customization Tool")
+A working Python 3 installation and an environment capable of running a Qt desktop application are required. Supported Python versions and platform-specific packaging instructions should be verified against the release you intend to run.
 
----
+### Install dependencies
 
-### 6) Database Viewer
-- A utility to interact with the underlying data tables.
-- Provides detailed views and management options for advanced users.
+From a checkout of the repository, create and activate a virtual environment, then install the declared dependencies:
 
-![Database Viewer](Screenshots/Database%20Viewer.png "Database Viewer")
+```bash
+python -m venv .venv
+```
 
----
+**Windows (PowerShell):**
+```powershell
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
 
-### 7) Damage Calculator
-- Calculate the amount of damage needed to reduce a target to staking level.
-- Analyze various combinations of items and their effects.
+**macOS / Linux:**
+```bash
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-![Damage Calculator](Screenshots/Damage%20Calculator.png "Damage Calculator")
+For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions. The appropriate application entry point may vary by version; consult the selected release's documentation rather than running an archived script from `Version Control/`.
 
----
+## Data and privacy
 
-### 8) Power Information
-- View detailed information about the powers available in the game, including their descriptions, costs, and effects.
-- **Countdown Timer**: Displays time remaining until next guild move.
+Character information, credentials, session state, and application preferences are stored in a local SQLite database. The documented community reporting feature is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
 
-![Power Information](Screenshots/Power%20Information.png "Power Information")
+## Documentation, support, and contributions
 
----
+- [Changelog](Changelog.md) — release history.
+- [Help documentation](docs/help/RBC_Map_Help.html) — application help topics.
+- [GitHub issues](https://github.com/JELollis/RBC-Map/issues) — report bugs and suggest improvements.
+- [Community Discord](https://discord.gg/rKamEZvK6X) — community discussion (the server has a joining process).
 
-### 9) Interface and Theme Customization
-- Customize the application's interface with personalized themes, including the minimap and main interface elements.
+Contributions and feedback are welcome. When reporting a problem, include the application version, operating system, steps to reproduce, and relevant error details; do not include passwords or session credentials.
 
-![Interface Theme](Screenshots/Interface%20Theme.png "Interface Theme")
+## License
 
----
+The project is documented as licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
-## Development
+## Contributors
 
-This project is hosted on GitHub: [RBC-Map GitHub Repository](https://github.com/JELollis/RBC-Map). Contributions and feedback are always welcome!
+**Development team**
+- **Windows compatibility:** Jonathan Lollis (Nesmuth), Justin Solivan
+- **macOS compatibility:** Joseph Lemois
+- **Linux compatibility:** Josh "Blaskewitts" Corse, Fern Lovebond
+- **Design and layout:** Shuvi, Blair Wilson (Ikunnaprinsess)
 
-Please also join us on Discord.
-
-***NOTE*** This is a community server so it does have some steps to join it. Don't let that scare you away though. 
-
-https://discord.gg/rKamEZvK6X
-
-### License
-The RBC City Map Application is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
----
-
-### Contributors
-
-#### Development Team:
-- **Windows Compatibility**: Jonathan Lollis (Nesmuth), Justin Solivan
-- **Apple OSx Compatibility**: Joseph Lemois
-- **Linux Compatibility**: Josh "Blaskewitts" Corse, Fern Lovebond
-- **Design and Layout**: Shuvi, Blair Wilson (Ikunnaprinsess)
-
-#### Special Thanks:
-- [**LIAM²**](http://liam2.leprichaunproductions.com/home.php) by Cain "Leprechaun" McBride, which inspired this project.
-- [**A View in the Dark**](https://aviewinthedark.net/) by Cliff Burton, providing the source for shops and guilds data.
-- [**RavenBlack Wiki**](https://ravenblack.city/) contributors.
-- **Anders** for **RBNav** and ongoing support.
-- **Vespertine** for [**Vespertine's City Crawler**](https://vampires.terrible.engineering/) providing additional sources for shop and guild data.
-
----
-
-We hope this tool enhances your experience in RavenBlack City. Thank you for using the RBC City Map application!
+**Special thanks**
+- [LIAM²](http://liam2.leprichaunproductions.com/home.php) by Cain "Leprechaun" McBride — inspiration for this project.
+- [A View in the Dark](https://aviewinthedark.net/) by Cliff Burton — shop and guild data.
+- [RavenBlack Wiki](https://ravenblack.city/) contributors.
+- Anders — RBNav and ongoing support.
+- [Vespertine's City Crawler](https://vampires.terrible.engineering/) — additional shop and guild data.
