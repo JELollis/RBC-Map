@@ -1,117 +1,86 @@
-# RBC Community Map Application
+# RBC Community Map — 0.1.0
 
-**Current documented release: 1.0.0** · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+> **Archived snapshot.** This branch preserves version 0.1.0 for reference; it is not maintained.
+> For current use, see the latest release, [1.0.0](https://github.com/JELollis/RBC-Map/tree/version/1.0.0),
+> or the [`dev`](https://github.com/JELollis/RBC-Map/tree/dev) branch for ongoing development.
 
-RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
+RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in
+[RavenBlack City](https://quiz.ravenblack.net/blood.pl).
 
-![Main application](Screenshots/Main%20Application.png)
+## About 0.1.0: Tkinter prototype
 
-## Features
+**💡 Summary**
 
-### Interactive minimap
-- Follow the character's current position using the game's right-hand frame.
-- Show routes to the nearest **transit station** (red), **bank** (blue), and **pub** (orange).
-- Choose a **3×3** (default), **5×5**, **7×7**, or **9×9** view.
-- Recenter by clicking a map cell or choosing a location from the dropdowns and selecting **Go**.
-- Use **Set Destination** to mark a destination and display its route in green.
-- Customize the minimap theme; fallback rendering helps maintain usability in zoomed views.
-- Refresh destination choices when the destination dialog opens.
+Version 0.1.0 of the RBCMap app is a functional prototype built with tkinter, focusing on a minimap interface and manual street navigation using dropdowns and zooming. This version is highly procedural and uses no class-based structure.
 
-![Minimap theme](Screenshots/Minimap%20Theme.png)
+**🧩 Key Features in 0.1.0**
 
-### Community location data
-- Synchronize guild and shop movements and community-supplied buildings, points of interest, arenas, alchemy locations, lairs, and halls.
-- Optionally enable **Contribute Discovered Locations** to report newly discovered non-moving locations anonymously. You can turn this setting off at any time.
-- Continue using previously synchronized local location data when the update service is unavailable.
+🗺️ Minimap
+Grid-style minimap rendered using a Canvas.
 
-### Characters and controls
-- Store character login details locally and switch between characters.
-- Restore destinations, themes, and other preferences between sessions.
-- Choose **WASD** or **arrow keys** for movement; movement shortcuts are suppressed while typing into input fields.
+Visualizes intersections of N-S and E-W streets.
 
-![New user dialog](Screenshots/New%20User%20Dialog.png)
+Dynamically adjusts based on zoom_level.
 
-### Planning and reference tools
+Clickable grid allows repositioning the viewport (on_minimap_click).
 
-| Tool | What it does |
-| --- | --- |
-| **Shopping list** | Build item lists, calculate total cost, compare against available coins, and view the countdown to the next shop update. |
-| **Damage calculator** | Estimate damage required to bring a target to staking level and compare item combinations. |
-| **Power information** | Review game powers, descriptions, costs, effects, and the countdown to the next guild move. |
-| **Database viewer** | Inspect and manage underlying data tables (intended for advanced users). |
+🧭 Zoom Controls
+Buttons for "Zoom In" and "Zoom Out".
 
-![Shopping list tool](Screenshots/Shopping%20List%20Tool.png)
-![Damage calculator](Screenshots/Damage%20Calculator.png)
-![Power information](Screenshots/Power%20Information.png)
-![Database viewer](Screenshots/Database%20Viewer.png)
+Zoom affects how many streets are shown in the viewport (range 3–10).
 
-### Appearance customization
-- Customize interface and minimap themes.
-- Use the CSS customization tool for styling, including fonts, box shadows, and background images, with a live preview.
+🏙️ Street Navigation
+Dropdowns for selecting a specific N-S and E-W intersection.
 
-![CSS customization tool](Screenshots/CSS%20Customization%20Dialog.png)
-![Interface theme](Screenshots/Interface%20Theme.png)
+“Go” button jumps the map to that location via go_to_location().
 
-## Getting started
+📌 Map Refresh & Extra Buttons
+Buttons included:
 
-### Requirements
-The Python runtime dependencies listed in [`requirements.txt`](requirements.txt) are:
-- PySide6 (including the Qt WebEngine components used by the embedded browser)
-- beautifulsoup4
-- requests
+“Refresh Map” – calls update_minimap().
 
-A working Python 3 installation and an environment capable of running a Qt desktop application are required. Supported Python versions and platform-specific packaging instructions should be verified against the release you intend to run.
+“Discord” – placeholder for community link.
 
-### Install dependencies
+“Modify Buildings” – placeholder for webpage/editor.
 
-From a checkout of the repository, create and activate a virtual environment, then install the declared dependencies:
+**📦 Placeholder Functions**
+
+Functions like open_webpage(), open_discord(), and set_destination() exist but are unimplemented — suggesting planned features like building editing, community integration, and character destination logic.
+
+**🛠️ Utilities**
+
+generate_ew_streets() builds E-W street names from 1st to 100th with ordinal suffixes.
+
+Static N-S street list contains both natural and thematic naming (e.g., “Pine”, “Torment”, “Despair”).
+
+**🧱 Technical Notes**
+
+Hardcoded GUI using absolute grid placements.
+
+Pure procedural code — no object-oriented design.
+
+No data persistence or external file/database integration.
+
+Initial zoom logic and bounds checking are in place for stability.
+
+See the [Changelog](Changelog.md#version-010--tkinter-prototype) for details and earlier history.
+
+## Requirements
+
+- Python 3
+- UI toolkit: tkinter
+
+Third-party packages (also listed in [`requirements.txt`](requirements.txt)):
+- None beyond Python 3 itself; tkinter ships with the standard library on most installs.
+
+## Run
 
 ```bash
-python -m venv .venv
+python main_0.1.0.py
 ```
 
-**Windows (PowerShell):**
-```powershell
-.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-```
-
-**macOS / Linux:**
-```bash
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-```
-
-For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions. The appropriate application entry point may vary by version; consult the selected release's documentation rather than running an archived script from `Version Control/`.
-
-## Data and privacy
-
-Character information, credentials, session state, and application preferences are stored in a local SQLite database. The documented community reporting feature is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
-
-## Documentation, support, and contributions
-
-- [Changelog](Changelog.md) — release history.
-- [Help documentation](docs/help/RBC_Map_Help.html) — application help topics.
-- [GitHub issues](https://github.com/JELollis/RBC-Map/issues) — report bugs and suggest improvements.
-- [Community Discord](https://discord.gg/rKamEZvK6X) — community discussion (the server has a joining process).
-
-Contributions and feedback are welcome. When reporting a problem, include the application version, operating system, steps to reproduce, and relevant error details; do not include passwords or session credentials.
+- This is an early tkinter prototype; it predates the embedded game browser.
 
 ## License
 
-The project is documented as licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-## Contributors
-
-**Development team**
-- **Windows compatibility:** Jonathan Lollis (Nesmuth), Justin Solivan
-- **macOS compatibility:** Joseph Lemois
-- **Linux compatibility:** Josh "Blaskewitts" Corse, Fern Lovebond
-- **Design and layout:** Shuvi, Blair Wilson (Ikunnaprinsess)
-
-**Special thanks**
-- [LIAM²](http://liam2.leprichaunproductions.com/home.php) by Cain "Leprechaun" McBride — inspiration for this project.
-- [A View in the Dark](https://aviewinthedark.net/) by Cliff Burton — shop and guild data.
-- [RavenBlack Wiki](https://ravenblack.city/) contributors.
-- Anders — RBNav and ongoing support.
-- [Vespertine's City Crawler](https://vampires.terrible.engineering/) — additional shop and guild data.
+Licensed under the [Apache License 2.0](License.txt). See [Contributors.md](Contributors.md) for credits.
