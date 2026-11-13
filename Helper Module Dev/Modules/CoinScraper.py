@@ -151,7 +151,7 @@ class CoinScraper(QMainWindow):
     # SQLite Cookie Storage Setup
     # -----------------------
 
-    COOKIE_DB_PATH = './testing/sessions/cookies.db'  # Path to the SQLite database for storing cookies
+    COOKIE_DB_PATH = './sessions/cookies.db'  # Path to the SQLite database for storing cookies
 
     def initialize_cookie_db(self):
         """
