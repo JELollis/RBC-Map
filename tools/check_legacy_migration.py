@@ -17,7 +17,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.0.py"
-WANTED = {"_count_characters", "migrate_legacy_data"}
+WANTED = {"_count_characters", "_copy_if_absent", "migrate_legacy_data"}
 
 
 def load_functions():
@@ -93,6 +93,21 @@ def replaces_empty_new_db_with_backup(t: Path):
     assert (t / "new/rbc_map_data.db.pre-migration").is_file()
 
 
+def keeps_existing_profile_files(t: Path):
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    (t / "app/sessions/profile").mkdir()
+    (t / "app/sessions/profile/Cookies").write_text("legacy")
+    (t / "app/sessions/profile/Preferences").write_text("legacy-prefs")
+    make_db(t / "new/rbc_map_data.db", [])  # earlier 1.0.0 launch
+    (t / "new/profile").mkdir()
+    (t / "new/profile/Cookies").write_text("current")
+    msg = migrate(t / "new", [t / "app/sessions"])
+    assert msg and "Migrated" in msg, msg
+    assert (t / "new/profile/Cookies").read_text() == "current", "existing profile file overwritten"
+    assert (t / "new/profile/Preferences").read_text() == "legacy-prefs", "missing file not copied"
+    assert names(t / "new/rbc_map_data.db") == ["Alice"]
+
+
 def keeps_populated_new_db(t: Path):
     make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
     make_db(t / "new/rbc_map_data.db", ["Bob"])
@@ -128,7 +143,8 @@ def empty_legacy_does_not_replace_new_db(t: Path):
 
 
 for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_legacy,
-             replaces_empty_new_db_with_backup, keeps_populated_new_db, second_run_is_noop,
+             replaces_empty_new_db_with_backup, keeps_existing_profile_files,
+             keeps_populated_new_db, second_run_is_noop,
              same_dir_is_ignored, failure_leaves_no_partial_db,
              empty_legacy_does_not_replace_new_db]:
     run(case.__name__, case)

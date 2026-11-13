@@ -1007,7 +1007,8 @@ under 0.14.0, plus:
   users started with no saved characters, settings, or logins. On launch, the
   app now copies `sessions/` (or `testing/sessions/`) from next to the script
   into the data folder when the new database is missing or has no saved
-  characters. Originals are left untouched, a replaced empty database is kept
+  characters. Originals are left untouched, browser-profile files already in
+  the data folder are kept, a replaced empty database is kept
   as `rbc_map_data.db.pre-migration`, and a failed copy is retried next launch.
 - **Help:** "Update Data" is now described as requesting shop, guild, and
   community building locations from the update service, not from A View in the

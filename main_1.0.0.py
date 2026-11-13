@@ -539,6 +539,13 @@ def _count_characters(db_path: Path) -> int:
         return 0
 
 
+def _copy_if_absent(src: str, dst: str) -> str:
+    """copytree copy function that leaves an existing destination file alone."""
+    if os.path.lexists(dst):
+        return dst
+    return shutil.copy2(src, dst)
+
+
 def migrate_legacy_data(
         sessions_dir: Path = SESSIONS_DIR,
         legacy_dirs: list[Path] | None = None,
@@ -548,7 +555,9 @@ def migrate_legacy_data(
     Runs before anything opens the database. It migrates when the new database
     is missing, or exists but holds no saved characters while a legacy
     database does (a 1.0.0 launch before this fix created an empty one). The
-    replaced database is kept as a ``.pre-migration`` backup.
+    replaced database is kept as a ``.pre-migration`` backup. Web profile
+    files already present in *sessions_dir* are kept; only missing ones are
+    copied.
 
     Legacy files are only read, never modified. The database is copied last,
     through a temporary file and an atomic rename, so a failed migration leaves
@@ -577,12 +586,14 @@ def migrate_legacy_data(
     temp_db = target_db.with_name(LEGACY_DB_NAME + ".migrating")
     try:
         sessions_dir.mkdir(parents=True, exist_ok=True)
-        # Web profile data (cookies, cache) first; the database last.
+        # Web profile data (cookies, cache) first; the database last. Files
+        # already in the new profile are kept, never overwritten.
         shutil.copytree(
             source_dir,
             sessions_dir,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns(LEGACY_DB_NAME + "*"),
+            copy_function=_copy_if_absent,
         )
         temp_db.unlink(missing_ok=True)
         src = sqlite3.connect(f"file:{source_db.as_posix()}?mode=ro", uri=True)
