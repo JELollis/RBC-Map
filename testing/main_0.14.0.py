@@ -3372,7 +3372,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Main layout for map and controls
         map_layout = QHBoxLayout()
-        main_layout.addLayout(map_layout)
+        main_layout.addLayout(map_layout);
 
         # Left layout containing the minimap and control buttons
         left_layout = QVBoxLayout()
