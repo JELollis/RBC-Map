@@ -38,15 +38,13 @@ qodana.yaml
 # Misc
 /settings/
 */sesions*/  # Possible typo? Should this be `/sessions*/` or corrected?
+/Helper Module Dev/
 
 # Data files
 *.json
 
 # IntelliJ IDEA and similar
 */.idea
-/Helper Module Dev/API/wsgi/.idea
-Helper Module Dev/.env
-Helper Module Dev/tmp.py
 /scratch.py
 /RBC Community Map.exe
 /shop_move_timestamp.txt
