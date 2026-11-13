@@ -1,12 +1,9 @@
 # Logs and sessions
 /logs/
 /sessions/
+/testing/
 /Version Control/logs/
 /Version Control/sessions/
-/testing/logs/
-/testing/sessions/
-/testing/screenshots/
-/testing/settings/
 
 # System and IDE-specific
 /.idea/
@@ -21,12 +18,11 @@
 /Distributions/*
 
 # Sensitive or secret keys
-/testing/secret.key
-/testing/fernet_key.py
+/secret.key
+/fernet_key.py
 
 # Database dumps and related
 /MySQL Dump/
-/testing/*.sql
 *.xlsx
 
 # Python cache
@@ -45,13 +41,13 @@ qodana.yaml
 
 # Data files
 *.json
-/testing/*.txt
 
 # IntelliJ IDEA and similar
 */.idea
 /Helper Module Dev/API/wsgi/.idea
 Helper Module Dev/.env
 Helper Module Dev/tmp.py
-testing/scratch.py
-testing/RBC Community Map.exe
+/scratch.py
+/RBC Community Map.exe
+/shop_move_timestamp.txt
 */.agents

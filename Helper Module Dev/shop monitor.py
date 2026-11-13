@@ -15,7 +15,7 @@ from PySide6.QtNetwork import QNetworkCookie
 
 # ------------- CONFIG ----------------
 CHARACTER_NAME = "Map Thrall 5"
-DB_PATH = "../testing/sessions/rbc_map_data.db"
+DB_PATH = "../sessions/rbc_map_data.db"
 URL = "https://quiz.ravenblack.net/blood.pl"
 TARGET_SPAN_TEXT = "Scrollworks"
 
@@ -148,7 +148,7 @@ class ShopMonitorApp(QMainWindow):
                 self.status_label.setText("Status: Shop moved!")
                 self.result_box.append(f"[{current_time}] ❌ Shop moved!")
                 logging.info("Shop moved — stopping timer and writing file.")
-                with open("../testing/shop_move_timestamp.txt", "w") as f:
+                with open("../shop_move_timestamp.txt", "w") as f:
                     f.write(current_time)
                 self.timer.stop()
 
