@@ -2,9 +2,9 @@
 
 Release history for the RBC Community Map application, oldest first.
 
-- **Latest release:** [1.0.0](#version-100--first-stable-release), archived on the
+- **Current version:** [1.0.0](#version-100--first-stable-release), `main_1.0.0.py`
+  on the `dev` branch, with the release snapshot on the
   [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
-- **Development:** 0.14.0, `main_0.14.0.py` on the `dev` branch.
 - **Earlier versions:** each is preserved on its own `version/<number>` branch
   as `main_<number>.py`.
 
@@ -922,11 +922,12 @@ fail-fast dependency reporting introduced in 0.13.2.
 
 ---
 
-## Version 0.14.0 — Development line (formerly 0.13.3.1)
+## Version 0.14.0 — Pre-release development line (formerly 0.13.3.1)
 
-The development version (`main_0.14.0.py`, on `dev`). It began as 0.13.3.1 in
-the former `testing/` folder and was renamed to 0.14.0. Release 1.0.0 was built
-from this line.
+The development line that became release 1.0.0. It began as 0.13.3.1 in the
+former `testing/` folder and was renamed to 0.14.0. It was never released on its
+own and has no `version/0.14.0` branch; `main_1.0.0.py` replaced
+`main_0.14.0.py` on `dev`.
 
 ### 🛡️ Security & robustness
 - 🔒 **Credential redaction in logs:** the `ip` cookie's password portion is
@@ -968,10 +969,6 @@ from this line.
   `fetch_location_update()` helper used by the startup worker and the manual
   "Update Data" action.
 - Added `requirements.txt`, mirroring the in-code dependency validation map.
-
-> The 1.0.0-only changes listed below (per-user data directory, Linux
-> rendering and window fixes) have not yet been merged back into
-> `main_0.14.0.py`.
 
 ---
 

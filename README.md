@@ -1,6 +1,6 @@
 # RBC Community Map Application
 
-**Latest release: [1.0.0](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)** · **Development version: 0.14.0** · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+**Current version: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
 
 RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
 
@@ -85,14 +85,14 @@ python -m pip install -r requirements.txt
 ### Run
 
 ```bash
-python main_0.14.0.py
+python main_1.0.0.py
 ```
 
 For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
 
 ## Data and privacy
 
-Character information, credentials, session state, and application preferences are stored in a local SQLite database. The development script (`main_0.14.0.py`) keeps its `logs/` and `sessions/` folders (including `sessions/rbc_map_data.db`) next to the script; release 1.0.0 stores them in a per-user data folder instead (`%LOCALAPPDATA%\RBC-Map` on Windows, `~/.local/share/RBC-Map` on macOS and Linux). These folders are excluded from version control; don't commit or share them.
+Character information, credentials, session state, and application preferences are stored in a local SQLite database. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.
 
 The documented community reporting feature (**Contribute Discovered Locations**) is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
 
@@ -100,7 +100,7 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 
 | Branch | Contents |
 | --- | --- |
-| `dev` | Active development (`main_0.14.0.py`); feature work merges here through pull requests. |
+| `dev` | Active development, currently on 1.0.0 (`main_1.0.0.py`); feature work merges here through pull requests. |
 | `main` | Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
@@ -112,13 +112,13 @@ Each `version/<number>` branch holds that version as `main_<number>.py`, with a
 README and changelog for that version. Branches are snapshots for reference and
 are not maintained.
 
-To run the latest release from source, check out the `version/1.0.0` branch and run `main_1.0.0.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
+The `dev` and `version/1.0.0` branches both run `main_1.0.0.py`; `version/1.0.0` is the fixed release snapshot, while `dev` moves on as new work lands. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
-| `main_0.14.0.py` | The application (development version), packaged as a single file. |
+| `main_1.0.0.py` | The application, packaged as a single file. |
 | `requirements.txt` | Runtime dependencies. |
 | `images/`, `css/` | Icons, artwork, and stylesheets used by the app. |
 | `docs/help/` | Help documentation (HTML, PDF, CHM, EPUB, DOCX). |
