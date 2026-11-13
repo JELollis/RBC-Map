@@ -122,6 +122,7 @@ import math
 import os
 import platform
 import re
+import shutil
 import sqlite3
 import sys
 import threading
@@ -513,6 +514,144 @@ if not ensure_directories_exist():
 
 
 # -----------------------
+# Legacy Data Migration
+# -----------------------
+
+# Before 1.0.0 the app kept its data next to the script: ``sessions/`` at the
+# repository root (0.13.x and earlier) or ``testing/sessions/`` (the former
+# 0.13.3.x / 0.14.0 development line). 1.0.0 moved it to DATA_DIR.
+LEGACY_SESSIONS_DIRS = [
+    APP_DIR / "sessions",
+    APP_DIR / "testing" / "sessions",
+]
+LEGACY_DB_NAME = "rbc_map_data.db"
+# Written once the legacy question is settled; after that, never migrate again.
+LEGACY_MIGRATION_MARKER = ".legacy-migration-done"
+
+
+def _connect_read_only(db_path: Path) -> sqlite3.Connection:
+    """Open *db_path* read-only via an encoded file URI (safe for '#', '?', '%')."""
+    return sqlite3.connect(f"{db_path.resolve().as_uri()}?mode=ro", uri=True)
+
+
+def _count_characters(db_path: Path) -> int | None:
+    """Return the number of saved characters in *db_path*, or None if unreadable."""
+    try:
+        conn = _connect_read_only(db_path)
+        try:
+            return conn.execute("SELECT COUNT(*) FROM characters").fetchone()[0]
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+
+
+def _mark_migration_done(sessions_dir: Path, note: str) -> None:
+    """Persist that legacy migration is settled; best effort."""
+    try:
+        (sessions_dir / LEGACY_MIGRATION_MARKER).write_text(note + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _copy_if_absent(src: str, dst: str) -> str:
+    """copytree copy function that leaves an existing destination file alone."""
+    if os.path.lexists(dst):
+        return dst
+    return shutil.copy2(src, dst)
+
+
+def migrate_legacy_data(
+        sessions_dir: Path = SESSIONS_DIR,
+        legacy_dirs: list[Path] | None = None,
+) -> str | None:
+    """Copy pre-1.0.0 session data into *sessions_dir* once.
+
+    Runs before anything opens the database. It migrates when the new database
+    is missing, or exists but holds no saved characters while a legacy
+    database does (a 1.0.0 launch before this fix created an empty one). The
+    replaced database is kept as a ``.pre-migration`` backup. Web profile
+    files already present in *sessions_dir* are kept; only missing ones are
+    copied.
+
+    A marker file records when the question is settled: after a successful
+    migration, or when the new database already holds characters (or cannot
+    be read). Once it exists the migration never runs again, so deleting all
+    characters later cannot bring the legacy accounts back.
+
+    Legacy files are only read, never modified. The database is copied last,
+    through a temporary file and an atomic rename, so a failed migration leaves
+    no partial database and is retried on the next launch.
+
+    Returns a message describing what happened, or None if nothing to do.
+    Logging is not configured yet when this runs, so the caller logs it.
+    """
+    if legacy_dirs is None:
+        legacy_dirs = LEGACY_SESSIONS_DIRS
+
+    target_db = sessions_dir / LEGACY_DB_NAME
+    if (sessions_dir / LEGACY_MIGRATION_MARKER).exists():
+        return None
+    candidates = [
+        d for d in legacy_dirs
+        if (d / LEGACY_DB_NAME).is_file() and d.resolve() != sessions_dir.resolve()
+    ]
+    if not candidates:
+        return None
+    source_dir = max(candidates, key=lambda d: (d / LEGACY_DB_NAME).stat().st_mtime)
+    source_db = source_dir / LEGACY_DB_NAME
+
+    if target_db.exists():
+        target_count = _count_characters(target_db)
+        if target_count is None or target_count > 0:
+            # The new location holds the user's data (or can't be checked
+            # safely): keep it and settle the question for good.
+            _mark_migration_done(sessions_dir, f"kept existing data; legacy at {source_dir}")
+            return None
+        if not _count_characters(source_db):
+            return None  # nothing worth bringing over
+
+    temp_db = target_db.with_name(LEGACY_DB_NAME + ".migrating")
+    try:
+        sessions_dir.mkdir(parents=True, exist_ok=True)
+        # Web profile data (cookies, cache) first; the database last. Files
+        # already in the new profile are kept, never overwritten.
+        shutil.copytree(
+            source_dir,
+            sessions_dir,
+            dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns(LEGACY_DB_NAME + "*"),
+            copy_function=_copy_if_absent,
+        )
+        temp_db.unlink(missing_ok=True)
+        src = _connect_read_only(source_db)
+        try:
+            dst = sqlite3.connect(temp_db)
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+        if target_db.exists():
+            backup = target_db.with_name(LEGACY_DB_NAME + ".pre-migration")
+            os.replace(target_db, backup)
+        os.replace(temp_db, target_db)
+    except (OSError, sqlite3.Error) as exc:
+        try:
+            temp_db.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return f"Legacy data migration from {source_dir} failed; will retry next launch: {exc}"
+
+    _mark_migration_done(sessions_dir, f"migrated from {source_dir}")
+    return f"Migrated saved data from {source_dir} to {sessions_dir}"
+
+
+LEGACY_MIGRATION_MESSAGE = migrate_legacy_data()
+
+
+# -----------------------
 # Logging Setup
 # -----------------------
 
@@ -582,6 +721,11 @@ if not setup_logging(log_level=get_logging_level_from_db()):
     )
 
 logging.info("Launching app version %s", VERSION_NUMBER)
+if LEGACY_MIGRATION_MESSAGE:
+    if "failed" in LEGACY_MIGRATION_MESSAGE:
+        logging.error(LEGACY_MIGRATION_MESSAGE)
+    else:
+        logging.info(LEGACY_MIGRATION_MESSAGE)
 
 
 def save_logging_level_to_db(level: int) -> bool:
