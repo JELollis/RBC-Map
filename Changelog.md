@@ -4,7 +4,7 @@ Release history for the RBC Community Map application, oldest first.
 
 - **Latest release:** [1.0.0](#version-100--first-stable-release), archived on the
   [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
-- **Development:** 0.14.0, `main_0.14.0.py` on the `main` branch.
+- **Development:** 0.14.0, `main_0.14.0.py` on the `dev` branch.
 - **Earlier versions:** each is preserved on its own `version/<number>` branch
   as `main_<number>.py`.
 
@@ -924,7 +924,7 @@ fail-fast dependency reporting introduced in 0.13.2.
 
 ## Version 0.14.0 — Development line (formerly 0.13.3.1)
 
-The development version on `main` (`main_0.14.0.py`). It began as 0.13.3.1 in
+The development version (`main_0.14.0.py`, on `dev`). It began as 0.13.3.1 in
 the former `testing/` folder and was renamed to 0.14.0. Release 1.0.0 was built
 from this line.
 

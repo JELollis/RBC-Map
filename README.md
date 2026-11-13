@@ -100,8 +100,8 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 
 | Branch | Contents |
 | --- | --- |
-| `main` | Active development (`main_0.14.0.py`). |
-| `dev` | Staging branch; changes reach `main` through pull requests. |
+| `dev` | Active development (`main_0.14.0.py`); feature work merges here through pull requests. |
+| `main` | Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
 | `version/0.3.2` … `version/0.7.0` | Archived PyQt5 versions. |
@@ -123,7 +123,6 @@ To run the latest release from source, check out the `version/1.0.0` branch and 
 | `images/`, `css/` | Icons, artwork, and stylesheets used by the app. |
 | `docs/help/` | Help documentation (HTML, PDF, CHM, EPUB, DOCX). |
 | `Screenshots/` | Screenshots used in this README. |
-| `Helper Module Dev/` | Experimental helper modules and server-side scripts; not needed to run the app. |
 | `scratch.py` | A UI-modernization design demo, not a release. |
 
 ## Documentation, support, and contributions
