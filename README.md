@@ -1,6 +1,6 @@
 # RBC Community Map Application
 
-**Current documented release: 1.0.0** · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+**Current version: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
 
 RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
 
@@ -60,11 +60,11 @@ The Python runtime dependencies listed in [`requirements.txt`](requirements.txt)
 - beautifulsoup4
 - requests
 
-A working Python 3 installation and an environment capable of running a Qt desktop application are required. Supported Python versions and platform-specific packaging instructions should be verified against the release you intend to run.
+A working Python 3 installation and an environment capable of running a Qt desktop application are required.
 
 ### Install dependencies
 
-From a checkout of the repository, create and activate a virtual environment, then install the declared dependencies:
+From a checkout of this branch, create and activate a virtual environment, then install the declared dependencies:
 
 ```bash
 python -m venv .venv
@@ -82,11 +82,48 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions. The appropriate application entry point may vary by version; consult the selected release's documentation rather than running an archived script from `Version Control/`.
+### Run
+
+```bash
+python main_1.0.0.py
+```
+
+For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
 
 ## Data and privacy
 
-Character information, credentials, session state, and application preferences are stored in a local SQLite database. The documented community reporting feature is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
+Character information, credentials, session state, and application preferences are stored in a local SQLite database. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.
+
+The documented community reporting feature (**Contribute Discovered Locations**) is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
+
+## Versions and branches
+
+| Branch | Contents |
+| --- | --- |
+| `dev` | Active development, currently on 1.0.0 (`main_1.0.0.py`); feature work merges here through pull requests. |
+| `main` | Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. |
+| [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
+| `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
+| `version/0.3.2` … `version/0.7.0` | Archived PyQt5 versions. |
+| `version/0.1.0` … `version/0.3.1` | Archived tkinter prototypes. |
+| `version/0.11.2-abandoned` | An alternative 0.11.2 draft that was not continued. |
+
+Each `version/<number>` branch holds that version as `main_<number>.py`, with a
+README and changelog for that version. Branches are snapshots for reference and
+are not maintained.
+
+The `dev` and `version/1.0.0` branches both run `main_1.0.0.py`; `version/1.0.0` is the fixed release snapshot, while `dev` moves on as new work lands. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `main_1.0.0.py` | The application, packaged as a single file. |
+| `requirements.txt` | Runtime dependencies. |
+| `images/`, `css/` | Icons, artwork, and stylesheets used by the app. |
+| `docs/help/` | Help documentation (HTML, PDF, CHM, EPUB, DOCX). |
+| `Screenshots/` | Screenshots used in this README. |
+| `scratch.py` | A UI-modernization design demo, not a release. |
 
 ## Documentation, support, and contributions
 
