@@ -376,6 +376,20 @@ def check_failed_character_creates_roll_back() -> None:
 
 def check_modify_character_atomicity() -> None:
     namespace = load_character_mutation_methods()
+    namespace["store_character_secret"] = lambda character_id, password: set_secret(
+        "character-password", namespace["character_secret_id"](character_id), password
+    )
+    real_connect = sqlite3.connect
+
+    def fast_connect(*args, **kwargs):
+        kwargs["timeout"] = 0.1
+        return real_connect(*args, **kwargs)
+
+    namespace["sqlite3"] = type(
+        "SQLiteProxy",
+        (),
+        {"connect": staticmethod(fast_connect), "Error": sqlite3.Error},
+    )
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as handle:
         db_path = Path(handle.name)
     connection = None

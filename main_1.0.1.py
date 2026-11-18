@@ -385,7 +385,7 @@ def _credential_namespace(credential_namespace: str | None = None) -> str:
     """Return the active database namespace, requiring initialization first."""
     namespace = credential_namespace or CREDENTIAL_NAMESPACE
     if not namespace:
-        raise RuntimeError("credential namespace has not been initialized")
+        raise CredentialStoreError("credential namespace has not been initialized")
     return namespace
 
 
