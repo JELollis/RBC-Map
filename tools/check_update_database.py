@@ -15,6 +15,26 @@ MAIN = ROOT / "main_1.0.0.py"
 BUILDING_TABLES = ("banks", "taverns", "transits", "userbuildings", "placesofinterest")
 
 
+class FakeRequests:
+    class RequestException(Exception):
+        pass
+
+
+class FakeRequestExceptions:
+    RequestException = FakeRequests.RequestException
+
+
+FakeRequests.exceptions = FakeRequestExceptions
+
+
+class FakeMessageBox:
+    critical_calls = []
+
+    @classmethod
+    def critical(cls, *args):
+        cls.critical_calls.append(args)
+
+
 def load_update_method():
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
     methods = [
@@ -38,11 +58,54 @@ def load_update_method():
         "datetime": datetime,
         "timezone": timezone,
         "logging": logging,
+        "requests": FakeRequests,
+        "QMessageBox": FakeMessageBox,
         "DB_PATH": None,
         "BUILDING_CLASS_MAP": building_map,
     }
     exec(compile(ast.Module(body=[methods[0]], type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace["update_database_with_json"], namespace
+
+
+def load_function(function_name: str):
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    methods = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    ]
+    assert len(methods) == 1, f"expected one {function_name} method"
+    node = methods[0]
+    node.decorator_list = []
+    namespace = {
+        "logging": logging,
+        "requests": FakeRequests,
+        "QMessageBox": FakeMessageBox,
+        "fetch_location_update": lambda **kwargs: {},
+        "DB_PATH": None,
+        "BUILDING_CLASS_MAP": {},
+    }
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(MAIN), "exec"), namespace)
+    return namespace[function_name], namespace
+
+
+def load_startup_run():
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    classes = [
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "StartupUpdateWorker"
+    ]
+    assert len(classes) == 1, "expected one StartupUpdateWorker class"
+    methods = [node for node in classes[0].body if isinstance(node, ast.FunctionDef) and node.name == "run"]
+    assert len(methods) == 1, "expected one StartupUpdateWorker.run method"
+    node = methods[0]
+    node.decorator_list = []
+    namespace = {
+        "logging": logging,
+        "requests": FakeRequests,
+        "fetch_location_update": lambda **kwargs: {"guilds": {}, "shops": {}},
+    }
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(MAIN), "exec"), namespace)
+    return namespace["run"], namespace
 
 
 def make_database(path: Path) -> None:
@@ -115,6 +178,66 @@ def malformed_payload_is_reported(root: Path) -> None:
     raise AssertionError("malformed guild payload was swallowed")
 
 
+def manual_update_reports_database_failure(root: Path) -> None:
+    method, namespace = load_function("update_data")
+    FakeMessageBox.critical_calls.clear()
+    namespace["fetch_location_update"] = lambda **kwargs: {"guilds": [], "shops": {}}
+
+    class FailingApp:
+        def update_database_with_json(self, data):
+            raise sqlite3.DatabaseError("simulated database failure")
+
+        def fetch_and_merge_community_buildings(self, **kwargs):
+            raise AssertionError("community merge should not run after database failure")
+
+        def refresh_map_data_from_db(self):
+            raise AssertionError("map refresh should not run after database failure")
+
+        def get_locations_last_updated(self):
+            return None
+
+    assert method(FailingApp()) is False
+    assert FakeMessageBox.critical_calls, "manual failure should show an error"
+
+
+def dialog_stops_before_success_path() -> None:
+    source = MAIN.read_text(encoding="utf-8")
+    guard = "if not self.parent.update_data():"
+    assert guard in source
+    guard_start = source.index(guard)
+    step_two = source.index("# Step 2: Reload from DB", guard_start)
+    assert "return" in source[guard_start:step_two]
+
+
+def startup_worker_reports_database_failure(root: Path) -> None:
+    method, namespace = load_startup_run()
+    events = []
+
+    class Signal:
+        def emit(self, *args):
+            events.append(args)
+
+    class FailingApp:
+        def get_locations_last_updated(self):
+            return None
+
+        def update_database_with_json(self, data):
+            raise sqlite3.DatabaseError("simulated database failure")
+
+        def fetch_and_merge_community_buildings(self, **kwargs):
+            raise AssertionError("community merge should not run after database failure")
+
+    worker = type("Worker", (), {})()
+    worker.started = Signal()
+    worker.finished = Signal()
+    worker.app = FailingApp()
+    worker.REQUEST_TIMEOUT = 10
+    namespace["fetch_location_update"] = lambda **kwargs: {"guilds": {}, "shops": {}}
+    method(worker)
+    assert events[-1][0] is False
+    assert "Startup update failed" in events[-1][1]
+
+
 def missing_buildings_preserves_local_data(root: Path) -> None:
     db = root / "map.db"
     make_database(db)
@@ -164,11 +287,16 @@ def run_case(name, case) -> None:
 
 for case in (
     malformed_payload_is_reported,
+    manual_update_reports_database_failure,
+    startup_worker_reports_database_failure,
     missing_buildings_preserves_local_data,
     empty_buildings_preserves_local_data,
     shop_only_buildings_preserve_local_data,
     valid_buildings_replace_snapshot,
 ):
     run_case(case.__name__, case)
+
+dialog_stops_before_success_path()
+print("ok   dialog_stops_before_success_path")
 
 print("all update-database checks passed")
