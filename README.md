@@ -123,7 +123,6 @@ The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on a
 | `images/`, `css/` | Icons, artwork, and stylesheets used by the app. |
 | `docs/help/` | Help documentation (HTML, PDF, CHM, EPUB, DOCX). |
 | `Screenshots/` | Screenshots used in this README. |
-| `scratch.py` | A UI-modernization design demo, not a release. |
 
 ## Documentation, support, and contributions
 

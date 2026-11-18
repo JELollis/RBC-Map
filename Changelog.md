@@ -1006,6 +1006,9 @@ under 0.14.0, plus:
   manual refreshes can report unsuccessful updates.
 - Incomplete building payloads no longer erase existing local building data.
 - Manual update status text warns that the bot refresh may take up to one minute.
+- Runtime dependencies are pinned to the locally validated versions.
+- Added a Python validation workflow with syntax, Unicode-token, regression, and release-tree checks.
+- Removed the tracked `scratch.py` design-demo artifact from the release tree.
 - **Saved data carried over on upgrade:** 1.0.0 moved the database and session
   data to the per-user data folder but never copied the old data, so upgrading
   users started with no saved characters, settings, or logins. On launch, the
