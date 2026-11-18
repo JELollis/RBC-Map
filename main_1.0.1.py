@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_1.0.0
+# Filename: main_1.0.1
 
 """
 ======================
@@ -22,14 +22,15 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v1.0.0)
+RBC City Map Application (v1.0.1)
 =================================
 
 This application provides an interactive mapping and character management tool
 for the browser-based vampire RPG **Vampires! The Dark Alleyway**, set in the
 fictional RavenBlack City.
 
-Version 1.0.0 moves all server-owned map locations to launch-time API sync.
+Version 1.0.1 continues the 1.0.0 launch-time API sync and hardens update
+failure reporting and building-payload handling.
 While still packaged as a single file, it redacts credentials from logs, adds
 request timeouts to the manual data update, fixes two latent bugs, and
 consolidates the location-update flow into a single shared code path.
@@ -65,7 +66,7 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v1.0.0:
+Updated in v1.0.1:
 -------------------
 - Redacted the 'ip' cookie password portion in debug logs (login/logout state
   is still distinguishable) so credentials no longer reach on-disk logs.
@@ -75,6 +76,8 @@ Updated in v1.0.0:
   instead of QDialog.DialogCode.Accepted) and an aliased fallback-dict bug.
 - Consolidated the token -> trigger -> fetch update flow into a shared
   fetch_location_update() helper used by both the startup worker and update_data.
+- Database-update failures now reach both startup and manual-refresh error paths.
+- Incomplete or shop-only building payloads no longer erase local building data.
 
 Carried over from v0.13.3.0 / v0.13.2:
 - Replaced runtime pip auto-install with fail-fast dependency reporting.
@@ -87,7 +90,7 @@ Modules Used:
 - **requests**: Fetches external JSON data (`locations.json`) from the update service.
 - **re**: Regex for parsing and name normalization.
 - **datetime**: Countdown and timestamp calculations.
-- **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
+- **bs4 (BeautifulSoup)**: Parses game-page HTML to extract the character position and visible buildings.
 - **PySide6**: Qt-based GUI framework, dialogs, embedded webview, and event system.
 - **sqlite3**: Local data storage for characters, locations, settings, and logs.
 - **logging**: Captures logs for display and debugging.
@@ -167,7 +170,7 @@ REQUIRED_DIRECTORIES = [
     SESSIONS_DIR,
 ]
 
-VERSION_NUMBER = "1.0.0"
+VERSION_NUMBER = "1.0.1"
 
 # Default timeout (seconds) for outbound HTTP calls made on the UI thread.
 HTTP_REQUEST_TIMEOUT = 10
@@ -198,7 +201,8 @@ REFRESH_POLL_INTERVAL_SECONDS = 1.5
 # Endpoint that receives locations this client discovers on the game page, so
 # the scraper bot can keep shared data current between AVITD reveal cycles.
 # Gated by the user's opt-in preference; POST is fire-and-forget and any
-# failure is logged, never fatal. Inert until the server exposes the route.
+# failure is logged, never fatal. The endpoint is provided by the deployed
+# report-back service.
 REPORT_LOCATION_URL = "https://lollis-home.ddns.net/api/report-location"
 
 # Timeout (seconds) for the report POST. Kept short so a slow/down endpoint
@@ -6328,6 +6332,9 @@ class RBCCommunityMap(QMainWindow):
         """
         Securely triggers the bot to update locations.json using the token-based API flow,
         waits for completion, and then updates the local database.
+
+        Returns:
+            bool: True when the refresh and local merge succeed; otherwise False.
         """
         try:
             # Runs on the UI thread, so cap both the legacy blind wait and the
@@ -6348,13 +6355,16 @@ class RBCCommunityMap(QMainWindow):
             # cooldown, so always pull them; then refresh the map in one pass.
             self.fetch_and_merge_community_buildings(timeout=5)
             self.refresh_map_data_from_db()
+            return True
 
         except requests.exceptions.RequestException as e:
             logging.error(f"Update error: {e}")
             QMessageBox.critical(self, "Network Error", f"An error occurred:\n{e}")
+            return False
         except Exception as e:
             logging.error(f"Unexpected error during update: {e}")
             QMessageBox.critical(self, "Error", str(e))
+            return False
 
     def update_database_with_json(self, data):
         """
@@ -6407,19 +6417,50 @@ class RBCCommunityMap(QMainWindow):
 
                 # All building locations, including curated POIs, are
                 # server-owned in 0.14.0. Reconcile the complete snapshot.
-                server_buildings = data.get("buildings", {})
+                server_buildings = data.get("buildings")
+                valid_buildings = []
+                malformed_buildings = False
                 if isinstance(server_buildings, dict):
-                    for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest"):
-                        cursor.execute(f"DELETE FROM {table}")
                     for entry in server_buildings.values():
                         if not isinstance(entry, dict):
+                            malformed_buildings = True
                             continue
                         kind = entry.get("kind")
                         name = str(entry.get("name") or "").strip()
                         col = str(entry.get("column") or "").strip()
                         row = str(entry.get("row") or "").strip()
-                        if kind in BUILDING_CLASS_MAP and name and col and row:
-                            self._upsert_building(cursor, kind, name, col, row)
+                        building_meta = BUILDING_CLASS_MAP.get(kind)
+                        if not building_meta:
+                            continue
+
+                        table = building_meta.get("table")
+                        if table not in {
+                            "banks",
+                            "taverns",
+                            "transits",
+                            "userbuildings",
+                            "placesofinterest",
+                        }:
+                            continue
+
+                        if name and col and row:
+                            valid_buildings.append((kind, name, col, row))
+                        else:
+                            malformed_buildings = True
+
+                # A missing, empty, or partial snapshot is not evidence that
+                # every locally known building was removed. Reject the entire
+                # snapshot if any server-owned entry is malformed, so a mixed
+                # valid/malformed response cannot erase known locations.
+                if valid_buildings and not malformed_buildings:
+                    for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest"):
+                        cursor.execute(f"DELETE FROM {table}")
+                    for kind, name, col, row in valid_buildings:
+                        self._upsert_building(cursor, kind, name, col, row)
+                elif server_buildings is not None:
+                    logging.warning(
+                        "Ignoring incomplete building snapshot; preserving local building data"
+                    )
 
                 # Record the server's own data timestamp so later /refresh
                 # "cooldown" responses can be compared against what we hold
@@ -6439,6 +6480,7 @@ class RBCCommunityMap(QMainWindow):
 
         except Exception as e:
             logging.error(f"Error updating database: {e}")
+            raise
 
     def fetch_and_merge_community_buildings(self, timeout: int = HTTP_REQUEST_TIMEOUT) -> int:
         """Pull crowdsourced non-mover buildings and merge them into the DB.
@@ -7892,7 +7934,7 @@ class SetDestinationDialog(QDialog):
         status_dialog.setWindowTitle("Updating Location Data")
         status_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         layout = QVBoxLayout(status_dialog)
-        status_label = QLabel("Step 1: Triggering bot scrape...")
+        status_label = QLabel("Step 1: Triggering bot scrape (may take up to one minute)...")
         layout.addWidget(status_label)
         status_dialog.setFixedSize(400, 100)
         status_dialog.show()
@@ -7900,7 +7942,11 @@ class SetDestinationDialog(QDialog):
 
         try:
             # Step 1: Trigger update
-            self.parent.update_data()
+            if not self.parent.update_data():
+                status_label.setText("❌ Update failed.")
+                QApplication.processEvents()
+                QTimer.singleShot(2000, status_dialog.accept)
+                return
 
             # Step 2: Reload from DB
             status_label.setText("Step 2: Reloading updated location data...")
