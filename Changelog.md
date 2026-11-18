@@ -2,8 +2,9 @@
 
 Release history for the RBC Community Map application, oldest first.
 
-- **Current version:** [1.0.0](#version-100--first-stable-release), `main_1.0.0.py`
-  on the `dev` branch, with the release snapshot on the
+- **Current development version:** 1.0.1, `main_1.0.1.py` on the `dev` branch.
+- **Latest stable release:** [1.0.0](#version-100--first-stable-release), with
+  the release snapshot on the
   [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
 - **Earlier versions:** each is preserved on its own `version/<number>` branch
   as `main_<number>.py`.
@@ -997,11 +998,14 @@ under 0.14.0, plus:
 ### 📘 Documentation
 - Refreshed the README, help documentation, and screenshots for the release.
 
----
-
-## Unreleased — on `dev`
+## Unreleased — on `dev` (target 1.0.1)
 
 ### 🐛 Bug fixes
+- Corrected stale BeautifulSoup and crowdsourced-reporting documentation.
+- Database update failures now propagate to their callers so startup and
+  manual refreshes can report unsuccessful updates.
+- Incomplete building payloads no longer erase existing local building data.
+- Manual update status text warns that the bot refresh may take up to one minute.
 - **Saved data carried over on upgrade:** 1.0.0 moved the database and session
   data to the per-user data folder but never copied the old data, so upgrading
   users started with no saved characters, settings, or logins. On launch, the
