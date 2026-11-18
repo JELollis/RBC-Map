@@ -268,9 +268,23 @@ def check_database_secret_namespaces() -> None:
     legacy_connection = sqlite3.connect(":memory:")
     legacy_connection.execute("CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value BLOB)")
     set_secret("character-password", "7", "legacy-password")
+    real_set_secret = namespace["set_secret"]
+
+    def failing_namespaced_write(secret_namespace, identifier, value):
+        if identifier != "7":
+            raise CredentialStoreError("simulated namespaced write failure")
+        return real_set_secret(secret_namespace, identifier, value)
+
+    namespace["set_secret"] = failing_namespaced_write
+    assert namespace["load_character_secret"](legacy_connection, 7, None) is None
+    assert get_secret("character-password", "7") == "legacy-password"
+    namespace["set_secret"] = real_set_secret
     assert namespace["load_character_secret"](legacy_connection, 7, None) == "legacy-password"
     assert get_secret("character-password", character_id(7)) == "legacy-password"
     assert get_secret("character-password", "7") is None
+
+    namespace["CREDENTIAL_NAMESPACE"] = None
+    assert namespace["load_character_secret"](legacy_connection, 8, None) is None
     first.close()
     second.close()
     legacy_connection.close()
@@ -376,9 +390,13 @@ def check_failed_character_creates_roll_back() -> None:
 
 def check_modify_character_atomicity() -> None:
     namespace = load_character_mutation_methods()
-    namespace["store_character_secret"] = lambda character_id, password: set_secret(
-        "character-password", namespace["character_secret_id"](character_id), password
-    )
+    store_calls = []
+
+    def working_store(character_id, password):
+        store_calls.append((character_id, password))
+        set_secret("character-password", namespace["character_secret_id"](character_id), password)
+
+    namespace["store_character_secret"] = working_store
     real_connect = sqlite3.connect
 
     def fast_connect(*args, **kwargs):
@@ -415,6 +433,7 @@ def check_modify_character_atomicity() -> None:
         holder.execute("BEGIN IMMEDIATE")
         namespace["dialog"] = FakeCharacterDialog("Alice-renamed", "new-password")
         namespace["modify_character"](fake_self)
+        assert store_calls == []
         assert get_secret("character-password", namespace["character_secret_id"](1)) == "old-password"
         holder.rollback()
         holder.close()
@@ -428,6 +447,7 @@ def check_modify_character_atomicity() -> None:
         connection.close()
         namespace["dialog"] = FakeCharacterDialog("Alice-renamed", "new-password")
         namespace["modify_character"](fake_self)
+        assert store_calls == [(1, "new-password")]
         assert get_secret("character-password", namespace["character_secret_id"](1)) == "old-password"
         connection = sqlite3.connect(db_path)
         assert connection.execute("SELECT name FROM characters WHERE id = 1").fetchone()[0] == "Alice"
