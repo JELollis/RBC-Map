@@ -87,7 +87,7 @@ Modules Used:
 - **requests**: Fetches external JSON data (`locations.json`) from the update service.
 - **re**: Regex for parsing and name normalization.
 - **datetime**: Countdown and timestamp calculations.
-- **bs4 (BeautifulSoup)**: Retained for legacy compatibility (no longer used for scraping).
+- **bs4 (BeautifulSoup)**: Parses game-page HTML to extract the character position and visible buildings.
 - **PySide6**: Qt-based GUI framework, dialogs, embedded webview, and event system.
 - **sqlite3**: Local data storage for characters, locations, settings, and logs.
 - **logging**: Captures logs for display and debugging.
@@ -198,7 +198,8 @@ REFRESH_POLL_INTERVAL_SECONDS = 1.5
 # Endpoint that receives locations this client discovers on the game page, so
 # the scraper bot can keep shared data current between AVITD reveal cycles.
 # Gated by the user's opt-in preference; POST is fire-and-forget and any
-# failure is logged, never fatal. Inert until the server exposes the route.
+# failure is logged, never fatal. The endpoint is provided by the deployed
+# report-back service.
 REPORT_LOCATION_URL = "https://lollis-home.ddns.net/api/report-location"
 
 # Timeout (seconds) for the report POST. Kept short so a slow/down endpoint
@@ -6407,10 +6408,9 @@ class RBCCommunityMap(QMainWindow):
 
                 # All building locations, including curated POIs, are
                 # server-owned in 0.14.0. Reconcile the complete snapshot.
-                server_buildings = data.get("buildings", {})
+                server_buildings = data.get("buildings")
+                valid_buildings = []
                 if isinstance(server_buildings, dict):
-                    for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest"):
-                        cursor.execute(f"DELETE FROM {table}")
                     for entry in server_buildings.values():
                         if not isinstance(entry, dict):
                             continue
@@ -6419,7 +6419,20 @@ class RBCCommunityMap(QMainWindow):
                         col = str(entry.get("column") or "").strip()
                         row = str(entry.get("row") or "").strip()
                         if kind in BUILDING_CLASS_MAP and name and col and row:
-                            self._upsert_building(cursor, kind, name, col, row)
+                            valid_buildings.append((kind, name, col, row))
+
+                # A missing, empty, or malformed snapshot is not evidence that
+                # every locally known building was removed. Keep existing rows
+                # until the server supplies at least one valid building.
+                if valid_buildings:
+                    for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest"):
+                        cursor.execute(f"DELETE FROM {table}")
+                    for kind, name, col, row in valid_buildings:
+                        self._upsert_building(cursor, kind, name, col, row)
+                elif server_buildings is not None:
+                    logging.warning(
+                        "Ignoring building snapshot without valid entries; preserving local building data"
+                    )
 
                 # Record the server's own data timestamp so later /refresh
                 # "cooldown" responses can be compared against what we hold
@@ -6439,6 +6452,7 @@ class RBCCommunityMap(QMainWindow):
 
         except Exception as e:
             logging.error(f"Error updating database: {e}")
+            raise
 
     def fetch_and_merge_community_buildings(self, timeout: int = HTTP_REQUEST_TIMEOUT) -> int:
         """Pull crowdsourced non-mover buildings and merge them into the DB.

@@ -11,6 +11,13 @@ Release history for the RBC Community Map application, oldest first.
 Entries for versions before 0.12.0 were reconstructed from the archived source
 files and are less detailed than later entries.
 
+## Unreleased — on dev
+
+- Corrected stale BeautifulSoup and crowdsourced-reporting documentation.
+- Database update failures now propagate to their callers so startup and
+  manual refreshes can report unsuccessful updates.
+- Incomplete building payloads no longer erase existing local building data.
+
 ---
 
 ## Version 0.1.0 — Tkinter prototype
