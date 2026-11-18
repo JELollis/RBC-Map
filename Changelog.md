@@ -17,6 +17,7 @@ files and are less detailed than later entries.
 - Database update failures now propagate to their callers so startup and
   manual refreshes can report unsuccessful updates.
 - Incomplete building payloads no longer erase existing local building data.
+- Manual update status text warns that the bot refresh may take up to one minute.
 
 ---
 

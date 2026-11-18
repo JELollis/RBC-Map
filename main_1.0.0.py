@@ -6329,6 +6329,9 @@ class RBCCommunityMap(QMainWindow):
         """
         Securely triggers the bot to update locations.json using the token-based API flow,
         waits for completion, and then updates the local database.
+
+        Returns:
+            bool: True when the refresh and local merge succeed; otherwise False.
         """
         try:
             # Runs on the UI thread, so cap both the legacy blind wait and the
@@ -6349,13 +6352,16 @@ class RBCCommunityMap(QMainWindow):
             # cooldown, so always pull them; then refresh the map in one pass.
             self.fetch_and_merge_community_buildings(timeout=5)
             self.refresh_map_data_from_db()
+            return True
 
         except requests.exceptions.RequestException as e:
             logging.error(f"Update error: {e}")
             QMessageBox.critical(self, "Network Error", f"An error occurred:\n{e}")
+            return False
         except Exception as e:
             logging.error(f"Unexpected error during update: {e}")
             QMessageBox.critical(self, "Error", str(e))
+            return False
 
     def update_database_with_json(self, data):
         """
@@ -6418,7 +6424,18 @@ class RBCCommunityMap(QMainWindow):
                         name = str(entry.get("name") or "").strip()
                         col = str(entry.get("column") or "").strip()
                         row = str(entry.get("row") or "").strip()
-                        if kind in BUILDING_CLASS_MAP and name and col and row:
+                        building_meta = BUILDING_CLASS_MAP.get(kind)
+                        if (
+                            building_meta
+                            and building_meta.get("table") in {
+                                "banks",
+                                "taverns",
+                                "transits",
+                                "userbuildings",
+                                "placesofinterest",
+                            }
+                            and name and col and row
+                        ):
                             valid_buildings.append((kind, name, col, row))
 
                 # A missing, empty, or malformed snapshot is not evidence that
@@ -7906,7 +7923,7 @@ class SetDestinationDialog(QDialog):
         status_dialog.setWindowTitle("Updating Location Data")
         status_dialog.setWindowFlags(Qt.Window | Qt.WindowTitleHint | Qt.WindowCloseButtonHint)
         layout = QVBoxLayout(status_dialog)
-        status_label = QLabel("Step 1: Triggering bot scrape...")
+        status_label = QLabel("Step 1: Triggering bot scrape (may take up to one minute)...")
         layout.addWidget(status_label)
         status_dialog.setFixedSize(400, 100)
         status_dialog.show()
@@ -7914,7 +7931,11 @@ class SetDestinationDialog(QDialog):
 
         try:
             # Step 1: Trigger update
-            self.parent.update_data()
+            if not self.parent.update_data():
+                status_label.setText("❌ Update failed.")
+                QApplication.processEvents()
+                QTimer.singleShot(2000, status_dialog.accept)
+                return
 
             # Step 2: Reload from DB
             status_label.setText("Step 2: Reloading updated location data...")

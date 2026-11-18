@@ -13,13 +13,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = ROOT / "main_1.0.0.py"
 BUILDING_TABLES = ("banks", "taverns", "transits", "userbuildings", "placesofinterest")
-BUILDING_KINDS = {
-    "bank": "banks",
-    "tavern": "taverns",
-    "transit": "transits",
-    "userbuilding": "userbuildings",
-    "placeofinterest": "placesofinterest",
-}
 
 
 def load_update_method():
@@ -30,13 +23,23 @@ def load_update_method():
         and node.name == "update_database_with_json"
     ]
     assert len(methods) == 1, "expected one update_database_with_json method"
+    map_assignments = [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "BUILDING_CLASS_MAP"
+            for target in node.targets
+        )
+    ]
+    assert len(map_assignments) == 1, "expected one BUILDING_CLASS_MAP assignment"
+    building_map = ast.literal_eval(map_assignments[0].value)
     namespace = {
         "sqlite3": sqlite3,
         "datetime": datetime,
         "timezone": timezone,
         "logging": logging,
         "DB_PATH": None,
-        "BUILDING_CLASS_MAP": BUILDING_KINDS,
+        "BUILDING_CLASS_MAP": building_map,
     }
     exec(compile(ast.Module(body=[methods[0]], type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace["update_database_with_json"], namespace
@@ -79,7 +82,15 @@ class FakeMap:
         method(self, data)
 
     def _upsert_building(self, cursor, kind, name, column, row):
-        table = BUILDING_KINDS[kind]
+        table = {
+            "bank": "banks",
+            "pub": "taverns",
+            "transit": "transits",
+            "arena": "placesofinterest",
+            "grave": "placesofinterest",
+            "lair": "userbuildings",
+            "alchemy": "placesofinterest",
+        }[kind]
         cursor.execute(
             f'INSERT INTO {table} (Name, "Column", "Row") VALUES (?, ?, ?)',
             (name, column, row),
@@ -118,6 +129,15 @@ def empty_buildings_preserves_local_data(root: Path) -> None:
     assert count_rows(db, "taverns") == 1
 
 
+def shop_only_buildings_preserve_local_data(root: Path) -> None:
+    db = root / "map.db"
+    make_database(db)
+    FakeMap(db).update(
+        {"buildings": {"shop": {"kind": "shop", "name": "Shop", "column": "B", "row": "2nd"}}}
+    )
+    assert count_rows(db, "transits") == 1
+
+
 def valid_buildings_replace_snapshot(root: Path) -> None:
     db = root / "map.db"
     make_database(db)
@@ -146,6 +166,7 @@ for case in (
     malformed_payload_is_reported,
     missing_buildings_preserves_local_data,
     empty_buildings_preserves_local_data,
+    shop_only_buildings_preserve_local_data,
     valid_buildings_replace_snapshot,
 ):
     run_case(case.__name__, case)
