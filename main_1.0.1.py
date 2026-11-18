@@ -6419,39 +6419,47 @@ class RBCCommunityMap(QMainWindow):
                 # server-owned in 0.14.0. Reconcile the complete snapshot.
                 server_buildings = data.get("buildings")
                 valid_buildings = []
+                malformed_buildings = False
                 if isinstance(server_buildings, dict):
                     for entry in server_buildings.values():
                         if not isinstance(entry, dict):
+                            malformed_buildings = True
                             continue
                         kind = entry.get("kind")
                         name = str(entry.get("name") or "").strip()
                         col = str(entry.get("column") or "").strip()
                         row = str(entry.get("row") or "").strip()
                         building_meta = BUILDING_CLASS_MAP.get(kind)
-                        if (
-                            building_meta
-                            and building_meta.get("table") in {
-                                "banks",
-                                "taverns",
-                                "transits",
-                                "userbuildings",
-                                "placesofinterest",
-                            }
-                            and name and col and row
-                        ):
-                            valid_buildings.append((kind, name, col, row))
+                        if not building_meta:
+                            continue
 
-                # A missing, empty, or malformed snapshot is not evidence that
-                # every locally known building was removed. Keep existing rows
-                # until the server supplies at least one valid building.
-                if valid_buildings:
+                        table = building_meta.get("table")
+                        if table not in {
+                            "banks",
+                            "taverns",
+                            "transits",
+                            "userbuildings",
+                            "placesofinterest",
+                        }:
+                            continue
+
+                        if name and col and row:
+                            valid_buildings.append((kind, name, col, row))
+                        else:
+                            malformed_buildings = True
+
+                # A missing, empty, or partial snapshot is not evidence that
+                # every locally known building was removed. Reject the entire
+                # snapshot if any server-owned entry is malformed, so a mixed
+                # valid/malformed response cannot erase known locations.
+                if valid_buildings and not malformed_buildings:
                     for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest"):
                         cursor.execute(f"DELETE FROM {table}")
                     for kind, name, col, row in valid_buildings:
                         self._upsert_building(cursor, kind, name, col, row)
                 elif server_buildings is not None:
                     logging.warning(
-                        "Ignoring building snapshot without valid entries; preserving local building data"
+                        "Ignoring incomplete building snapshot; preserving local building data"
                     )
 
                 # Record the server's own data timestamp so later /refresh

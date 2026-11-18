@@ -261,6 +261,21 @@ def shop_only_buildings_preserve_local_data(root: Path) -> None:
     assert count_rows(db, "transits") == 1
 
 
+def mixed_valid_and_malformed_preserves_local_data(root: Path) -> None:
+    db = root / "map.db"
+    make_database(db)
+    FakeMap(db).update(
+        {
+            "buildings": {
+                "valid": {"kind": "bank", "name": "New Bank", "column": "B", "row": "2nd"},
+                "malformed": {"kind": "pub", "name": "Missing Row", "column": "C"},
+            }
+        }
+    )
+    assert count_rows(db, "banks") == 1
+    assert count_rows(db, "taverns") == 1
+
+
 def valid_buildings_replace_snapshot(root: Path) -> None:
     db = root / "map.db"
     make_database(db)
@@ -292,6 +307,7 @@ for case in (
     missing_buildings_preserves_local_data,
     empty_buildings_preserves_local_data,
     shop_only_buildings_preserve_local_data,
+    mixed_valid_and_malformed_preserves_local_data,
     valid_buildings_replace_snapshot,
 ):
     run_case(case.__name__, case)
