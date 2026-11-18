@@ -269,8 +269,11 @@ def removes_old_cookie_store(t: Path):
     sessions.mkdir(parents=True)
     for suffix in ("", "-journal", "-wal", "-shm"):
         (sessions / f"Cookies{suffix}").write_text("legacy")
+        (sessions / "Network").mkdir(exist_ok=True)
+        (sessions / "Network" / f"Cookies{suffix}").write_text("nested legacy")
     remove_cookie_store(sessions)
     assert not list(sessions.glob("Cookies*"))
+    assert not list((sessions / "Network").glob("Cookies*"))
 
 
 for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_legacy,

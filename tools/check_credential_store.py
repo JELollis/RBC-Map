@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import gc
+import hashlib
 import logging
 import sqlite3
 import sys
@@ -87,6 +88,7 @@ def load_migration_helpers() -> dict[str, object]:
         "CHARACTER_SECRET_NAMESPACE",
         "COOKIE_SECRET_NAMESPACE",
         "SECRETS_MIGRATED",
+        "_credential_database_id",
         "character_secret_id",
         "cookie_secret_id",
         "load_character_secret",
@@ -105,7 +107,11 @@ def load_migration_helpers() -> dict[str, object]:
         "CredentialStoreError": CredentialStoreError,
         "get_secret": get_secret,
         "set_secret": set_secret,
+        "hashlib": hashlib,
         "logging": logging,
+        "os": __import__("os"),
+        "Path": Path,
+        "DB_PATH": ":memory:",
         "sqlite3": sqlite3,
     }
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
@@ -121,9 +127,15 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
         "DB_PATH": ":memory:",
         "logging": logging,
         "CredentialStoreError": CredentialStoreError,
-        "store_cookie_secret": lambda cookie_id, value: set_secret("cookie-value", str(cookie_id), value),
+        "store_cookie_secret": lambda cookie_id, value: set_secret(
+            "cookie-value", namespace["cookie_secret_id"](cookie_id), value
+        ),
         "Qt": type("Qt", (), {"DateFormat": type("DateFormat", (), {"ISODate": object()})}),
     }
+    namespace.update({
+        "_credential_database_id": load_migration_helpers()["_credential_database_id"],
+        "cookie_secret_id": load_migration_helpers()["cookie_secret_id"],
+    })
     exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
     return namespace["on_cookie_added"], namespace
 
@@ -132,6 +144,7 @@ def check_cookie_callback() -> None:
     callback, namespace = load_cookie_callback()
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as handle:
         db_path = Path(handle.name)
+    connection = None
     try:
         connection = sqlite3.connect(db_path)
         connection.executescript(
@@ -164,9 +177,11 @@ def check_cookie_callback() -> None:
         callback(object(), FakeCookie("Alice#"))
         connection = sqlite3.connect(db_path)
         assert connection.execute("SELECT COUNT(*) FROM cookies").fetchone()[0] == 2
-        assert get_secret("cookie-value", str(rows[0][0])) == "Alice#pwA"
+        assert get_secret("cookie-value", namespace["cookie_secret_id"](rows[0][0])) == "Alice#pwA"
         connection.close()
     finally:
+        if connection is not None:
+            connection.close()
         gc.collect()
         db_path.unlink(missing_ok=True)
 
@@ -198,8 +213,8 @@ def check_migrations() -> None:
     rows = connection.execute("SELECT id, name, value, domain, path FROM cookies ORDER BY id").fetchall()
     for cookie_id, name, value, domain, path in rows:
         assert load_cookie_secret(connection, cookie_id, name, domain, path, value) == value
-    assert get_secret("cookie-value", "10") == "Alice#pwA"
-    assert get_secret("cookie-value", "11") == "Bob#pwB"
+    assert get_secret("cookie-value", namespace["cookie_secret_id"](10)) == "Alice#pwA"
+    assert get_secret("cookie-value", namespace["cookie_secret_id"](11)) == "Bob#pwB"
     assert connection.execute("SELECT value FROM cookies ORDER BY id").fetchall() == [(None,), (None,)]
     vacuum_migrated_secrets(connection)
     assert namespace["SECRETS_MIGRATED"] is False
@@ -209,6 +224,18 @@ def check_migrations() -> None:
     assert load_character_secret(connection, 2, "pwB") is None
     assert connection.execute("SELECT password FROM characters WHERE id = 2").fetchone()[0] == "pwB"
     connection.close()
+
+
+def check_database_secret_namespaces() -> None:
+    namespace = load_migration_helpers()
+    database_id = namespace["_credential_database_id"]
+    character_id = namespace["character_secret_id"]
+    cookie_id = namespace["cookie_secret_id"]
+    first_path = "/tmp/rbc-map-one/sessions/rbc_map_data.db"
+    second_path = "/tmp/rbc-map-two/sessions/rbc_map_data.db"
+    assert database_id(first_path) != database_id(second_path)
+    assert character_id(1, first_path) != character_id(1, second_path)
+    assert cookie_id(1, first_path) != cookie_id(1, second_path)
 
 
 def main() -> int:
@@ -227,6 +254,7 @@ def main() -> int:
             raise AssertionError("empty secrets must be rejected")
         check_migrations()
         check_cookie_callback()
+        check_database_secret_namespaces()
     finally:
         FakeKeyring.available = True
         credential_store.keyring = original_keyring

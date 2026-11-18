@@ -122,6 +122,7 @@ Discord: https://discord.gg/rKamEZvK6X
 # -----------------------
 
 import logging
+import hashlib
 import json
 import math
 import os
@@ -360,12 +361,18 @@ COOKIE_SECRET_NAMESPACE = "cookie-value"
 SECRETS_MIGRATED = False
 
 
-def character_secret_id(character_id: int) -> str:
-    return str(character_id)
+def _credential_database_id(db_path: str | os.PathLike = DB_PATH) -> str:
+    """Return a stable namespace for the database owning a secret."""
+    resolved_path = Path(db_path).expanduser().resolve()
+    return hashlib.sha256(str(resolved_path).encode("utf-8")).hexdigest()[:32]
 
 
-def cookie_secret_id(cookie_id: int) -> str:
-    return str(cookie_id)
+def character_secret_id(character_id: int, db_path: str | os.PathLike = DB_PATH) -> str:
+    return f"{_credential_database_id(db_path)}:{character_id}"
+
+
+def cookie_secret_id(cookie_id: int, db_path: str | os.PathLike = DB_PATH) -> str:
+    return f"{_credential_database_id(db_path)}:{cookie_id}"
 
 
 def load_character_secret(connection: sqlite3.Connection, character_id: int, stored_value: str | None) -> str | None:
@@ -775,7 +782,7 @@ LEGACY_MIGRATION_MESSAGE = migrate_legacy_data()
 
 def remove_persistent_browser_cookies(sessions_dir: Path = SESSIONS_DIR) -> None:
     """Remove Chromium cookie stores left by older persistent-cookie builds."""
-    for cookie_path in sessions_dir.glob("Cookies*"):
+    for cookie_path in sessions_dir.rglob("Cookies*"):
         try:
             if cookie_path.is_dir():
                 shutil.rmtree(cookie_path)
@@ -4602,9 +4609,9 @@ class RBCCommunityMap(QMainWindow):
         if dialog.exec():
             name = dialog.name_edit.text()
             password = dialog.password_edit.text()
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                try:
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cursor = conn.cursor()
                     cursor.execute('INSERT INTO characters (name, password) VALUES (?, NULL)', (name,))
                     character_id = cursor.lastrowid
                     store_character_secret(character_id, password)
@@ -4627,9 +4634,9 @@ class RBCCommunityMap(QMainWindow):
 
                     logging.debug(f"First-run character '{name}' created and login initiated.")
 
-                except (CredentialStoreError, sqlite3.Error) as e:
-                    logging.error(f"Failed to create character '{name}': {e}")
-                    QMessageBox.critical(self, "Credential Storage Error", f"Failed to create character: {e}")
+            except (CredentialStoreError, sqlite3.Error) as e:
+                logging.error(f"Failed to create character '{name}': {e}")
+                QMessageBox.critical(self, "Credential Storage Error", f"Failed to create character: {e}")
         else:
             sys.exit("No characters added. Exiting the application.")
 
@@ -4646,9 +4653,9 @@ class RBCCommunityMap(QMainWindow):
         name = dialog.name_edit.text().strip()
         password = dialog.password_edit.text().strip()
 
-        with sqlite3.connect(DB_PATH) as conn:
-            cursor = conn.cursor()
-            try:
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
                 cursor.execute('INSERT INTO characters (name, password) VALUES (?, NULL)', (name,))
                 character_id = cursor.lastrowid
                 store_character_secret(character_id, password)
@@ -4675,9 +4682,9 @@ class RBCCommunityMap(QMainWindow):
 
                 QTimer.singleShot(1500, delayed_login)
 
-            except (CredentialStoreError, sqlite3.Error) as e:
-                logging.error(f"Failed to add character '{name}': {e}")
-                QMessageBox.critical(self, "Credential Storage Error", f"Failed to add character: {e}")
+        except (CredentialStoreError, sqlite3.Error) as e:
+            logging.error(f"Failed to add character '{name}': {e}")
+            QMessageBox.critical(self, "Credential Storage Error", f"Failed to add character: {e}")
 
     def modify_character(self):
         """
@@ -4707,11 +4714,16 @@ class RBCCommunityMap(QMainWindow):
             QMessageBox.warning(self, "Validation Error", "Character name and password cannot be empty.")
             return  # 🚨 Do not proceed if fields are blank
 
+        secret_changed = False
         try:
-            store_character_secret(character['id'], new_password)
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
+            old_password = get_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character['id']))
+            # Lock the database before changing the keyring so a failed write
+            # cannot leave the keyring ahead of the committed character row.
+            with sqlite3.connect(DB_PATH, timeout=10) as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                store_character_secret(character['id'], new_password)
+                secret_changed = True
+                conn.execute("""
                     UPDATE characters SET name = ?, password = NULL WHERE id = ?
                 """, (new_name, character['id']))
                 conn.commit()
@@ -4725,6 +4737,22 @@ class RBCCommunityMap(QMainWindow):
             logging.debug(f"Character '{new_name}' modified successfully.")
 
         except (CredentialStoreError, sqlite3.Error) as e:
+            if secret_changed:
+                try:
+                    if old_password is None:
+                        delete_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character['id']))
+                    else:
+                        set_secret(
+                            CHARACTER_SECRET_NAMESPACE,
+                            character_secret_id(character['id']),
+                            old_password,
+                        )
+                except CredentialStoreError as restore_error:
+                    logging.error(
+                        "Failed to restore character %s password after rejected edit: %s",
+                        character['id'],
+                        restore_error,
+                    )
             logging.error(f"Failed to modify character '{name}': {e}")
             QMessageBox.critical(self, "Credential Storage Error", f"Failed to modify character: {e}")
 
