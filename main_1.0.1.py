@@ -362,8 +362,8 @@ def character_secret_id(character_id: int) -> str:
     return str(character_id)
 
 
-def cookie_secret_id(name: str, domain: str, path: str) -> str:
-    return f"{name}\0{domain}\0{path}"
+def cookie_secret_id(cookie_id: int) -> str:
+    return str(cookie_id)
 
 
 def load_character_secret(connection: sqlite3.Connection, character_id: int, stored_value: str | None) -> str | None:
@@ -371,8 +371,10 @@ def load_character_secret(connection: sqlite3.Connection, character_id: int, sto
     if stored_value:
         try:
             set_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character_id), stored_value)
+            connection.execute("PRAGMA secure_delete = ON")
             connection.execute("UPDATE characters SET password = NULL WHERE id = ?", (character_id,))
             connection.commit()
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             logging.info("Migrated character %s password to the OS credential store", character_id)
         except CredentialStoreError as exc:
             logging.error("Could not migrate character %s password: %s", character_id, exc)
@@ -392,21 +394,21 @@ def store_character_secret(character_id: int, password: str) -> None:
 
 def load_cookie_secret(
     connection: sqlite3.Connection,
+    cookie_id: int,
     name: str,
     domain: str,
     path: str,
     stored_value: str | None,
 ) -> str | None:
     """Load a cookie value and migrate legacy plaintext when possible."""
-    identifier = cookie_secret_id(name, domain, path)
+    identifier = cookie_secret_id(cookie_id)
     if stored_value:
         try:
             set_secret(COOKIE_SECRET_NAMESPACE, identifier, stored_value)
-            connection.execute(
-                "UPDATE cookies SET value = NULL WHERE name = ? AND domain = ? AND path = ?",
-                (name, domain, path),
-            )
+            connection.execute("PRAGMA secure_delete = ON")
+            connection.execute("UPDATE cookies SET value = NULL WHERE id = ?", (cookie_id,))
             connection.commit()
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             logging.info("Migrated cookie '%s' to the OS credential store", name)
         except CredentialStoreError as exc:
             logging.error("Could not migrate cookie '%s': %s", name, exc)
@@ -420,8 +422,8 @@ def load_cookie_secret(
         return None
 
 
-def store_cookie_secret(name: str, domain: str, path: str, value: str) -> None:
-    set_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(name, domain, path), value)
+def store_cookie_secret(cookie_id: int, value: str) -> None:
+    set_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(cookie_id), value)
 
 # -----------------------
 # Type Checking
@@ -1942,16 +1944,31 @@ def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
 
             secure = int(cookie.isSecure())
             httponly = int(cookie.isHttpOnly())
-            store_cookie_secret(name, domain, path, value)
-
             cursor.execute(
-                """
-                INSERT OR REPLACE INTO cookies
-                    (name, value, domain, path, expiration, secure, httponly)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (name, None, domain, path, expiration, secure, httponly),
+                "SELECT id FROM cookies WHERE name = ? AND domain = ? AND path = ? ORDER BY id LIMIT 1",
+                (name, domain, path),
             )
+            row = cursor.fetchone()
+            if row:
+                cookie_id = row[0]
+                cursor.execute(
+                    """
+                    UPDATE cookies SET value = NULL, expiration = ?, secure = ?, httponly = ?
+                    WHERE id = ?
+                    """,
+                    (expiration, secure, httponly, cookie_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO cookies
+                        (name, value, domain, path, expiration, secure, httponly)
+                    VALUES (?, NULL, ?, ?, ?, ?, ?)
+                    """,
+                    (name, domain, path, expiration, secure, httponly),
+                )
+                cookie_id = cursor.lastrowid
+            store_cookie_secret(cookie_id, value)
 
             conn.commit()
 
@@ -1981,13 +1998,13 @@ def load_cookies_from_db() -> list[QNetworkCookie]:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT name, value, domain, path, expiration, secure, httponly
+                SELECT id, name, value, domain, path, expiration, secure, httponly
                 FROM cookies
                 """
             )
 
-            for name, value, domain, path, expiration, secure, httponly in cursor.fetchall():
-                value = load_cookie_secret(connection, name, domain, path, value)
+            for cookie_id, name, value, domain, path, expiration, secure, httponly in cursor.fetchall():
+                value = load_cookie_secret(conn, cookie_id, name, domain, path, value)
                 if value is None:
                     logging.warning("Skipping cookie '%s' because its secret is unavailable", name)
                     continue
@@ -2027,16 +2044,18 @@ def clear_cookie_db() -> bool:
     try:
         with sqlite3.connect(DB_PATH) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT name, domain, path FROM cookies")
+            cursor.execute("SELECT id, name FROM cookies")
             cookie_keys = cursor.fetchall()
-            for name, domain, path in cookie_keys:
+            conn.execute("PRAGMA secure_delete = ON")
+            cursor.execute("DELETE FROM cookies")
+            conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            for cookie_id, name in cookie_keys:
                 try:
-                    delete_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(name, domain, path))
+                    delete_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(cookie_id))
                 except CredentialStoreError as exc:
                     logging.error("Failed to delete cookie secret '%s': %s", name, exc)
                     return False
-            cursor.execute("DELETE FROM cookies")
-            conn.commit()
 
         logging.info("Cleared all cookies from database")
         return True
@@ -2530,8 +2549,10 @@ class RBCCommunityMap(QMainWindow):
 
         try:
             SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+            # QtWebEngine must not persist cookies; credentials are restored
+            # explicitly from the OS credential store by setup_cookie_handling.
             self.web_profile.setPersistentCookiesPolicy(
-                QWebEngineProfile.ForcePersistentCookies
+                QWebEngineProfile.NoPersistentCookies
             )
             self.web_profile.setPersistentStoragePath(str(SESSIONS_DIR))
             self.setup_cookie_handling()
@@ -3249,11 +3270,11 @@ class RBCCommunityMap(QMainWindow):
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT name, domain, path, value, expiration, secure, httponly FROM cookies")
+                cursor.execute("SELECT id, name, domain, path, value, expiration, secure, httponly FROM cookies")
                 cookies = cursor.fetchall()
 
-                for name, domain, path, value, expiration, secure, httponly in cookies:
-                    value = load_cookie_secret(conn, name, domain, path, value)
+                for cookie_id, name, domain, path, value, expiration, secure, httponly in cookies:
+                    value = load_cookie_secret(conn, cookie_id, name, domain, path, value)
                     if value is None:
                         logging.warning("Skipping cookie '%s' because its secret is unavailable", name)
                         continue
@@ -3292,16 +3313,26 @@ class RBCCommunityMap(QMainWindow):
             return  # skip churn cookie
 
         try:
-            store_cookie_secret(name, domain, path, value)
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
 
-                # Keep only metadata in SQLite; the value lives in the OS credential store.
-                cursor.execute("""
-                    SELECT id FROM cookies 
-                    WHERE name = ? AND domain = ? AND path = ?
-                """, (name, domain, path))
-                existing = cursor.fetchone()
+                # IP cookies are account-specific. Reuse the row already linked to
+                # that character; other cookies are keyed by their metadata.
+                existing = None
+                username = value.split('#', 1)[0] if name == 'ip' and '#' in value else None
+                if username:
+                    cursor.execute(
+                        "SELECT active_cookie FROM characters WHERE name = ?",
+                        (username,),
+                    )
+                    existing = cursor.fetchone()
+                if existing is None:
+                    cursor.execute("""
+                        SELECT id FROM cookies
+                        WHERE name = ? AND domain = ? AND path = ?
+                        ORDER BY id LIMIT 1
+                    """, (name, domain, path))
+                    existing = cursor.fetchone()
 
                 if existing:
                     new_cookie_id = existing[0]
@@ -3325,6 +3356,7 @@ class RBCCommunityMap(QMainWindow):
                     new_cookie_id = cursor.lastrowid
                     logging.debug("Saved cookie '%s' in the OS credential store", name)
 
+                store_cookie_secret(new_cookie_id, value)
                 conn.commit()
                 logging.debug(f"Saved cookie '{name}' (ID {new_cookie_id}) for domain '{domain}'")
 
@@ -3356,15 +3388,14 @@ class RBCCommunityMap(QMainWindow):
                 value = f"{name}#{password}"
                 domain = 'quiz.ravenblack.net'
                 path = '/'
-                store_cookie_secret('ip', domain, path, value)
 
-                # Avoid duplicate
+                # Keep a separate row/keyring entry for each character.
                 cursor.execute("""
-                    SELECT id FROM cookies WHERE name = 'ip' AND domain = ? AND path = ?
-                """, (domain, path))
+                    SELECT active_cookie FROM characters WHERE name = ?
+                """, (name,))
                 row = cursor.fetchone()
 
-                if row:
+                if row and row[0] is not None:
                     cookie_id = row[0]
                     cursor.execute("UPDATE cookies SET value = NULL WHERE id = ?", (cookie_id,))
                 else:
@@ -3377,6 +3408,8 @@ class RBCCommunityMap(QMainWindow):
                         0, 0
                     ))
                     cookie_id = cursor.lastrowid
+
+                store_cookie_secret(cookie_id, value)
 
                 # Set this cookie as active, clear others
                 cursor.execute("UPDATE characters SET active_cookie = NULL")
@@ -4174,9 +4207,17 @@ class RBCCommunityMap(QMainWindow):
             for character in self.characters:
                 if character.get('password'):
                     store_character_secret(character['id'], character['password'])
-                cursor.execute('''
-                    INSERT OR REPLACE INTO characters (id, name, password) VALUES (?, ?, ?)
-                ''', (character.get('id'), character['name'], None))
+                    cursor.execute(
+                        "UPDATE characters SET name = ?, password = NULL WHERE id = ?",
+                        (character['name'], character['id']),
+                    )
+                else:
+                    # Preserve the legacy value when the keyring is unavailable;
+                    # never turn an unknown credential into NULL during a save.
+                    cursor.execute(
+                        "UPDATE characters SET name = ? WHERE id = ?",
+                        (character['name'], character['id']),
+                    )
             connection.commit()
             logging.debug("Characters saved successfully with passwords in the OS credential store.")
         except CredentialStoreError as e:
@@ -4254,7 +4295,7 @@ class RBCCommunityMap(QMainWindow):
 
                 cookie_id, cookie_name, cookie_domain, cookie_path, stored_value = row
                 cookie_value = load_cookie_secret(
-                    conn, cookie_name, cookie_domain, cookie_path, stored_value
+                    conn, cookie_id, cookie_name, cookie_domain, cookie_path, stored_value
                 )
                 if cookie_value is None:
                     logging.error("No credential-store value found for cookie ID %s", cookie_id)
@@ -4491,11 +4532,15 @@ class RBCCommunityMap(QMainWindow):
                 cursor.execute("DELETE FROM characters WHERE id = ?", (char_id,))
                 conn.commit()
                 logging.debug(f"Character ID {char_id} deleted from database.")
-            delete_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(char_id))
         except (CredentialStoreError, sqlite3.Error) as e:
             logging.error(f"Failed to delete character ID {char_id} from database: {e}")
             QMessageBox.critical(self, "Credential Storage Error", f"Failed to delete character: {e}")
             return
+
+        try:
+            delete_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(char_id))
+        except CredentialStoreError as e:
+            logging.warning("Character %s was deleted but its keyring entry remains: %s", char_id, e)
 
         # Then update in-memory list and UI
         self.characters = [char for char in self.characters if char['id'] != char_id]

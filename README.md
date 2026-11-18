@@ -90,6 +90,11 @@ python main_1.0.1.py
 
 For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
 
+Packagers must include `credential_store.py` and the platform-appropriate
+`keyring` backend modules. For frozen builds, verify that the selected
+backend (for example, Windows Credential Locker) is included and available at
+runtime.
+
 ## Data and privacy
 
 Character information, session metadata, and application preferences are stored in a local SQLite database. Passwords and session-cookie values are stored through the operating system credential store via `keyring`; the database keeps only non-secret metadata. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.

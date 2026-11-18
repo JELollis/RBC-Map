@@ -14,10 +14,12 @@ import tokenize
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SOURCE_FILES = tuple(sorted(ROOT.glob("main_*.py"))) + tuple(sorted((ROOT / "tools").glob("*.py")))
+SOURCE_FILES = tuple(sorted(ROOT.glob("*.py"))) + tuple(sorted((ROOT / "tools").glob("*.py")))
 IGNORED_TOKEN_TYPES = {tokenize.STRING, tokenize.COMMENT}
 if hasattr(tokenize, "FSTRING_MIDDLE"):
     IGNORED_TOKEN_TYPES.add(tokenize.FSTRING_MIDDLE)
+if hasattr(tokenize, "TSTRING_MIDDLE"):
+    IGNORED_TOKEN_TYPES.add(tokenize.TSTRING_MIDDLE)
 BIDI_CONTROLS = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 
 
