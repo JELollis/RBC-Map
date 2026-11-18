@@ -5,6 +5,6 @@
 # QtWebEngineCore, QtWebChannel) used by the embedded browser view, so no
 # separate WebEngine package is required from PyPI.
 
-PySide6
-beautifulsoup4
-requests
+PySide6==6.11.2
+beautifulsoup4==4.15.0
+requests==2.34.2
