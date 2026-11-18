@@ -539,10 +539,19 @@ def _connect_read_only(db_path: Path) -> sqlite3.Connection:
 
 
 def _count_characters(db_path: Path) -> int | None:
-    """Return the number of saved characters in *db_path*, or None if unreadable."""
+    """Return the number of saved characters in *db_path*.
+
+    Returns 0 for an empty or schema-less database (no ``characters``
+    table) and None only when the file cannot be read as SQLite at all.
+    """
     try:
         conn = _connect_read_only(db_path)
         try:
+            has_table = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'characters'"
+            ).fetchone()
+            if not has_table:
+                return 0
             return conn.execute("SELECT COUNT(*) FROM characters").fetchone()[0]
         finally:
             conn.close()
@@ -559,10 +568,17 @@ def _mark_migration_done(sessions_dir: Path, note: str) -> None:
 
 
 def _copy_if_absent(src: str, dst: str) -> str:
-    """copytree copy function that leaves an existing destination file alone."""
+    """copytree copy function that leaves an existing destination file alone.
+
+    Copies via a ``.migrating`` sibling and an atomic rename so an interrupted
+    copy never leaves a truncated file that would look complete next launch.
+    """
     if os.path.lexists(dst):
         return dst
-    return shutil.copy2(src, dst)
+    temp = dst + ".migrating"
+    shutil.copy2(src, temp)
+    os.replace(temp, dst)
+    return dst
 
 
 def migrate_legacy_data(
@@ -573,7 +589,8 @@ def migrate_legacy_data(
 
     Runs before anything opens the database. It migrates when the new database
     is missing, or exists but holds no saved characters while a legacy
-    database does (a 1.0.0 launch before this fix created an empty one). The
+    database does (a 1.0.0 launch before this fix created an empty one). Only
+    legacy databases that contain saved characters are considered. The
     replaced database is kept as a ``.pre-migration`` backup. Web profile
     files already present in *sessions_dir* are kept; only missing ones are
     copied.
@@ -600,9 +617,15 @@ def migrate_legacy_data(
         d for d in legacy_dirs
         if (d / LEGACY_DB_NAME).is_file() and d.resolve() != sessions_dir.resolve()
     ]
-    if not candidates:
+    # Only legacy databases that actually hold characters are worth
+    # migrating; a newer but empty one must not beat an older populated one.
+    populated = [
+        d for d in candidates
+        if (_count_characters(d / LEGACY_DB_NAME) or 0) > 0
+    ]
+    if not populated:
         return None
-    source_dir = max(candidates, key=lambda d: (d / LEGACY_DB_NAME).stat().st_mtime)
+    source_dir = max(populated, key=lambda d: (d / LEGACY_DB_NAME).stat().st_mtime)
     source_db = source_dir / LEGACY_DB_NAME
 
     if target_db.exists():
@@ -612,8 +635,6 @@ def migrate_legacy_data(
             # safely): keep it and settle the question for good.
             _mark_migration_done(sessions_dir, f"kept existing data; legacy at {source_dir}")
             return None
-        if not _count_characters(source_db):
-            return None  # nothing worth bringing over
 
     temp_db = target_db.with_name(LEGACY_DB_NAME + ".migrating")
     try:

@@ -1,10 +1,10 @@
-"""Regression check for the pre-1.0.0 data migration in main_1.0.0.py.
+"""Regression check for the pre-1.0.0 data migration in main_1.0.1.py.
 
 Extracts ``_count_characters`` and ``migrate_legacy_data`` from the main
 script without importing it (importing would start the Qt app), then runs
 them against temporary folders.
 
-Usage: python tools/check_legacy_migration.py [path/to/main_1.0.0.py]
+Usage: python tools/check_legacy_migration.py [path/to/main_1.0.1.py]
 Exits non-zero on the first failure.
 """
 import ast
@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.0.py"
+MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.1.py"
 WANTED = {"_connect_read_only", "_count_characters", "_mark_migration_done",
           "_copy_if_absent", "migrate_legacy_data"}
 
@@ -128,14 +128,33 @@ def same_dir_is_ignored(t: Path):
     assert migrate(t / "s", [t / "s"]) is None
 
 
-def failure_leaves_no_partial_db(t: Path):
+def corrupt_legacy_db_is_skipped(t: Path):
+    # A legacy database that is not readable SQLite has no characters to
+    # migrate, so it is skipped without copying or settling the marker.
     legacy = t / "app/sessions"
     legacy.mkdir(parents=True)
     (legacy / "rbc_map_data.db").write_bytes(b"not a database" * 100)
-    msg = migrate(t / "new", [legacy])
+    assert migrate(t / "new", [legacy]) is None
+    assert not (t / "new").exists()
+    assert not (t / "new/.legacy-migration-done").exists()
+
+
+def failure_leaves_no_partial_db(t: Path):
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    real_copytree = shutil.copytree
+
+    def failing_copytree(*args, **kwargs):
+        raise OSError("simulated copy failure")
+
+    shutil.copytree = failing_copytree
+    try:
+        msg = migrate(t / "new", [t / "app/sessions"])
+    finally:
+        shutil.copytree = real_copytree
     assert msg and "failed" in msg, msg
     assert not (t / "new/rbc_map_data.db").exists()
     assert not (t / "new/rbc_map_data.db.migrating").exists()
+    assert not (t / "new/.legacy-migration-done").exists()
 
 
 def delete_characters(path: Path):
@@ -191,12 +210,70 @@ def empty_legacy_does_not_replace_new_db(t: Path):
     assert migrate(t / "new", [t / "app/sessions"]) is None
 
 
+def newest_empty_legacy_loses_to_older_populated(t: Path):
+    # A newer but empty legacy DB must not beat an older populated one,
+    # even when the target exists but holds no characters.
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    make_db(t / "app/testing/sessions/rbc_map_data.db", [])
+    os.utime(t / "app/sessions/rbc_map_data.db", (1, 1))  # older mtime
+    make_db(t / "new/rbc_map_data.db", [])
+    msg = migrate(t / "new", [t / "app/sessions", t / "app/testing/sessions"])
+    assert msg and "Migrated" in msg, msg
+    assert names(t / "new/rbc_map_data.db") == ["Alice"]
+
+
+def empty_legacy_is_not_migrated(t: Path):
+    # With no populated legacy DB there is nothing to copy or settle.
+    make_db(t / "app/sessions/rbc_map_data.db", [])
+    assert migrate(t / "new", [t / "app/sessions"]) is None
+    assert not (t / "new/rbc_map_data.db").exists()
+    assert not (t / "new/.legacy-migration-done").exists()
+
+
+def interrupted_profile_copy_is_repaired(t: Path):
+    # A leftover .migrating file from a killed copy is replaced cleanly.
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    (t / "app/sessions/profile").mkdir()
+    (t / "app/sessions/profile/Cookies").write_text("x" * 1000)
+    (t / "new/profile").mkdir(parents=True)
+    (t / "new/profile/Cookies.migrating").write_text("partial")
+    msg = migrate(t / "new", [t / "app/sessions"])
+    assert msg and "Migrated" in msg, msg
+    assert (t / "new/profile/Cookies").read_text() == "x" * 1000
+    assert not (t / "new/profile/Cookies.migrating").exists()
+
+
+def schema_less_target_is_migrated(t: Path):
+    # A 0-byte or table-less target is empty, not unreadable.
+    make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
+    (t / "new1").mkdir(parents=True)
+    (t / "new1/rbc_map_data.db").write_bytes(b"")
+    assert "Migrated" in (migrate(t / "new1", [t / "app/sessions"]) or "")
+    assert names(t / "new1/rbc_map_data.db") == ["Alice"]
+    assert (t / "new1/rbc_map_data.db.pre-migration").stat().st_size == 0
+    # Same for a valid SQLite file that simply lacks the characters table.
+    other = t / "app2/sessions"
+    make_db(other / "rbc_map_data.db", ["Bob"])
+    (t / "new2").mkdir(parents=True)
+    conn = sqlite3.connect(t / "new2/rbc_map_data.db")
+    conn.execute("CREATE TABLE something_else (x)")
+    conn.commit()
+    conn.close()
+    assert "Migrated" in (migrate(t / "new2", [other]) or "")
+    assert names(t / "new2/rbc_map_data.db") == ["Bob"]
+
+
 for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_legacy,
              replaces_empty_new_db_with_backup, keeps_existing_profile_files,
              keeps_populated_new_db, second_run_is_noop,
-             same_dir_is_ignored, failure_leaves_no_partial_db,
+             same_dir_is_ignored, corrupt_legacy_db_is_skipped,
+             failure_leaves_no_partial_db,
              deleted_characters_stay_deleted, populated_target_settles_migration,
              unreadable_target_is_kept, reserved_characters_in_paths,
-             empty_legacy_does_not_replace_new_db]:
+             empty_legacy_does_not_replace_new_db,
+             newest_empty_legacy_loses_to_older_populated,
+             empty_legacy_is_not_migrated,
+             interrupted_profile_copy_is_repaired,
+             schema_less_target_is_migrated]:
     run(case.__name__, case)
 print("all legacy-migration checks passed")
