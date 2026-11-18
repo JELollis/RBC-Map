@@ -357,6 +357,7 @@ from PySide6.QtNetwork import QNetworkCookie
 
 CHARACTER_SECRET_NAMESPACE = "character-password"
 COOKIE_SECRET_NAMESPACE = "cookie-value"
+SECRETS_MIGRATED = False
 
 
 def character_secret_id(character_id: int) -> str:
@@ -369,6 +370,7 @@ def cookie_secret_id(cookie_id: int) -> str:
 
 def load_character_secret(connection: sqlite3.Connection, character_id: int, stored_value: str | None) -> str | None:
     """Load a character password and migrate legacy plaintext when possible."""
+    global SECRETS_MIGRATED
     if stored_value:
         try:
             set_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character_id), stored_value)
@@ -376,6 +378,7 @@ def load_character_secret(connection: sqlite3.Connection, character_id: int, sto
             connection.execute("UPDATE characters SET password = NULL WHERE id = ?", (character_id,))
             connection.commit()
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            SECRETS_MIGRATED = True
             logging.info("Migrated character %s password to the OS credential store", character_id)
         except CredentialStoreError as exc:
             logging.error("Could not migrate character %s password: %s", character_id, exc)
@@ -402,6 +405,7 @@ def load_cookie_secret(
     stored_value: str | None,
 ) -> str | None:
     """Load a cookie value and migrate legacy plaintext when possible."""
+    global SECRETS_MIGRATED
     identifier = cookie_secret_id(cookie_id)
     if stored_value:
         try:
@@ -410,6 +414,7 @@ def load_cookie_secret(
             connection.execute("UPDATE cookies SET value = NULL WHERE id = ?", (cookie_id,))
             connection.commit()
             connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            SECRETS_MIGRATED = True
             logging.info("Migrated cookie '%s' to the OS credential store", name)
         except CredentialStoreError as exc:
             logging.error("Could not migrate cookie '%s': %s", name, exc)
@@ -425,6 +430,22 @@ def load_cookie_secret(
 
 def store_cookie_secret(cookie_id: int, value: str) -> None:
     set_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(cookie_id), value)
+
+
+def vacuum_migrated_secrets(connection: sqlite3.Connection) -> None:
+    """Scrub old plaintext pages after a successful credential migration."""
+    global SECRETS_MIGRATED
+    if not SECRETS_MIGRATED:
+        return
+    try:
+        connection.commit()
+        connection.execute("PRAGMA secure_delete = ON")
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        connection.execute("VACUUM")
+        SECRETS_MIGRATED = False
+        logging.info("Scrubbed migrated credential data from the SQLite file")
+    except sqlite3.Error as exc:
+        logging.warning("Could not vacuum migrated credential data: %s", exc)
 
 # -----------------------
 # Type Checking
@@ -715,13 +736,13 @@ def migrate_legacy_data(
     temp_db = target_db.with_name(LEGACY_DB_NAME + ".migrating")
     try:
         sessions_dir.mkdir(parents=True, exist_ok=True)
-        # Web profile data (cookies, cache) first; the database last. Files
-        # already in the new profile are kept, never overwritten.
+        # Web profile data (except Chromium cookie databases) first; the
+        # database last. Files already in the new profile are kept.
         shutil.copytree(
             source_dir,
             sessions_dir,
             dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns(LEGACY_DB_NAME + "*"),
+            ignore=shutil.ignore_patterns(LEGACY_DB_NAME + "*", "Cookies*"),
             copy_function=_copy_if_absent,
         )
         temp_db.unlink(missing_ok=True)
@@ -750,6 +771,19 @@ def migrate_legacy_data(
 
 
 LEGACY_MIGRATION_MESSAGE = migrate_legacy_data()
+
+
+def remove_persistent_browser_cookies(sessions_dir: Path = SESSIONS_DIR) -> None:
+    """Remove Chromium cookie stores left by older persistent-cookie builds."""
+    for cookie_path in sessions_dir.glob("Cookies*"):
+        try:
+            if cookie_path.is_dir():
+                shutil.rmtree(cookie_path)
+            else:
+                cookie_path.unlink()
+            logging.info("Removed legacy persistent cookie store %s", cookie_path)
+        except OSError as exc:
+            logging.warning("Could not remove legacy cookie store %s: %s", cookie_path, exc)
 
 
 # -----------------------
@@ -2192,6 +2226,8 @@ def load_cookies_from_db() -> list[QNetworkCookie]:
                 cookie.setHttpOnly(bool(httponly))
                 cookies.append(cookie)
 
+            vacuum_migrated_secrets(conn)
+
         logging.debug(
             "Loaded %d cookies from database",
             len(cookies),
@@ -2710,10 +2746,10 @@ class RBCCommunityMap(QMainWindow):
 
     @splash_message(lambda self: self.splash, "Initializing web profile")
     def _init_web_profile(self) -> None:
-        self.web_profile = QWebEngineProfile.defaultProfile()
-
         try:
             SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+            remove_persistent_browser_cookies(SESSIONS_DIR)
+            self.web_profile = QWebEngineProfile.defaultProfile()
             # QtWebEngine must not persist cookies; credentials are restored
             # explicitly from the OS credential store by setup_cookie_handling.
             self.web_profile.setPersistentCookiesPolicy(
@@ -3461,6 +3497,7 @@ class RBCCommunityMap(QMainWindow):
                         except ValueError as e:
                             logging.warning(f"Failed to parse expiration '{expiration}' for cookie '{name}': {e}")
                     self.cookie_store.setCookie(cookie, QUrl(f"https://{domain}"))
+                vacuum_migrated_secrets(conn)
                 logging.debug(f"Loaded {len(cookies)} cookies from database")
         except sqlite3.Error as e:
             logging.error(f"Failed to load cookies: {e}")
@@ -3485,13 +3522,26 @@ class RBCCommunityMap(QMainWindow):
                 # that character; other cookies are keyed by their metadata.
                 existing = None
                 username = value.split('#', 1)[0] if name == 'ip' and '#' in value else None
-                if username:
+                if name == 'ip':
+                    if not username:
+                        return
+                    _, password = value.split('#', 1)
+                    if not password.strip():
+                        logging.debug("Ignoring logout cookie for '%s'", username)
+                        return
                     cursor.execute(
                         "SELECT active_cookie FROM characters WHERE name = ?",
                         (username,),
                     )
                     existing = cursor.fetchone()
-                if existing is None:
+                    if existing and existing[0] is None:
+                        existing = None
+                    if existing is None and not cursor.execute(
+                        "SELECT 1 FROM characters WHERE name = ?", (username,)
+                    ).fetchone():
+                        logging.warning("Ignoring IP cookie for unknown character '%s'", username)
+                        return
+                else:
                     cursor.execute("""
                         SELECT id FROM cookies
                         WHERE name = ? AND domain = ? AND path = ?
@@ -4343,6 +4393,7 @@ class RBCCommunityMap(QMainWindow):
                 }
                 for char_id, name, password in character_data
             ]
+            vacuum_migrated_secrets(connection)
 
             self.character_list.clear()
             for character in self.characters:

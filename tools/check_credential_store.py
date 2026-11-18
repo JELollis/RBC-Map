@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import ast
+import gc
 import logging
 import sqlite3
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -37,15 +39,59 @@ class FakeKeyring:
         del cls.values[(service, account)]
 
 
+class FakeByteValue:
+    def __init__(self, value: str):
+        self.value = value
+
+    def data(self) -> bytes:
+        return self.value.encode()
+
+
+class FakeDate:
+    def toString(self, *_args) -> str:
+        return ""
+
+
+class FakeCookie:
+    def __init__(self, value: str):
+        self._value = value
+
+    def name(self) -> FakeByteValue:
+        return FakeByteValue("ip")
+
+    def value(self) -> FakeByteValue:
+        return FakeByteValue(self._value)
+
+    def domain(self) -> str:
+        return "quiz.ravenblack.net"
+
+    def path(self) -> str:
+        return "/"
+
+    def isSessionCookie(self) -> bool:
+        return True
+
+    def expirationDate(self) -> FakeDate:
+        return FakeDate()
+
+    def isSecure(self) -> bool:
+        return False
+
+    def isHttpOnly(self) -> bool:
+        return False
+
+
 def load_migration_helpers() -> dict[str, object]:
     tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.1.py").read_text(encoding="utf-8"))
     names = {
         "CHARACTER_SECRET_NAMESPACE",
         "COOKIE_SECRET_NAMESPACE",
+        "SECRETS_MIGRATED",
         "character_secret_id",
         "cookie_secret_id",
         "load_character_secret",
         "load_cookie_secret",
+        "vacuum_migrated_secrets",
     }
     nodes = []
     for node in tree.body:
@@ -66,10 +112,70 @@ def load_migration_helpers() -> dict[str, object]:
     return namespace
 
 
+def load_cookie_callback() -> tuple[object, dict[str, object]]:
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.1.py").read_text(encoding="utf-8"))
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
+    method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "on_cookie_added")
+    namespace = {
+        "sqlite3": sqlite3,
+        "DB_PATH": ":memory:",
+        "logging": logging,
+        "CredentialStoreError": CredentialStoreError,
+        "store_cookie_secret": lambda cookie_id, value: set_secret("cookie-value", str(cookie_id), value),
+        "Qt": type("Qt", (), {"DateFormat": type("DateFormat", (), {"ISODate": object()})}),
+    }
+    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
+    return namespace["on_cookie_added"], namespace
+
+
+def check_cookie_callback() -> None:
+    callback, namespace = load_cookie_callback()
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as handle:
+        db_path = Path(handle.name)
+    try:
+        connection = sqlite3.connect(db_path)
+        connection.executescript(
+            """
+            CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT, active_cookie INTEGER);
+            CREATE TABLE cookies (id INTEGER PRIMARY KEY, name TEXT, value TEXT,
+                                  domain TEXT, path TEXT, expiration TEXT,
+                                  secure INTEGER, httponly INTEGER);
+            INSERT INTO characters VALUES (1, 'Alice', NULL);
+            INSERT INTO characters VALUES (2, 'Bob', NULL);
+            """
+        )
+        connection.commit()
+        connection.close()
+
+        namespace["DB_PATH"] = str(db_path)
+        FakeKeyring.values.clear()
+        FakeKeyring.available = True
+        callback(object(), FakeCookie("Alice#pwA"))
+        callback(object(), FakeCookie("Bob#pwB"))
+
+        connection = sqlite3.connect(db_path)
+        rows = connection.execute("SELECT id, name FROM cookies ORDER BY id").fetchall()
+        assert len(rows) == 2
+        linked = connection.execute("SELECT active_cookie FROM characters ORDER BY id").fetchall()
+        assert linked == [(rows[0][0],), (rows[1][0],)]
+        connection.close()
+
+        callback(object(), FakeCookie("Carol#pwC"))
+        callback(object(), FakeCookie("Alice#"))
+        connection = sqlite3.connect(db_path)
+        assert connection.execute("SELECT COUNT(*) FROM cookies").fetchone()[0] == 2
+        assert get_secret("cookie-value", str(rows[0][0])) == "Alice#pwA"
+        connection.close()
+    finally:
+        gc.collect()
+        db_path.unlink(missing_ok=True)
+
+
 def check_migrations() -> None:
     namespace = load_migration_helpers()
     load_character_secret = namespace["load_character_secret"]
     load_cookie_secret = namespace["load_cookie_secret"]
+    vacuum_migrated_secrets = namespace["vacuum_migrated_secrets"]
 
     connection = sqlite3.connect(":memory:")
     connection.executescript(
@@ -95,6 +201,8 @@ def check_migrations() -> None:
     assert get_secret("cookie-value", "10") == "Alice#pwA"
     assert get_secret("cookie-value", "11") == "Bob#pwB"
     assert connection.execute("SELECT value FROM cookies ORDER BY id").fetchall() == [(None,), (None,)]
+    vacuum_migrated_secrets(connection)
+    assert namespace["SECRETS_MIGRATED"] is False
 
     connection.execute("INSERT INTO characters VALUES (2, 'Bob', 'pwB')")
     FakeKeyring.available = False
@@ -118,6 +226,7 @@ def main() -> int:
         else:
             raise AssertionError("empty secrets must be rejected")
         check_migrations()
+        check_cookie_callback()
     finally:
         FakeKeyring.available = True
         credential_store.keyring = original_keyring
