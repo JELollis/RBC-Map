@@ -92,7 +92,7 @@ For a packaged build, check the repository's [releases](https://github.com/JELol
 
 ## Data and privacy
 
-Character information, credentials, session state, and application preferences are stored in a local SQLite database. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.
+Character information, credentials, session state, and application preferences are stored in a local SQLite database. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder. On first launch, data from an older version kept next to the script (`sessions/` or `testing/sessions/`) is copied there automatically; the originals are left in place.
 
 The documented community reporting feature (**Contribute Discovered Locations**) is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
 

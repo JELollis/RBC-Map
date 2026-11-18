@@ -1000,8 +1000,22 @@ under 0.14.0, plus:
 
 ## Unreleased — on `dev` (target 1.0.1)
 
+### 🐛 Bug fixes
 - Corrected stale BeautifulSoup and crowdsourced-reporting documentation.
 - Database update failures now propagate to their callers so startup and
   manual refreshes can report unsuccessful updates.
 - Incomplete building payloads no longer erase existing local building data.
 - Manual update status text warns that the bot refresh may take up to one minute.
+- **Saved data carried over on upgrade:** 1.0.0 moved the database and session
+  data to the per-user data folder but never copied the old data, so upgrading
+  users started with no saved characters, settings, or logins. On launch, the
+  app now copies `sessions/` (or `testing/sessions/`) from next to the script
+  into the data folder when the new database is missing or has no saved
+  characters. Originals are left untouched, browser-profile files already in
+  the data folder are kept, a replaced empty database is kept
+  as `rbc_map_data.db.pre-migration`, and a failed copy is retried next launch.
+  The migration happens at most once (recorded by `.legacy-migration-done` in
+  the sessions folder), so deleting characters later never brings old ones back.
+- **Help:** "Update Data" is now described as requesting shop, guild, and
+  community building locations from the update service, not from A View in the
+  Dark.
