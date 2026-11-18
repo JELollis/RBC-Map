@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import ast
 import gc
-import hashlib
 import logging
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -87,8 +87,12 @@ def load_migration_helpers() -> dict[str, object]:
     names = {
         "CHARACTER_SECRET_NAMESPACE",
         "COOKIE_SECRET_NAMESPACE",
+        "CREDENTIAL_NAMESPACE_SETTING",
+        "CREDENTIAL_NAMESPACE",
         "SECRETS_MIGRATED",
-        "_credential_database_id",
+        "ensure_credential_namespace",
+        "_credential_namespace",
+        "_migrate_legacy_secret",
         "character_secret_id",
         "cookie_secret_id",
         "load_character_secret",
@@ -105,13 +109,14 @@ def load_migration_helpers() -> dict[str, object]:
             nodes.append(node)
     namespace = {
         "CredentialStoreError": CredentialStoreError,
+        "delete_secret": delete_secret,
         "get_secret": get_secret,
         "set_secret": set_secret,
-        "hashlib": hashlib,
         "logging": logging,
         "os": __import__("os"),
         "Path": Path,
         "DB_PATH": ":memory:",
+        "uuid": __import__("uuid"),
         "sqlite3": sqlite3,
     }
     exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
@@ -127,15 +132,17 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
         "DB_PATH": ":memory:",
         "logging": logging,
         "CredentialStoreError": CredentialStoreError,
+        "CHARACTER_SECRET_NAMESPACE": "character-password",
         "store_cookie_secret": lambda cookie_id, value: set_secret(
             "cookie-value", namespace["cookie_secret_id"](cookie_id), value
         ),
         "Qt": type("Qt", (), {"DateFormat": type("DateFormat", (), {"ISODate": object()})}),
     }
-    namespace.update({
-        "_credential_database_id": load_migration_helpers()["_credential_database_id"],
-        "cookie_secret_id": load_migration_helpers()["cookie_secret_id"],
-    })
+    helpers = load_migration_helpers()
+    helpers["CREDENTIAL_NAMESPACE"] = "test-cookie-namespace"
+    namespace.update({"_credential_namespace": helpers["_credential_namespace"]})
+    namespace["CREDENTIAL_NAMESPACE"] = helpers["CREDENTIAL_NAMESPACE"]
+    namespace["cookie_secret_id"] = helpers["cookie_secret_id"]
     exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
     return namespace["on_cookie_added"], namespace
 
@@ -195,6 +202,7 @@ def check_migrations() -> None:
     connection = sqlite3.connect(":memory:")
     connection.executescript(
         """
+        CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value BLOB);
         CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT, password TEXT);
         CREATE TABLE cookies (id INTEGER PRIMARY KEY, name TEXT, value TEXT,
                               domain TEXT, path TEXT, expiration TEXT,
@@ -204,6 +212,7 @@ def check_migrations() -> None:
         INSERT INTO cookies VALUES (11, 'ip', 'Bob#pwB', 'quiz.ravenblack.net', '/', NULL, 0, 0);
         """
     )
+    namespace["CREDENTIAL_NAMESPACE"] = namespace["ensure_credential_namespace"](connection)
 
     FakeKeyring.available = True
     FakeKeyring.values.clear()
@@ -228,14 +237,193 @@ def check_migrations() -> None:
 
 def check_database_secret_namespaces() -> None:
     namespace = load_migration_helpers()
-    database_id = namespace["_credential_database_id"]
+    ensure_namespace = namespace["ensure_credential_namespace"]
     character_id = namespace["character_secret_id"]
     cookie_id = namespace["cookie_secret_id"]
-    first_path = "/tmp/rbc-map-one/sessions/rbc_map_data.db"
-    second_path = "/tmp/rbc-map-two/sessions/rbc_map_data.db"
-    assert database_id(first_path) != database_id(second_path)
-    assert character_id(1, first_path) != character_id(1, second_path)
-    assert cookie_id(1, first_path) != cookie_id(1, second_path)
+    first = sqlite3.connect(":memory:")
+    first.execute("CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value BLOB)")
+    first_namespace = ensure_namespace(first)
+    first.commit()
+    second = sqlite3.connect(":memory:")
+    second.execute("CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value BLOB)")
+    second_namespace = ensure_namespace(second)
+    assert first_namespace != second_namespace
+    assert character_id(1, first_namespace) != character_id(1, second_namespace)
+    assert cookie_id(1, first_namespace) != cookie_id(1, second_namespace)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        original = Path(temp_dir) / "original.db"
+        copied = Path(temp_dir) / "copied.db"
+        connection = sqlite3.connect(original)
+        connection.execute("CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value BLOB)")
+        original_namespace = ensure_namespace(connection)
+        connection.commit()
+        connection.close()
+        shutil.copy2(original, copied)
+        copied_connection = sqlite3.connect(copied)
+        assert ensure_namespace(copied_connection) == original_namespace
+        copied_connection.close()
+
+    namespace["CREDENTIAL_NAMESPACE"] = "legacy-test"
+    legacy_connection = sqlite3.connect(":memory:")
+    legacy_connection.execute("CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value BLOB)")
+    set_secret("character-password", "7", "legacy-password")
+    assert namespace["load_character_secret"](legacy_connection, 7, None) == "legacy-password"
+    assert get_secret("character-password", character_id(7)) == "legacy-password"
+    assert get_secret("character-password", "7") is None
+    first.close()
+    second.close()
+    legacy_connection.close()
+
+
+class FakeTextField:
+    def __init__(self, value: str):
+        self.value = value
+
+    def text(self) -> str:
+        return self.value
+
+
+class FakeCharacterDialog:
+    def __init__(self, name: str, password: str):
+        self.name_edit = FakeTextField(name)
+        self.password_edit = FakeTextField(password)
+
+    def exec(self) -> bool:
+        return True
+
+
+class FakeMessageBox:
+    @staticmethod
+    def critical(*_args) -> None:
+        return None
+
+    @staticmethod
+    def warning(*_args) -> None:
+        return None
+
+
+def load_character_mutation_methods() -> dict[str, object]:
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.1.py").read_text(encoding="utf-8"))
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
+    wanted = {"firstrun_character_creation", "add_new_character", "modify_character"}
+    methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
+    namespace = {
+        "sqlite3": sqlite3,
+        "DB_PATH": ":memory:",
+        "logging": logging,
+        "CredentialStoreError": CredentialStoreError,
+        "CHARACTER_SECRET_NAMESPACE": "character-password",
+        "QMessageBox": FakeMessageBox,
+        "sys": sys,
+        "get_secret": get_secret,
+        "set_secret": set_secret,
+        "delete_secret": delete_secret,
+        "store_character_secret": lambda _character_id, _password: (_ for _ in ()).throw(
+            CredentialStoreError("simulated unavailable keyring")
+        ),
+        "CharacterDialog": lambda *_args: namespace["dialog"],
+        "QTimer": type("QTimer", (), {"singleShot": staticmethod(lambda *_args: None)}),
+        "QListWidgetItem": lambda *_args: object(),
+        "QUrl": lambda value: value,
+    }
+    helpers = load_migration_helpers()
+    helpers["CREDENTIAL_NAMESPACE"] = "character-test"
+    namespace.update({
+        "CREDENTIAL_NAMESPACE": helpers["CREDENTIAL_NAMESPACE"],
+        "_credential_namespace": helpers["_credential_namespace"],
+        "character_secret_id": helpers["character_secret_id"],
+    })
+    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
+    return namespace
+
+
+def check_failed_character_creates_roll_back() -> None:
+    namespace = load_character_mutation_methods()
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as handle:
+        db_path = Path(handle.name)
+    connection = None
+    try:
+        connection = sqlite3.connect(db_path)
+        connection.executescript(
+            """
+            CREATE TABLE characters (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, password TEXT);
+            CREATE TABLE coins (character_id INTEGER, pocket INTEGER, bank INTEGER);
+            """
+        )
+        connection.commit()
+        connection.close()
+        namespace["DB_PATH"] = str(db_path)
+        namespace["dialog"] = FakeCharacterDialog("Alice", "pwA")
+        fake_self = type("FakeWindow", (), {})()
+        fake_self.characters = []
+        fake_self.character_list = type("FakeList", (), {"addItem": lambda *_args: None})()
+        namespace["firstrun_character_creation"](fake_self)
+        namespace["dialog"] = FakeCharacterDialog("Bob", "pwB")
+        namespace["add_new_character"](fake_self)
+
+        connection = sqlite3.connect(db_path)
+        assert connection.execute("SELECT COUNT(*) FROM characters").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM coins").fetchone()[0] == 0
+        connection.close()
+        connection = None
+    finally:
+        if connection is not None:
+            connection.close()
+        gc.collect()
+        db_path.unlink(missing_ok=True)
+
+
+def check_modify_character_atomicity() -> None:
+    namespace = load_character_mutation_methods()
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as handle:
+        db_path = Path(handle.name)
+    connection = None
+    try:
+        connection = sqlite3.connect(db_path)
+        connection.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT, password TEXT)")
+        connection.execute("INSERT INTO characters VALUES (1, 'Alice', NULL)")
+        connection.commit()
+        connection.close()
+        connection = None
+        namespace["DB_PATH"] = str(db_path)
+        namespace["CREDENTIAL_NAMESPACE"] = "modify-test"
+        set_secret("character-password", namespace["character_secret_id"](1), "old-password")
+
+        character = {"id": 1, "name": "Alice", "password": "old-password"}
+        item = type("FakeItem", (), {"text": lambda _self: "Alice", "setText": lambda *_args: None})()
+        character_list = type("FakeList", (), {"currentItem": lambda _self: item})()
+        fake_self = type("FakeWindow", (), {})()
+        fake_self.characters = [character]
+        fake_self.character_list = character_list
+
+        holder = sqlite3.connect(db_path)
+        holder.execute("BEGIN IMMEDIATE")
+        namespace["dialog"] = FakeCharacterDialog("Alice-renamed", "new-password")
+        namespace["modify_character"](fake_self)
+        assert get_secret("character-password", namespace["character_secret_id"](1)) == "old-password"
+        holder.rollback()
+        holder.close()
+
+        connection = sqlite3.connect(db_path)
+        connection.execute(
+            "CREATE TRIGGER reject_character_update BEFORE UPDATE ON characters "
+            "BEGIN SELECT RAISE(ABORT, 'simulated update failure'); END"
+        )
+        connection.commit()
+        connection.close()
+        namespace["dialog"] = FakeCharacterDialog("Alice-renamed", "new-password")
+        namespace["modify_character"](fake_self)
+        assert get_secret("character-password", namespace["character_secret_id"](1)) == "old-password"
+        connection = sqlite3.connect(db_path)
+        assert connection.execute("SELECT name FROM characters WHERE id = 1").fetchone()[0] == "Alice"
+        connection.close()
+        connection = None
+    finally:
+        if connection is not None:
+            connection.close()
+        gc.collect()
+        db_path.unlink(missing_ok=True)
 
 
 def main() -> int:
@@ -255,6 +443,8 @@ def main() -> int:
         check_migrations()
         check_cookie_callback()
         check_database_secret_namespaces()
+        check_failed_character_creates_roll_back()
+        check_modify_character_atomicity()
     finally:
         FakeKeyring.available = True
         credential_store.keyring = original_keyring

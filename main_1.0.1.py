@@ -122,7 +122,6 @@ Discord: https://discord.gg/rKamEZvK6X
 # -----------------------
 
 import logging
-import hashlib
 import json
 import math
 import os
@@ -358,21 +357,63 @@ from PySide6.QtNetwork import QNetworkCookie
 
 CHARACTER_SECRET_NAMESPACE = "character-password"
 COOKIE_SECRET_NAMESPACE = "cookie-value"
+CREDENTIAL_NAMESPACE_SETTING = "credential_namespace"
+CREDENTIAL_NAMESPACE = None
 SECRETS_MIGRATED = False
 
 
-def _credential_database_id(db_path: str | os.PathLike = DB_PATH) -> str:
-    """Return a stable namespace for the database owning a secret."""
-    resolved_path = Path(db_path).expanduser().resolve()
-    return hashlib.sha256(str(resolved_path).encode("utf-8")).hexdigest()[:32]
+def ensure_credential_namespace(connection: sqlite3.Connection) -> str:
+    """Load or create the persistent namespace owned by this database."""
+    global CREDENTIAL_NAMESPACE
+    row = connection.execute(
+        "SELECT setting_value FROM settings WHERE setting_name = ?",
+        (CREDENTIAL_NAMESPACE_SETTING,),
+    ).fetchone()
+    if row and row[0]:
+        CREDENTIAL_NAMESPACE = str(row[0])
+        return CREDENTIAL_NAMESPACE
+
+    CREDENTIAL_NAMESPACE = uuid.uuid4().hex
+    connection.execute(
+        "INSERT INTO settings (setting_name, setting_value) VALUES (?, ?)",
+        (CREDENTIAL_NAMESPACE_SETTING, CREDENTIAL_NAMESPACE),
+    )
+    return CREDENTIAL_NAMESPACE
 
 
-def character_secret_id(character_id: int, db_path: str | os.PathLike = DB_PATH) -> str:
-    return f"{_credential_database_id(db_path)}:{character_id}"
+def _credential_namespace(credential_namespace: str | None = None) -> str:
+    """Return the active database namespace, requiring initialization first."""
+    namespace = credential_namespace or CREDENTIAL_NAMESPACE
+    if not namespace:
+        raise RuntimeError("credential namespace has not been initialized")
+    return namespace
 
 
-def cookie_secret_id(cookie_id: int, db_path: str | os.PathLike = DB_PATH) -> str:
-    return f"{_credential_database_id(db_path)}:{cookie_id}"
+def character_secret_id(character_id: int, credential_namespace: str | None = None) -> str:
+    return f"{_credential_namespace(credential_namespace)}:{character_id}"
+
+
+def cookie_secret_id(cookie_id: int, credential_namespace: str | None = None) -> str:
+    return f"{_credential_namespace(credential_namespace)}:{cookie_id}"
+
+
+def _migrate_legacy_secret(
+    secret_namespace: str,
+    namespaced_identifier: str,
+    legacy_identifier: str,
+) -> str | None:
+    """Move a pre-namespaced keyring entry after the new key is verified."""
+    legacy_value = get_secret(secret_namespace, legacy_identifier)
+    if legacy_value is None:
+        return None
+    set_secret(secret_namespace, namespaced_identifier, legacy_value)
+    if get_secret(secret_namespace, namespaced_identifier) != legacy_value:
+        raise CredentialStoreError("credential namespace migration verification failed")
+    try:
+        delete_secret(secret_namespace, legacy_identifier)
+    except CredentialStoreError:
+        logging.warning("Could not remove legacy credential entry for %s", legacy_identifier)
+    return legacy_value
 
 
 def load_character_secret(connection: sqlite3.Connection, character_id: int, stored_value: str | None) -> str | None:
@@ -393,7 +434,15 @@ def load_character_secret(connection: sqlite3.Connection, character_id: int, sto
         return stored_value
 
     try:
-        return get_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character_id))
+        identifier = character_secret_id(character_id)
+        secret = get_secret(CHARACTER_SECRET_NAMESPACE, identifier)
+        if secret is None:
+            secret = _migrate_legacy_secret(
+                CHARACTER_SECRET_NAMESPACE,
+                identifier,
+                str(character_id),
+            )
+        return secret
     except CredentialStoreError as exc:
         logging.error("Could not load character %s password: %s", character_id, exc)
         return None
@@ -429,7 +478,14 @@ def load_cookie_secret(
         return stored_value
 
     try:
-        return get_secret(COOKIE_SECRET_NAMESPACE, identifier)
+        secret = get_secret(COOKIE_SECRET_NAMESPACE, identifier)
+        if secret is None:
+            secret = _migrate_legacy_secret(
+                COOKIE_SECRET_NAMESPACE,
+                identifier,
+                str(cookie_id),
+            )
+        return secret
     except CredentialStoreError as exc:
         logging.error("Could not load cookie '%s': %s", name, exc)
         return None
@@ -1831,6 +1887,7 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
         with sqlite3.connect(db_path) as conn:
             conn.execute("PRAGMA foreign_keys = ON")  # Enable foreign key support
             create_tables(conn)                       # Fist create missing tables
+            ensure_credential_namespace(conn)
             migrate_schema(conn)                      # Then migrate schema
             insert_initial_data(conn)                 # THEN populate defaults
             logging.info(f"Database initialized successfully at {db_path}")
