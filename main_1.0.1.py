@@ -4626,6 +4626,10 @@ class RBCCommunityMap(QMainWindow):
                 logging.info("Auto-login disabled; skipping login injection.")
                 return
 
+            if not getattr(self, "pending_login", False):
+                logging.debug("No pending password login; skipping login injection.")
+                return
+
             if not getattr(self, "selected_character", None):
                 logging.debug("No selected character; skipping login.")
                 return
