@@ -1005,6 +1005,9 @@ under 0.14.0, plus:
 - Database update failures now propagate to their callers so startup and
   manual refreshes can report unsuccessful updates.
 - Incomplete building payloads no longer erase existing local building data.
+- Transit observations now canonicalize trailing `Station` labels and keep one
+  transit row per map cell, preventing duplicate names such as `Calliope` and
+  `Calliope Station`.
 - Manual update status text warns that the bot refresh may take up to one minute.
 - Runtime dependencies are pinned to the locally validated versions.
 - Added a Python validation workflow with syntax, Unicode-token, regression, and release-tree checks.

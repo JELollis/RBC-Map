@@ -5165,6 +5165,8 @@ class RBCCommunityMap(QMainWindow):
         if override:
             return override
         raw = el.get_text(" ", strip=True) or (el.get("title") or "")
+        if cls == "transit":
+            raw = re.sub(r"\s+Station\s*$", "", raw, flags=re.IGNORECASE)
         return self.normalize_building_name(raw)
 
     def normalize_building_name(self, s: str) -> str:
@@ -5214,8 +5216,34 @@ class RBCCommunityMap(QMainWindow):
         mapping = BUILDING_CLASS_MAP[cls]
         table = mapping["table"]
         name_col = mapping["name_col"]
+        if cls == "transit":
+            name = re.sub(r"\s+Station\s*$", "", name, flags=re.IGNORECASE).strip()
 
         if table in ("banks", "taverns", "transits", "placesofinterest", "userbuildings"):
+            if cls == "transit":
+                # There is only one transit station per map cell.  Older
+                # observations may have stored both "Calliope" and
+                # "Calliope Station"; retain one canonical row when a new
+                # observation arrives at that cell.
+                cur.execute(
+                    f"SELECT ID, {name_col} FROM {table} WHERE `Column`=? AND Row=? ORDER BY ID",
+                    (col, row),
+                )
+                existing = cur.fetchall()
+                if existing:
+                    matching = next((entry for entry in existing if entry[1] == name), None)
+                    keep_id = matching[0] if matching else existing[0][0]
+                    if not matching or len(existing) > 1:
+                        cur.execute(
+                            f"UPDATE {table} SET {name_col}=? WHERE ID=?",
+                            (name, keep_id),
+                        )
+                        cur.execute(
+                            f"DELETE FROM {table} WHERE `Column`=? AND Row=? AND ID<>?",
+                            (col, row, keep_id),
+                        )
+                        return "updated"
+                    return None
             cur.execute(f"SELECT 1 FROM {table} WHERE `Column`=? AND Row=? AND {name_col}=?", (col, row, name))
             if cur.fetchone():
                 return None
