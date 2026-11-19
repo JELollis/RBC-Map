@@ -8,6 +8,7 @@ import sqlite3
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -106,6 +107,71 @@ def load_startup_run():
     }
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace["run"], namespace
+
+
+def load_transit_helpers():
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
+    wanted = {"_building_display_name", "normalize_building_name", "_upsert_building"}
+    methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
+    assert {node.name for node in methods} == wanted
+    building_map = next(
+        ast.literal_eval(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "BUILDING_CLASS_MAP" for target in node.targets)
+    )
+    namespace = {
+        "re": __import__("re"),
+        "logging": logging,
+        "sqlite3": sqlite3,
+        "BUILDING_CLASS_MAP": building_map,
+    }
+    exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
+    return namespace
+
+
+class FakeBuildingSpan:
+    def __init__(self, text: str):
+        self.text = text
+
+    def get_text(self, *_args, **_kwargs):
+        return self.text
+
+    def get(self, name: str):
+        return self.text if name == "title" else None
+
+
+def transit_names_are_canonical_and_unique(root: Path) -> None:
+    namespace = load_transit_helpers()
+    display_name = namespace["_building_display_name"]
+    normalize_name = namespace["normalize_building_name"]
+    upsert = namespace["_upsert_building"]
+    fake = SimpleNamespace(_BUILDING_NAME_OVERRIDES={})
+    fake.normalize_building_name = normalize_name.__get__(fake)
+    assert display_name(fake, "transit", FakeBuildingSpan("Calliope Station")) == "Calliope"
+    assert display_name(fake, "transit", FakeBuildingSpan("Melpomene station")) == "Melpomene"
+
+    db = root / "transits.db"
+    connection = sqlite3.connect(db)
+    try:
+        connection.execute(
+            'CREATE TABLE transits (ID INTEGER PRIMARY KEY, "Column" TEXT, Row TEXT, Name TEXT)'
+        )
+        connection.executemany(
+            'INSERT INTO transits (ID, "Column", Row, Name) VALUES (?, ?, ?, ?)',
+            [(1, "Mongoose", "25th", "Calliope Station"), (2, "Mongoose", "25th", "Calliope")],
+        )
+        cursor = connection.cursor()
+        assert upsert(fake, cursor, "transit", "Calliope", "Mongoose", "25th") == "updated"
+        rows = connection.execute(
+            'SELECT Name FROM transits WHERE "Column"=? AND Row=?', ("Mongoose", "25th")
+        ).fetchall()
+        assert rows == [("Calliope",)]
+        assert upsert(fake, cursor, "transit", "Clio", "Zelkova", "50th") == "inserted"
+        assert connection.execute("SELECT COUNT(*) FROM transits").fetchone()[0] == 2
+    finally:
+        connection.close()
 
 
 def make_database(path: Path) -> None:
@@ -311,6 +377,8 @@ for case in (
     valid_buildings_replace_snapshot,
 ):
     run_case(case.__name__, case)
+
+run_case("transit_names_are_canonical_and_unique", transit_names_are_canonical_and_unique)
 
 dialog_stops_before_success_path()
 print("ok   dialog_stops_before_success_path")

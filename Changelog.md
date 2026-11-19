@@ -1005,6 +1005,9 @@ under 0.14.0, plus:
 - Database update failures now propagate to their callers so startup and
   manual refreshes can report unsuccessful updates.
 - Incomplete building payloads no longer erase existing local building data.
+- Transit observations now canonicalize trailing `Station` labels and keep one
+  transit row per map cell, preventing duplicate names such as `Calliope` and
+  `Calliope Station`.
 - Manual update status text warns that the bot refresh may take up to one minute.
 - Passwords and session-cookie values now use the operating system credential store instead of plaintext SQLite values, with legacy-data migration on startup.
 - Credential-store entries are scoped by a persistent per-database namespace, including one-time migration of entries created by the earlier bare-ID implementation; failed character creates and edits now remain atomic.
