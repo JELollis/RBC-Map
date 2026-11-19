@@ -8,6 +8,7 @@ Usage: python tools/check_legacy_migration.py [path/to/main_1.0.1.py]
 Exits non-zero on the first failure.
 """
 import ast
+import logging
 import os
 import shutil
 import sqlite3
@@ -18,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.1.py"
 WANTED = {"_connect_read_only", "_count_characters", "_mark_migration_done",
-          "_copy_if_absent", "migrate_legacy_data"}
+          "_copy_if_absent", "migrate_legacy_data", "remove_persistent_browser_cookies"}
 
 
 def load_functions():
@@ -26,12 +27,12 @@ def load_functions():
     nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in WANTED]
     assert {n.name for n in nodes} == WANTED, f"missing functions in {MAIN.name}"
     # Default arguments reference module globals; bind placeholders, tests pass real values.
-    ns = {"Path": Path, "os": os, "shutil": shutil, "sqlite3": sqlite3,
+    ns = {"Path": Path, "os": os, "shutil": shutil, "sqlite3": sqlite3, "logging": logging,
           "SESSIONS_DIR": Path("unused"), "LEGACY_SESSIONS_DIRS": [],
           "LEGACY_DB_NAME": "rbc_map_data.db",
           "LEGACY_MIGRATION_MARKER": ".legacy-migration-done"}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(MAIN), "exec"), ns)
-    return ns["migrate_legacy_data"], ns["_count_characters"]
+    return ns["migrate_legacy_data"], ns["_count_characters"], ns["remove_persistent_browser_cookies"]
 
 
 def make_db(path: Path, characters: list[str]):
@@ -58,7 +59,7 @@ def run(name, fn):
     print(f"ok   {name}")
 
 
-migrate, count = load_functions()
+migrate, count, remove_cookie_store = load_functions()
 
 
 def fresh_install_no_legacy(t: Path):
@@ -73,7 +74,7 @@ def migrates_root_sessions(t: Path):
     msg = migrate(t / "new", [t / "app/sessions", t / "app/testing/sessions"])
     assert msg and "Migrated" in msg, msg
     assert names(t / "new/rbc_map_data.db") == ["Alice"]
-    assert (t / "new/profile/Cookies").read_text() == "c"
+    assert not (t / "new/profile/Cookies").exists(), "legacy Chromium cookies must not be copied"
     assert names(t / "app/sessions/rbc_map_data.db") == ["Alice"], "original changed"
     assert not (t / "new/rbc_map_data.db.migrating").exists()
 
@@ -234,13 +235,13 @@ def interrupted_profile_copy_is_repaired(t: Path):
     # A leftover .migrating file from a killed copy is replaced cleanly.
     make_db(t / "app/sessions/rbc_map_data.db", ["Alice"])
     (t / "app/sessions/profile").mkdir()
-    (t / "app/sessions/profile/Cookies").write_text("x" * 1000)
+    (t / "app/sessions/profile/Preferences").write_text("x" * 1000)
     (t / "new/profile").mkdir(parents=True)
-    (t / "new/profile/Cookies.migrating").write_text("partial")
+    (t / "new/profile/Preferences.migrating").write_text("partial")
     msg = migrate(t / "new", [t / "app/sessions"])
     assert msg and "Migrated" in msg, msg
-    assert (t / "new/profile/Cookies").read_text() == "x" * 1000
-    assert not (t / "new/profile/Cookies.migrating").exists()
+    assert (t / "new/profile/Preferences").read_text() == "x" * 1000
+    assert not (t / "new/profile/Preferences.migrating").exists()
 
 
 def schema_less_target_is_migrated(t: Path):
@@ -263,6 +264,18 @@ def schema_less_target_is_migrated(t: Path):
     assert names(t / "new2/rbc_map_data.db") == ["Bob"]
 
 
+def removes_old_cookie_store(t: Path):
+    sessions = t / "new"
+    sessions.mkdir(parents=True)
+    for suffix in ("", "-journal", "-wal", "-shm"):
+        (sessions / f"Cookies{suffix}").write_text("legacy")
+        (sessions / "Network").mkdir(exist_ok=True)
+        (sessions / "Network" / f"Cookies{suffix}").write_text("nested legacy")
+    remove_cookie_store(sessions)
+    assert not list(sessions.glob("Cookies*"))
+    assert not list((sessions / "Network").glob("Cookies*"))
+
+
 for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_legacy,
              replaces_empty_new_db_with_backup, keeps_existing_profile_files,
              keeps_populated_new_db, second_run_is_noop,
@@ -274,6 +287,7 @@ for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_leg
              newest_empty_legacy_loses_to_older_populated,
              empty_legacy_is_not_migrated,
              interrupted_profile_copy_is_repaired,
-             schema_less_target_is_migrated]:
+             schema_less_target_is_migrated,
+             removes_old_cookie_store]:
     run(case.__name__, case)
 print("all legacy-migration checks passed")
