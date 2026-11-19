@@ -1006,6 +1006,9 @@ under 0.14.0, plus:
   manual refreshes can report unsuccessful updates.
 - Incomplete building payloads no longer erase existing local building data.
 - Manual update status text warns that the bot refresh may take up to one minute.
+- Passwords and session-cookie values now use the operating system credential store instead of plaintext SQLite values, with legacy-data migration on startup.
+- Credential-store entries are scoped by a persistent per-database namespace, including one-time migration of entries created by the earlier bare-ID implementation; failed character creates and edits now remain atomic.
+- Legacy Chromium cookie stores are removed recursively, including `Network/Cookies*` files.
 - Runtime dependencies are pinned to the locally validated versions.
 - Added a Python validation workflow with syntax, Unicode-token, regression, and release-tree checks.
 - Removed the tracked `scratch.py` design-demo artifact from the release tree.

@@ -90,9 +90,14 @@ python main_1.0.1.py
 
 For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
 
+Packagers must include `credential_store.py` and the platform-appropriate
+`keyring` backend modules. For frozen builds, verify that the selected
+backend (for example, Windows Credential Locker) is included and available at
+runtime.
+
 ## Data and privacy
 
-Character information, credentials, session state, and application preferences are stored in a local SQLite database. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder. On first launch, data from an older version kept next to the script (`sessions/` or `testing/sessions/`) is copied there automatically; the originals are left in place.
+Character information, session metadata, and application preferences are stored in a local SQLite database. Passwords and session-cookie values are stored through the operating system credential store via `keyring` when that store is available; after a successful migration, the database keeps only non-secret metadata. If the credential store is unavailable or locked, migration fails closed and deliberately leaves existing plaintext credentials in SQLite so they are not lost; resolve the credential-store problem and restart the app before treating the data as protected. On first launch, data from an older version kept next to the script (`sessions/` or `testing/sessions/`) is copied into the per-user data folder automatically; the originals are left in place. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.
 
 The documented community reporting feature (**Contribute Discovered Locations**) is **opt-in** and is intended to send only newly discovered non-moving locations, not login credentials. Review the application's settings before enabling reporting, and protect your local database and device as you would other stored credentials.
 
