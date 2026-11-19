@@ -2746,6 +2746,7 @@ class RBCCommunityMap(QMainWindow):
         self.is_updating_minimap = False
         self.login_needed = True
         self.pending_login = False
+        self._pending_login_character = None
         self._login_retry_count = 0
         self.auto_login_enabled = True
         self.webview_loaded = False
@@ -3727,8 +3728,8 @@ class RBCCommunityMap(QMainWindow):
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, False)
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
 
         # Add Keybindings
         self.setup_keybindings()
@@ -4549,6 +4550,8 @@ class RBCCommunityMap(QMainWindow):
         # Mark destination and login to be handled on next page load
         self.pending_character_id_for_map = character_id
         self.pending_login = True
+        self._pending_login_character = character_name
+        self._login_retry_count = 0
         self.save_last_active_character(character_id)
         self.load_last_destination_for_character(character_id)
         self.update_minimap()
@@ -4574,8 +4577,9 @@ class RBCCommunityMap(QMainWindow):
                 if not row:
                     logging.error(f"No saved login cookie found for character '{character_name}'.")
                     self.pending_login = True
+                    self._pending_login_character = character_name
                     self._login_retry_count = 0
-                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
+                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
 
                 cookie_id, cookie_name, cookie_domain, cookie_path, stored_value = row
@@ -4585,8 +4589,9 @@ class RBCCommunityMap(QMainWindow):
                 if cookie_value is None:
                     logging.error("No credential-store value found for cookie ID %s", cookie_id)
                     self.pending_login = True
+                    self._pending_login_character = character_name
                     self._login_retry_count = 0
-                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
+                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
 
                 ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
@@ -4595,6 +4600,7 @@ class RBCCommunityMap(QMainWindow):
                 ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
 
                 self.pending_login = False
+                self._pending_login_character = None
                 self._login_retry_count = 0
                 self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
                 logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
@@ -4637,6 +4643,11 @@ class RBCCommunityMap(QMainWindow):
                 logging.debug("Selected character missing name/password; skipping login.")
                 return
 
+            pending_name = getattr(self, "_pending_login_character", None)
+            if self.pending_login and pending_name and pending_name != name:
+                logging.debug("Ignoring stale auto-login request for '%s'", pending_name)
+                return
+
             # Embed credentials via json.dumps so they are always valid, escaped
             # JS string literals (guards against quotes/backslashes in the values).
             import json
@@ -4664,6 +4675,7 @@ class RBCCommunityMap(QMainWindow):
                 logging.debug(f"Login result: {result}")
                 if result in ("Login submitted", "Login clicked"):
                     self.pending_login = False
+                    self._pending_login_character = None
                     self._login_retry_count = 0
                 elif self.pending_login and self._login_retry_count < 10:
                     self._login_retry_count += 1
@@ -4709,8 +4721,10 @@ class RBCCommunityMap(QMainWindow):
                     self.selected_character = character
                     self.character_list.setCurrentRow(self.character_list.count() - 1)
                     self.pending_login = True
+                    self._pending_login_character = name
                     self._login_retry_count = 0
-                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
+                    if hasattr(self, "website_frame"):
+                        self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
 
                     logging.debug(f"First-run character '{name}' created and login initiated.")
 
@@ -4752,6 +4766,7 @@ class RBCCommunityMap(QMainWindow):
                 self.character_list.setCurrentRow(self.character_list.count() - 1)
                 self.save_last_active_character(character_id)
                 self.pending_login = True
+                self._pending_login_character = name
                 self._login_retry_count = 0
 
                 logging.debug(f"New character '{name}' added and selected. Logging out current user...")
@@ -4760,7 +4775,6 @@ class RBCCommunityMap(QMainWindow):
                 self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
 
                 # The load-finished handler retries until the login form is ready.
-                QTimer.singleShot(1500, self.login_selected_character)
 
         except (CredentialStoreError, sqlite3.Error) as e:
             logging.error(f"Failed to add character '{name}': {e}")
@@ -4916,12 +4930,6 @@ class RBCCommunityMap(QMainWindow):
 
                         # ✅ Inject correct cookie for selected character
                         self.switch_to_character(self.selected_character['name'])
-
-                        # ✅ After injecting cookie, navigate and login
-                        def delayed_login():
-                            self.login_selected_character()
-
-                        QTimer.singleShot(1500, delayed_login)
 
                     else:
                         logging.warning(f"Last active character ID '{character_id}' not found in character list.")
