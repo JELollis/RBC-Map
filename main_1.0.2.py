@@ -2748,6 +2748,7 @@ class RBCCommunityMap(QMainWindow):
         self.pending_login = False
         self._pending_login_character = None
         self._login_retry_count = 0
+        self._login_request_id = 0
         self.auto_login_enabled = True
         self.webview_loaded = False
 
@@ -4549,9 +4550,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Mark destination and login to be handled on next page load
         self.pending_character_id_for_map = character_id
-        self.pending_login = True
-        self._pending_login_character = character_name
-        self._login_retry_count = 0
+        self._queue_password_login(character_name)
         self.save_last_active_character(character_id)
         self.load_last_destination_for_character(character_id)
         self.update_minimap()
@@ -4576,9 +4575,7 @@ class RBCCommunityMap(QMainWindow):
 
                 if not row:
                     logging.error(f"No saved login cookie found for character '{character_name}'.")
-                    self.pending_login = True
-                    self._pending_login_character = character_name
-                    self._login_retry_count = 0
+                    self._queue_password_login(character_name)
                     self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
 
@@ -4588,9 +4585,7 @@ class RBCCommunityMap(QMainWindow):
                 )
                 if cookie_value is None:
                     logging.error("No credential-store value found for cookie ID %s", cookie_id)
-                    self.pending_login = True
-                    self._pending_login_character = character_name
-                    self._login_retry_count = 0
+                    self._queue_password_login(character_name)
                     self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
 
@@ -4602,6 +4597,7 @@ class RBCCommunityMap(QMainWindow):
                 self.pending_login = False
                 self._pending_login_character = None
                 self._login_retry_count = 0
+                self._login_request_id += 1
                 self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
                 logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
 
@@ -4611,7 +4607,14 @@ class RBCCommunityMap(QMainWindow):
         except (CredentialStoreError, sqlite3.Error) as e:
             logging.error(f"Failed to switch character '{character_name}': {e}")
 
-    def login_selected_character(self) -> None:
+    def _queue_password_login(self, character_name: str) -> None:
+        """Queue a password login and invalidate all earlier async attempts."""
+        self._login_request_id += 1
+        self.pending_login = True
+        self._pending_login_character = character_name
+        self._login_retry_count = 0
+
+    def login_selected_character(self, request_id=None) -> None:
         """Auto-fill and submit the RavenBlack login form for the selected character.
 
         Injects a small JavaScript snippet into the loaded page that populates the
@@ -4628,6 +4631,10 @@ class RBCCommunityMap(QMainWindow):
 
             if not getattr(self, "pending_login", False):
                 logging.debug("No pending password login; skipping login injection.")
+                return
+
+            if request_id is not None and request_id != self._login_request_id:
+                logging.debug("Ignoring stale auto-login request %s", request_id)
                 return
 
             if not getattr(self, "selected_character", None):
@@ -4675,7 +4682,15 @@ class RBCCommunityMap(QMainWindow):
                 }}
             }})();
             """
+            request_id = self._login_request_id
+
             def handle_login_result(result):
+                if request_id != self._login_request_id:
+                    logging.debug("Ignoring stale auto-login result for request %s", request_id)
+                    return
+                if not self.pending_login or self._pending_login_character != name:
+                    logging.debug("Ignoring auto-login result for inactive character '%s'", name)
+                    return
                 logging.debug(f"Login result: {result}")
                 if result in ("Login submitted", "Login clicked"):
                     self.pending_login = False
@@ -4683,7 +4698,10 @@ class RBCCommunityMap(QMainWindow):
                     self._login_retry_count = 0
                 elif self.pending_login and self._login_retry_count < 10:
                     self._login_retry_count += 1
-                    QTimer.singleShot(500, self.login_selected_character)
+                    QTimer.singleShot(
+                        500,
+                        lambda request_id=request_id: self.login_selected_character(request_id),
+                    )
                 elif self.pending_login:
                     logging.warning("Login form was not ready before the auto-login retry limit")
 
@@ -4724,9 +4742,7 @@ class RBCCommunityMap(QMainWindow):
                     # Select and login to generate cookie
                     self.selected_character = character
                     self.character_list.setCurrentRow(self.character_list.count() - 1)
-                    self.pending_login = True
-                    self._pending_login_character = name
-                    self._login_retry_count = 0
+                    self._queue_password_login(name)
                     if hasattr(self, "website_frame"):
                         self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
 
@@ -4769,9 +4785,7 @@ class RBCCommunityMap(QMainWindow):
                 self.selected_character = character
                 self.character_list.setCurrentRow(self.character_list.count() - 1)
                 self.save_last_active_character(character_id)
-                self.pending_login = True
-                self._pending_login_character = name
-                self._login_retry_count = 0
+                self._queue_password_login(name)
 
                 logging.debug(f"New character '{name}' added and selected. Logging out current user...")
 
