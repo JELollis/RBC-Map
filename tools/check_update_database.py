@@ -121,7 +121,12 @@ def load_transit_helpers():
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "BUILDING_CLASS_MAP" for target in node.targets)
     )
-    namespace = {"re": __import__("re"), "logging": logging, "BUILDING_CLASS_MAP": building_map}
+    namespace = {
+        "re": __import__("re"),
+        "logging": logging,
+        "sqlite3": sqlite3,
+        "BUILDING_CLASS_MAP": building_map,
+    }
     exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace
 
