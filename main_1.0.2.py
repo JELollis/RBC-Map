@@ -2762,6 +2762,9 @@ class RBCCommunityMap(QMainWindow):
         self.character_y = None
         self.selected_character = None
         self.destination = None
+        self.pending_character_id_for_map = None
+        self._pending_cookie_character = None
+        self._pending_cookie_request_id = None
 
         # Self-learning building cache
         self._seen_buildings: set[tuple[str, str, str]] = set()
@@ -4575,6 +4578,8 @@ class RBCCommunityMap(QMainWindow):
 
                 if not row:
                     logging.error(f"No saved login cookie found for character '{character_name}'.")
+                    self._pending_cookie_character = None
+                    self._pending_cookie_request_id = None
                     self._queue_password_login(character_name)
                     self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
@@ -4585,6 +4590,8 @@ class RBCCommunityMap(QMainWindow):
                 )
                 if cookie_value is None:
                     logging.error("No credential-store value found for cookie ID %s", cookie_id)
+                    self._pending_cookie_character = None
+                    self._pending_cookie_request_id = None
                     self._queue_password_login(character_name)
                     self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
@@ -4598,6 +4605,8 @@ class RBCCommunityMap(QMainWindow):
                 self._pending_login_character = None
                 self._login_retry_count = 0
                 self._login_request_id += 1
+                self._pending_cookie_character = character_name
+                self._pending_cookie_request_id = self._login_request_id
                 self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
                 logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
 
@@ -4606,6 +4615,21 @@ class RBCCommunityMap(QMainWindow):
 
         except (CredentialStoreError, sqlite3.Error) as e:
             logging.error(f"Failed to switch character '{character_name}': {e}")
+
+    def _handle_cookie_login_page(self, request_id: int, character_name: str, is_login_form: bool) -> None:
+        """Fall back to password login when a saved cookie was rejected."""
+        if (
+            request_id != self._pending_cookie_request_id
+            or character_name != self._pending_cookie_character
+        ):
+            return
+
+        self._pending_cookie_character = None
+        self._pending_cookie_request_id = None
+        if is_login_form:
+            logging.info("Saved cookie was rejected for '%s'; using password login", character_name)
+            self._queue_password_login(character_name)
+            self.login_selected_character()
 
     def _queue_password_login(self, character_name: str) -> None:
         """Queue a password login and invalidate all earlier async attempts."""
@@ -4827,18 +4851,37 @@ class RBCCommunityMap(QMainWindow):
             return  # 🚨 Do not proceed if fields are blank
 
         secret_changed = False
+        password_changed = new_password != character.get("password")
+        active_cookie_id = None
         try:
             old_password = get_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character['id']))
             # Lock the database before changing the keyring so a failed write
             # cannot leave the keyring ahead of the committed character row.
             with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 conn.execute("BEGIN IMMEDIATE")
+                active_cookie_row = conn.execute(
+                    "SELECT active_cookie FROM characters WHERE id = ?",
+                    (character['id'],),
+                ).fetchone()
+                active_cookie_id = active_cookie_row[0] if active_cookie_row else None
                 store_character_secret(character['id'], new_password)
                 secret_changed = True
                 conn.execute("""
-                    UPDATE characters SET name = ?, password = NULL WHERE id = ?
-                """, (new_name, character['id']))
+                    UPDATE characters SET name = ?, password = NULL,
+                        active_cookie = CASE WHEN ? THEN NULL ELSE active_cookie END
+                    WHERE id = ?
+                """, (new_name, password_changed, character['id']))
                 conn.commit()
+
+            if password_changed and active_cookie_id is not None:
+                try:
+                    delete_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(active_cookie_id))
+                except CredentialStoreError as cleanup_error:
+                    logging.warning(
+                        "Password changed for '%s', but old cookie cleanup failed: %s",
+                        new_name,
+                        cleanup_error,
+                    )
 
             # Update in-memory character and UI
             character['name'] = new_name
@@ -4971,8 +5014,10 @@ class RBCCommunityMap(QMainWindow):
             self.character_list.setCurrentRow(0)
             logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
             self.save_last_active_character(self.selected_character['id'])
-
-            self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+            self.load_last_destination_for_character(self.selected_character['id'])
+            self.update_minimap()
+            self._queue_password_login(self.selected_character['name'])
+            self.switch_to_character(self.selected_character['name'])
         else:
             self.selected_character = None
             logging.warning("No characters available to set as default.")
@@ -5050,6 +5095,16 @@ class RBCCommunityMap(QMainWindow):
         self.website_frame.page().toHtml(self.process_html)
         css = self.load_current_css()
         self.apply_custom_css(css)
+
+        if self._pending_cookie_character:
+            request_id = self._pending_cookie_request_id
+            character_name = self._pending_cookie_character
+            self.website_frame.page().runJavaScript(
+                "location.origin === 'https://quiz.ravenblack.net' "
+                "&& !!document.querySelector('form input[type=\\\"password\\\"]')",
+                lambda is_login_form, request_id=request_id, character_name=character_name:
+                    self._handle_cookie_login_page(request_id, character_name, bool(is_login_form)),
+            )
 
         if self.pending_login:
             logging.debug("Logging in selected character via JS injection...")

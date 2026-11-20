@@ -28,6 +28,8 @@ jobs:
         run: python tools/check_unicode.py
       - name: Run credential-store regression checks
         run: python tools/check_credential_store.py
+      - name: Run auto-login regression checks
+        run: python tools/check_auto_login.py
       - name: Run database update regression checks
         run: python tools/check_update_database.py
       - name: Verify release tree essentials
