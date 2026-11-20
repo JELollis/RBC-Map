@@ -338,8 +338,32 @@ def mixed_valid_and_malformed_preserves_local_data(root: Path) -> None:
             }
         }
     )
-    assert count_rows(db, "banks") == 1
-    assert count_rows(db, "taverns") == 1
+    assert_building_snapshot(db)
+
+
+def assert_building_snapshot(db: Path, bank=("Existing banks", "A", "1st")) -> None:
+    conn = sqlite3.connect(db)
+    try:
+        for table in BUILDING_TABLES:
+            expected = [bank] if table == "banks" else (
+                [(f"Existing {table}", "A", "1st")] if bank[0] == "Existing banks" else []
+            )
+            assert conn.execute(f'SELECT Name, "Column", "Row" FROM {table}').fetchall() == expected, table
+    finally:
+        conn.close()
+
+
+def snapshot_handles_non_building_entries(root: Path) -> None:
+    bank = {"kind": "bank", "name": "New Bank", "column": "B", "row": "2nd"}
+    for label, entry, expected in (
+        ("non-object", "invalid", ("Existing banks", "A", "1st")),
+        ("unknown-kind", {"kind": "unknown"}, ("New Bank", "B", "2nd")),
+        ("shop", {"kind": "shop", "name": "Shop", "column": "C", "row": "3rd"}, ("New Bank", "B", "2nd")),
+    ):
+        db = root / f"{label}.db"
+        make_database(db)
+        FakeMap(db).update({"buildings": {"bank": bank, "extra": entry}})
+        assert_building_snapshot(db, expected)
 
 
 def valid_buildings_replace_snapshot(root: Path) -> None:
@@ -374,6 +398,7 @@ for case in (
     empty_buildings_preserves_local_data,
     shop_only_buildings_preserve_local_data,
     mixed_valid_and_malformed_preserves_local_data,
+    snapshot_handles_non_building_entries,
     valid_buildings_replace_snapshot,
 ):
     run_case(case.__name__, case)
