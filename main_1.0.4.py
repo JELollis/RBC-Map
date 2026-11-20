@@ -4712,19 +4712,18 @@ class RBCCommunityMap(QMainWindow):
         - Windows: .chm file
         - macOS/Linux: .html file
         """
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        help_dir = os.path.join(base_dir, "docs", "help")
+        help_dir = APP_DIR / "docs" / "help"
         system = platform.system()
 
         if system == "Windows":
-            help_path = os.path.join(help_dir, "RBC Community Map Help.chm")
-            if os.path.exists(help_path):
-                os.startfile(help_path)
+            help_path = help_dir / "RBC Community Map Help.chm"
+            if help_path.exists():
+                os.startfile(str(help_path))
                 return
         else:
-            html_path = os.path.join(help_dir, "RBC_Map_Help.html")
-            if os.path.exists(html_path):
-                webbrowser.open(f"file://{html_path}")
+            html_path = help_dir / "RBC_Map_Help.html"
+            if html_path.exists():
+                webbrowser.open(html_path.as_uri())
                 return
 
         # If neither file is found

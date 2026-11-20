@@ -1,0 +1,221 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Exact branch, tag, PR head SHA, or commit SHA to build"
+        required: true
+        default: "dev"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install runtime and build dependencies
+        run: python -m pip install -r requirements.txt nuitka ordered-set zstandard
+      - name: Build Nuitka onedir bundle
+        shell: pwsh
+        run: >-
+          python -m nuitka --standalone --enable-plugin=pyside6
+          --windows-console-mode=disable
+          --output-dir=build/windows
+          --output-filename="RBC Community Map.exe"
+          --windows-icon-from-ico=images/favicon.ico
+          --include-data-dir=images=images
+          --include-data-dir=css=css
+          --include-data-dir=docs=docs
+          --include-distribution-metadata=keyring
+          --include-module=keyring.backends.Windows
+          --include-module=keyring.backends.chainer
+          main_1.0.4.py
+      - name: Verify Windows bundle layout
+        shell: pwsh
+        run: |
+          $dist = "build/windows/main_1.0.4.dist"
+          if (-not (Test-Path "$dist/RBC Community Map.exe")) { throw "Nuitka executable missing" }
+          foreach ($path in @("images", "css", "docs/help")) {
+            if (-not (Test-Path "$dist/$path")) { throw "Bundle path missing: $path" }
+          }
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Build unsigned NSIS installer
+        run: makensis "tools/packaging/RBC Community Map.nsi"
+      - name: Hash Windows installer
+        shell: pwsh
+        run: Get-FileHash "tools/packaging/RBC-Map-Installer-1.0.4.exe" -Algorithm SHA256 | Format-Table | Out-File windows.sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RBC-Map-windows-1.0.4
+          path: |
+            tools/packaging/RBC-Map-Installer-1.0.4.exe
+            windows.sha256.txt
+
+  deb:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install runtime and build dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+      - name: Build PyInstaller bundle
+        run: python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Assemble deb package
+        run: |
+          set -eux
+          root="$PWD/build/deb/root"
+          mkdir -p "$root/opt/rbc-map" "$root/usr/bin" "$root/usr/share/applications" "$root/DEBIAN"
+          cp -a dist/RBC-Map/. "$root/opt/rbc-map/"
+          printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > "$root/usr/bin/rbc-map"
+          chmod 755 "$root/usr/bin/rbc-map"
+          cat > "$root/usr/share/applications/rbc-map.desktop" <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=RBC Community Map
+          Exec=rbc-map
+          Icon=/opt/rbc-map/images/favicon.ico
+          Categories=Game;
+          EOF
+          cat > "$root/DEBIAN/control" <<'EOF'
+          Package: rbc-map
+          Version: 1.0.4
+          Section: games
+          Priority: optional
+          Architecture: amd64
+          Depends: libxcb-cursor0, libxkbcommon-x11-0, libnss3, libglib2.0-0, libdbus-1-3, libfontconfig1, libegl1, libgl1, gnome-keyring, libsecret-1-0, dbus-user-session
+          Maintainer: RBC Community Map Team
+          Description: RBC Community Map desktop application
+          EOF
+          dpkg-deb --build "$root" build/RBC-Map-1.0.4-amd64.deb
+          sha256sum build/RBC-Map-1.0.4-amd64.deb > build/RBC-Map-1.0.4-amd64.deb.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RBC-Map-deb-1.0.4
+          path: build/RBC-Map-1.0.4-amd64.deb*
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install runtime and build dependencies
+        run: python -m pip install -r requirements.txt pyinstaller
+      - name: Build unsigned app bundle
+        run: python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Create unsigned DMG
+        run: |
+          mkdir -p build/dmg
+          cp -a dist/RBC-Map build/dmg/RBC-Community-Map-1.0.4
+          hdiutil create -volname "RBC Community Map 1.0.4" -srcfolder build/dmg/RBC-Community-Map-1.0.4 -ov -format UDZO build/RBC-Map-1.0.4-macos.dmg
+          shasum -a 256 build/RBC-Map-1.0.4-macos.dmg > build/RBC-Map-1.0.4-macos.dmg.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RBC-Map-macos-1.0.4
+          path: build/RBC-Map-1.0.4-macos.dmg*
+
+  rpm:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+      - name: Install Fedora build dependencies
+        run: dnf install -y python3 python3-pip gcc gcc-c++ make rpm-build libxcb libxkbcommon nss alsa-lib mesa-libEGL mesa-libgbm gnome-keyring libsecret dbus-daemon xdg-utils
+      - name: Build PyInstaller bundle
+        run: python3 -m pip install --break-system-packages -r requirements.txt pyinstaller && python3 -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Assemble RPM
+        run: |
+          set -eux
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          mkdir -p build/rpm/root/opt/rbc-map build/rpm/root/usr/bin
+          cp -a dist/RBC-Map/. build/rpm/root/opt/rbc-map/
+          printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > build/rpm/root/usr/bin/rbc-map
+          chmod 755 build/rpm/root/usr/bin/rbc-map
+          tar -C build/rpm/root -czf ~/rpmbuild/SOURCES/rbc-map-1.0.4.tar.gz .
+          cat > ~/rpmbuild/SPECS/rbc-map.spec <<'EOF'
+          Name: rbc-map
+          Version: 1.0.4
+          Release: 1%{?dist}
+          Summary: RBC Community Map desktop application
+          License: Apache-2.0
+          BuildArch: x86_64
+          %description
+          RBC Community Map desktop application.
+          %prep
+          %setup -q -c -T
+          tar -xzf %{_sourcedir}/rbc-map-1.0.4.tar.gz
+          %install
+          mkdir -p %{buildroot}
+          cp -a opt usr %{buildroot}/
+          %files
+          /opt/rbc-map
+          /usr/bin/rbc-map
+          EOF
+          rpmbuild -bb ~/rpmbuild/SPECS/rbc-map.spec
+          cp ~/rpmbuild/RPMS/x86_64/*.rpm build/
+          sha256sum build/*.rpm > build/RBC-Map-1.0.4-rpm.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RBC-Map-rpm-1.0.4
+          path: build/*.rpm*
+
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:base
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+      - name: Install Arch build dependencies
+        run: pacman -Syu --noconfirm python python-pip base-devel libxcb libxkbcommon nss alsa-lib mesa gnome-keyring libsecret xdg-utils
+      - name: Build PyInstaller bundle
+        run: python -m pip install --break-system-packages -r requirements.txt pyinstaller && python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Build Arch package
+        run: |
+          set -eux
+          mkdir -p build/arch
+          cp -a dist/RBC-Map build/arch/rbc-map
+          cat > build/arch/PKGBUILD <<'EOF'
+          pkgname=rbc-map
+          pkgver=1.0.4
+          pkgrel=1
+          pkgdesc='RBC Community Map desktop application'
+          arch=('x86_64')
+          license=('Apache')
+          package() {
+            install -d "$pkgdir/opt/rbc-map" "$pkgdir/usr/bin"
+            cp -a "$srcdir/rbc-map/." "$pkgdir/opt/rbc-map/"
+            printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > "$pkgdir/usr/bin/rbc-map"
+            chmod 755 "$pkgdir/usr/bin/rbc-map"
+          }
+          EOF
+          (cd build/arch && makepkg --noconfirm --nodeps)
+          sha256sum build/arch/*.pkg.tar.zst > build/RBC-Map-1.0.4-arch.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RBC-Map-arch-1.0.4
+          path: build/arch/*.pkg.tar.zst
