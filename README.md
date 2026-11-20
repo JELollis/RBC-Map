@@ -103,10 +103,12 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 
 ## Versions and branches
 
+> **Looking for a stable build?** Use [`main`](https://github.com/JELollis/RBC-Map/tree/main) or the latest [release](https://github.com/JELollis/RBC-Map/releases). `dev` is the **beta** branch — it holds the newest work and may be less stable. `main` is the **stable** branch, and every numbered release is based on `main`.
+
 | Branch | Contents |
 | --- | --- |
-| `dev` | Active development, currently on 1.0.2 (`main_1.0.2.py`); bug fixes and feature work merge here through pull requests. |
-| `main` | Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. |
+| `dev` | **Beta.** Active development, currently on 1.0.2 (`main_1.0.2.py`); bug fixes and feature work merge here through pull requests. |
+| `main` | **Stable.** Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. All releases are based on this branch. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
 | `version/0.3.2` … `version/0.7.0` | Archived PyQt5 versions. |
