@@ -998,62 +998,79 @@ under 0.14.0, plus:
 ### 📘 Documentation
 - Refreshed the README, help documentation, and screenshots for the release.
 
-## Unreleased — on `dev` (target 1.0.2)
-
-### 🐛 Bug fixes
-- Characters without a saved session cookie now submit the saved credentials
-  after the login form is ready and capture the resulting session cookie.
-- Corrected stale BeautifulSoup and crowdsourced-reporting documentation.
-- Database update failures now propagate to their callers so startup and
-  manual refreshes can report unsuccessful updates.
-- Incomplete building payloads no longer erase existing local building data.
-- Transit observations now canonicalize trailing `Station` labels and keep one
-  transit row per map cell, preventing duplicate names such as `Calliope` and
-  `Calliope Station`.
-- Manual update status text warns that the bot refresh may take up to one minute.
-- Passwords and session-cookie values now use the operating system credential store instead of plaintext SQLite values, with legacy-data migration on startup.
-- Credential-store entries are scoped by a persistent per-database namespace, including one-time migration of entries created by the earlier bare-ID implementation; failed character creates and edits now remain atomic.
-- Legacy Chromium cookie stores are removed recursively, including `Network/Cookies*` files.
-- Runtime dependencies are pinned to the locally validated versions.
-- Added a Python validation workflow with syntax, Unicode-token, regression, and release-tree checks.
-- Removed the tracked `scratch.py` design-demo artifact from the release tree.
-- **Saved data carried over on upgrade:** 1.0.0 moved the database and session
-  data to the per-user data folder but never copied the old data, so upgrading
-  users started with no saved characters, settings, or logins. On launch, the
-  app now copies `sessions/` (or `testing/sessions/`) from next to the script
-  into the data folder when the new database is missing or has no saved
-  characters. Originals are left untouched, browser-profile files already in
-  the data folder are kept, a replaced empty database is kept
-  as `rbc_map_data.db.pre-migration`, and a failed copy is retried next launch.
-  The migration happens at most once (recorded by `.legacy-migration-done` in
-  the sessions folder), so deleting characters later never brings old ones back.
-- **Help:** "Update Data" is now described as requesting shop, guild, and
-  community building locations from the update service, not from A View in the
-  Dark.
-
-## Version 1.0.3 — prior development cycle
-
-### 🐛 Bug fixes and Linux layout
-- Initialized webview destination state before early load callbacks.
-- Made first-launch logging tolerate a schema that has not been created yet.
-- Made the navigation panel width user-resizable and its contents responsive to
-  available window height and panel width; dragging the splitter now rescales
-  the minimap.
-- Added startup-layout and auto-login regression checks.
-- Set a minimum navigation panel width that fits all three character buttons.
-- Restore automatic sign-in without a saved cookie by recognizing RavenBlack's login form fields.
-- Bounded Linux keyring waits and added an explicit SQLite profile for systems without a usable keyring.
-
 ## Unreleased — on `dev` (target 1.0.4)
 
-### 🐛 Bug fixes and credential-store robustness
-- Timed-out Linux keyring writes now compensate inside the worker thread so a
-  late backend completion cannot replace a credential after the database
-  transaction has rolled back.
-- Credential-store migration checks explicitly run in keyring mode and no
-  longer inherit an exported SQLite-profile environment setting.
-- Added a delayed-write regression check for the Linux timeout path.
-- Reintegrated credential storage into the monolithic application file; the
-  standalone runtime module is no longer required.
-- Settled keyring writes atomically around timeout races, restored secrets
-  after failed verification, and added chained Secret Service preflight checks.
+### 🔐 Saved sign-in and credential storage
+- Characters without a saved session cookie now submit the saved credentials
+  after the login form is ready and capture the resulting session cookie.
+  The app recognizes RavenBlack's signed-out login fields and recovers by
+  submitting the saved password when a stored cookie is rejected.
+- Asynchronous login callbacks and retries are bound to a per-request ID so
+  stale results from a previous character cannot clear or consume the
+  current login's state; switching to a character without a saved cookie
+  signs out first so another session is not reused.
+- Passwords and session-cookie values are stored through the operating
+  system credential store (`keyring`) instead of plaintext SQLite values,
+  with legacy-data migration on startup. Entries are scoped by a persistent
+  per-database namespace, including one-time migration of entries created
+  by the earlier bare-ID implementation; failed character creates and
+  edits remain atomic, and edits restore the previous secret if the
+  database commit fails.
+- On Linux, keyring calls are bounded (3 seconds) and a hung backend is
+  quarantined until restart; an opt-in `RBC_MAP_CREDENTIAL_STORAGE=sqlite`
+  profile keeps credentials in a separate `RBC-Map-SQLite` data folder for
+  systems without a usable keyring. Timed-out writes make an atomic commit
+  decision so a late backend completion cannot replace a credential after
+  rollback, and the Secret Service lock check works through chained
+  backends while respecting backend precedence and read fallback order.
+- Legacy Chromium cookie stores are removed recursively, including
+  `Network/Cookies*` files.
+- Added a Linux installation guide covering Mint/Ubuntu package requirements,
+  native-package alternatives, keyring setup, and the plaintext SQLite fallback.
+
+### 🗺️ Map data and community updates
+- Database update failures propagate to their callers so startup and
+  manual refreshes can report unsuccessful updates.
+- Incomplete or malformed building payloads no longer erase existing local
+  building data.
+- Transit observations canonicalize trailing `Station` labels and keep one
+  transit row per map cell, preventing duplicate names such as `Calliope`
+  and `Calliope Station`.
+- Manual update status text warns that the bot refresh may take up to one
+  minute; the "Update Data" help now correctly describes requesting shop,
+  guild, and community building locations from the update service.
+
+### 🐧 Linux startup and layout
+- Webview destination state is initialized before early load callbacks,
+  and first-launch logging tolerates a schema that has not been created
+  yet while still reporting other errors.
+- The navigation panel width is user-resizable and its contents respond to
+  available window height and panel width; dragging the splitter rescales
+  the minimap. The panel keeps a minimum width that fits the character
+  buttons.
+
+### 🛠️ Maintenance
+- **Saved data carried over on upgrade:** 1.0.0 moved the database and
+  session data to the per-user data folder but never copied the old data,
+  so upgrading users started with no saved characters, settings, or
+  logins. On launch, the app now copies `sessions/` (or
+  `testing/sessions/`) from next to the script into the data folder when
+  the new database is missing or has no saved characters. Originals are
+  left untouched, browser-profile files already in the data folder are
+  kept, a replaced empty database is kept as
+  `rbc_map_data.db.pre-migration`, and a failed copy is retried next
+  launch. The migration happens at most once (recorded by
+  `.legacy-migration-done` in the sessions folder), so deleting characters
+  later never brings old ones back.
+- Runtime dependencies are pinned to the locally validated versions.
+- Added a Python validation workflow with syntax, Unicode-token,
+  regression, and release-tree checks.
+- Added startup-layout, auto-login, credential-store, database-update, and
+  legacy-migration regression checks, including Linux keyring timeout and
+  chained-backend coverage.
+- Removed the tracked `scratch.py` design-demo artifact from the release
+  tree.
+- Reintegrated credential storage into the single monolithic application
+  file; no separate runtime module is required.
+- Corrected stale BeautifulSoup and crowdsourced-reporting documentation
+  and refreshed the README and help documentation.
