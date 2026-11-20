@@ -53,10 +53,63 @@ def check_password_change_and_default_paths(tree: ast.Module) -> None:
     assert "switch_to_character" in default_source
 
 
+def module_assignments(tree: ast.Module) -> dict[str, str]:
+    assigned = {}
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            assigned[node.targets[0].id] = ast.unparse(node.value)
+    return assigned
+
+
+def check_login_detector_matches_injector(tree: ast.Module) -> None:
+    """AUD-035: the rejected-cookie detector must match only the real login
+    form, and must share its field selectors with the credential injector."""
+    assigned = module_assignments(tree)
+    assert "'input[name=\"username\"]'" in assigned.get("LOGIN_FORM_USER_SELECTOR", "")
+    assert "'input[name=\"password\"]'" in assigned.get("LOGIN_FORM_PASS_SELECTOR", "")
+
+    detector_js = assigned.get("LOGIN_FORM_PRESENT_JS", "")
+    assert "querySelectorAll('form')" in detector_js
+    assert "LOGIN_FORM_USER_SELECTOR" in detector_js
+    assert "LOGIN_FORM_PASS_SELECTOR" in detector_js
+
+    detector_source = ast.unparse(class_method(tree, "on_webview_load_finished"))
+    assert "LOGIN_FORM_PRESENT_JS" in detector_source
+    # The old detector matched any password input, including the
+    # authenticated page's change-password form.
+    assert 'input[type="password"]' not in detector_source
+
+    injector_source = ast.unparse(class_method(tree, "login_selected_character"))
+    assert "LOGIN_FORM_USER_SELECTOR" in injector_source
+    assert "LOGIN_FORM_PASS_SELECTOR" in injector_source
+
+
+def check_pending_map_state_initialized(tree: ast.Module) -> None:
+    """AUD-030/L1: __init__ must initialize pending_character_id_for_map
+    before any webview loadFinished callback can read it."""
+    init = class_method(tree, "__init__")
+    assigned = {
+        target.attr
+        for node in ast.walk(init)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == "self"
+    }
+    assert "pending_character_id_for_map" in assigned
+
+
 def main() -> int:
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
     check_rejected_cookie_queues_password(tree)
     check_password_change_and_default_paths(tree)
+    check_login_detector_matches_injector(tree)
+    check_pending_map_state_initialized(tree)
     print("auto-login checks passed")
     return 0
 

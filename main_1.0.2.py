@@ -361,6 +361,20 @@ CREDENTIAL_NAMESPACE_SETTING = "credential_namespace"
 CREDENTIAL_NAMESPACE = None
 SECRETS_MIGRATED = False
 
+# Login-form field selectors shared by the rejected-cookie page detector and
+# the credential injector so the two cannot drift apart.
+LOGIN_FORM_USER_SELECTOR = 'input[name="username"]'
+LOGIN_FORM_PASS_SELECTOR = 'input[name="password"]'
+
+# True when the page holds a single form containing both login fields. The
+# authenticated page's change-password inputs must not match (AUD-035).
+LOGIN_FORM_PRESENT_JS = (
+    "Array.from(document.querySelectorAll('form')).some(function (form) {"
+    f"return form.querySelector({json.dumps(LOGIN_FORM_USER_SELECTOR)})"
+    f" && form.querySelector({json.dumps(LOGIN_FORM_PASS_SELECTOR)});"
+    "})"
+)
+
 
 def ensure_credential_namespace(connection: sqlite3.Connection) -> str:
     """Load or create the persistent namespace owned by this database."""
@@ -4691,16 +4705,18 @@ class RBCCommunityMap(QMainWindow):
                 try {{
                     const u = {json.dumps(name)};
                     const p = {json.dumps(password)};
-                    const user = document.querySelector('input[name="username"]');
-                    const pass = document.querySelector('input[name="password"]');
-                    if (!user || !pass) return "Login fields not found";
+                    const userSel = {json.dumps(LOGIN_FORM_USER_SELECTOR)};
+                    const passSel = {json.dumps(LOGIN_FORM_PASS_SELECTOR)};
+                    const form = Array.from(document.querySelectorAll('form')).find(function (f) {{
+                        return f.querySelector(userSel) && f.querySelector(passSel);
+                    }});
+                    if (!form) return "Login fields not found";
+                    const user = form.querySelector(userSel);
+                    const pass = form.querySelector(passSel);
                     user.value = u;
                     pass.value = p;
-                    const form = user.closest('form');
-                    if (form) {{ form.submit(); return "Login submitted"; }}
-                    const btn = document.querySelector('input[type="submit"], button[type="submit"]');
-                    if (btn) {{ btn.click(); return "Login clicked"; }}
-                    return "No form/submit found";
+                    form.submit();
+                    return "Login submitted";
                 }} catch (e) {{
                     return "Login JS error: " + e;
                 }}
@@ -5100,8 +5116,8 @@ class RBCCommunityMap(QMainWindow):
             request_id = self._pending_cookie_request_id
             character_name = self._pending_cookie_character
             self.website_frame.page().runJavaScript(
-                "location.origin === 'https://quiz.ravenblack.net' "
-                "&& !!document.querySelector('form input[type=\\\"password\\\"]')",
+                "location.origin === 'https://quiz.ravenblack.net' && "
+                + LOGIN_FORM_PRESENT_JS,
                 lambda is_login_form, request_id=request_id, character_name=character_name:
                     self._handle_cookie_login_page(request_id, character_name, bool(is_login_form)),
             )
