@@ -28,6 +28,7 @@ def load_credential_store():
         "_linux_keyring_disabled",
         "CredentialStoreError",
         "_username",
+        "_probe_secret_service_backend",
         "_require_unlocked_secret_service",
         "_run_keyring",
         "set_secret",
@@ -773,7 +774,10 @@ def check_chained_secret_service_probe() -> None:
         patch.dict(sys.modules, {"secretstorage": secretstorage}),
     ):
         try:
-            credential_store._run_keyring(lambda: operation_calls.append("called"))
+            credential_store._run_keyring(
+                lambda: operation_calls.append("called"),
+                preflight=("get", credential_store.SERVICE_NAME, "account"),
+            )
         except CredentialStoreError as exc:
             assert "Unlock the Secret Service collection" in str(exc)
         else:
@@ -781,7 +785,33 @@ def check_chained_secret_service_probe() -> None:
         assert operation_calls == []
 
         chainer.backends = [object()]
-        assert credential_store._run_keyring(lambda: "ok") == "ok"
+        assert credential_store._run_keyring(
+            lambda: "ok",
+            preflight=("get", credential_store.SERVICE_NAME, "account"),
+        ) == "ok"
+
+        KWalletBackend = type(
+            "KWalletBackend",
+            (),
+            {
+                "get_password": lambda _self, _service, _account: "existing",
+                "set_password": lambda _self, _service, _account, _value: None,
+            },
+        )
+        KWalletBackend.__module__ = "keyring.backends.kwallet"
+        chainer.backends = [KWalletBackend(), SecretServiceBackend()]
+        operation_calls.clear()
+        assert credential_store._run_keyring(
+            lambda: operation_calls.append("primary-read"),
+            preflight=("get", credential_store.SERVICE_NAME, "account"),
+        ) is None
+        assert operation_calls == ["primary-read"]
+        operation_calls.clear()
+        assert credential_store._run_keyring(
+            lambda: operation_calls.append("primary-write"),
+            preflight=("set", credential_store.SERVICE_NAME, "account"),
+        ) is None
+        assert operation_calls == ["primary-write"]
 
 
 def check_compensation_does_not_extend_timeout() -> None:
@@ -853,12 +883,12 @@ def check_committed_write_is_reported_successfully() -> None:
     FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
     real_run_keyring = credential_store._run_keyring
 
-    def gate_timeout(operation, on_timeout=None):
+    def gate_timeout(operation, on_timeout=None, preflight=None):
         def delayed_timeout():
             assert commit_ready.wait(2)
             return on_timeout() if on_timeout is not None else False
 
-        return real_run_keyring(operation, on_timeout=delayed_timeout)
+        return real_run_keyring(operation, on_timeout=delayed_timeout, preflight=preflight)
 
     with (
         patch.object(credential_store.sys, "platform", "linux"),

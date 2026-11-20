@@ -388,37 +388,34 @@ def _username(namespace: str, identifier: str) -> str:
     return f"{namespace}:{digest}"
 
 
-def _require_unlocked_secret_service() -> None:
-    """Check the selected Secret Service collection without creating or unlocking it."""
-    backend = keyring.get_keyring()
-    if type(backend).__module__ == "keyring.backends.SecretService":
-        secret_service_backend = backend
-    elif type(backend).__module__ == "keyring.backends.chainer":
-        secret_service_backend = next(
-            (
-                candidate
-                for candidate in getattr(backend, "backends", ())
-                if type(candidate).__module__ == "keyring.backends.SecretService"
-            ),
-            None,
-        )
-        if secret_service_backend is None:
-            return
-    else:
-        return
-
+def _probe_secret_service_backend(backend) -> None:
+    """Check one Secret Service collection without creating or unlocking it."""
     import secretstorage
 
     with secretstorage.dbus_init() as bus:
         collection = secretstorage.Collection(
             bus,
-            getattr(secret_service_backend, "preferred_collection", "/org/freedesktop/secrets/aliases/default"),
+            getattr(backend, "preferred_collection", "/org/freedesktop/secrets/aliases/default"),
         )
         if collection.is_locked():
             raise CredentialStoreError("Unlock the Secret Service collection before using saved credentials.")
 
 
-def _run_keyring(operation, on_timeout=None):
+def _require_unlocked_secret_service(operation_name=None, service=None, account=None) -> None:
+    """Check the collection that a keyring operation will actually reach."""
+    backend = keyring.get_keyring()
+    if type(backend).__module__ == "keyring.backends.SecretService":
+        _probe_secret_service_backend(backend)
+        return
+    if type(backend).__module__ != "keyring.backends.chainer":
+        return
+    candidates = list(getattr(backend, "backends", ()))
+    if not candidates or type(candidates[0]).__module__ != "keyring.backends.SecretService":
+        return
+    _probe_secret_service_backend(candidates[0])
+
+
+def _run_keyring(operation, on_timeout=None, preflight=None):
     """Bound Linux keyring calls and quarantine a backend that hangs."""
     global _linux_keyring_disabled
     if not sys.platform.startswith("linux"):
@@ -431,7 +428,10 @@ def _run_keyring(operation, on_timeout=None):
 
         def run():
             try:
-                _require_unlocked_secret_service()
+                if preflight is None:
+                    _require_unlocked_secret_service()
+                else:
+                    _require_unlocked_secret_service(*preflight)
                 result.set_result(operation())
             except Exception as exc:
                 result.set_exception(exc)
@@ -507,7 +507,11 @@ def set_secret(namespace: str, identifier: str, value: str) -> None:
             raise
 
     try:
-        _run_keyring(write_and_verify, on_timeout=handle_timeout)
+        _run_keyring(
+            write_and_verify,
+            on_timeout=handle_timeout,
+            preflight=("set", SERVICE_NAME, account),
+        )
     except CredentialStoreError:
         raise
     except Exception as exc:  # keyring backends expose different exception types
@@ -517,7 +521,11 @@ def set_secret(namespace: str, identifier: str, value: str) -> None:
 def get_secret(namespace: str, identifier: str) -> str | None:
     """Load a secret, or return ``None`` when no entry exists."""
     try:
-        return _run_keyring(lambda: keyring.get_password(SERVICE_NAME, _username(namespace, identifier)))
+        account = _username(namespace, identifier)
+        return _run_keyring(
+            lambda: keyring.get_password(SERVICE_NAME, account),
+            preflight=("get", SERVICE_NAME, account),
+        )
     except Exception as exc:
         raise CredentialStoreError(f"OS credential store unavailable: {exc}") from exc
 
@@ -531,7 +539,10 @@ def delete_secret(namespace: str, identifier: str) -> None:
             keyring.delete_password(SERVICE_NAME, account)
 
     try:
-        _run_keyring(delete_if_present)
+        _run_keyring(
+            delete_if_present,
+            preflight=("delete", SERVICE_NAME, account),
+        )
     except Exception as exc:
         raise CredentialStoreError(f"OS credential store unavailable: {exc}") from exc
 
