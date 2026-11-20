@@ -10,9 +10,10 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+import time
 import types
 from concurrent.futures import Future, TimeoutError
-from threading import Event, Lock, Thread
+from threading import Event, Lock, RLock, Thread
 from unittest.mock import patch
 from pathlib import Path
 
@@ -27,6 +28,7 @@ def load_credential_store():
         "_linux_keyring_disabled",
         "CredentialStoreError",
         "_username",
+        "_probe_secret_service_backend",
         "_require_unlocked_secret_service",
         "_run_keyring",
         "set_secret",
@@ -49,6 +51,7 @@ def load_credential_store():
         "TimeoutError": TimeoutError,
         "Event": Event,
         "Lock": Lock,
+        "RLock": RLock,
         "Thread": Thread,
         "keyring": None,
     })
@@ -656,6 +659,302 @@ def check_timed_out_write_is_reverted() -> None:
         assert FakeKeyring.values[(credential_store.SERVICE_NAME, account)] == "old-secret"
 
 
+def check_verify_timeout_is_reverted() -> None:
+    release = Event()
+    verify_started = Event()
+    restored = Event()
+    account = credential_store._username("test", "verify-timeout")
+    original_set_password = FakeKeyring.set_password
+    calls = 0
+
+    def blocking_verify(service: str, key: str) -> str | None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            verify_started.set()
+            assert release.wait(2)
+        return FakeKeyring.values.get((service, key))
+
+    def tracking_set_password(service: str, key: str, value: str) -> None:
+        original_set_password(service, key, value)
+        if value == "old-secret":
+            restored.set()
+
+    FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(FakeKeyring, "get_password", side_effect=blocking_verify),
+        patch.object(FakeKeyring, "set_password", side_effect=tracking_set_password),
+    ):
+        try:
+            set_secret("test", "verify-timeout", "new-secret")
+        except CredentialStoreError as exc:
+            assert "did not respond" in str(exc)
+        else:
+            raise AssertionError("a blocked verification read must time out")
+
+        assert verify_started.is_set()
+        release.set()
+        assert restored.wait(2)
+        assert FakeKeyring.values[(credential_store.SERVICE_NAME, account)] == "old-secret"
+
+
+def check_timed_out_new_secret_is_deleted() -> None:
+    release = Event()
+    deleted = Event()
+    account = credential_store._username("test", "new-secret")
+    original_set_password = FakeKeyring.set_password
+    original_delete_password = FakeKeyring.delete_password
+
+    def delayed_set_password(service: str, key: str, value: str) -> None:
+        if value == "new-secret":
+            assert release.wait(2)
+        original_set_password(service, key, value)
+
+    def tracking_delete_password(service: str, key: str) -> None:
+        original_delete_password(service, key)
+        deleted.set()
+
+    FakeKeyring.values.pop((credential_store.SERVICE_NAME, account), None)
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(FakeKeyring, "set_password", side_effect=delayed_set_password),
+        patch.object(FakeKeyring, "delete_password", side_effect=tracking_delete_password),
+    ):
+        try:
+            set_secret("test", "new-secret", "new-secret")
+        except CredentialStoreError as exc:
+            assert "did not respond" in str(exc)
+        else:
+            raise AssertionError("a delayed new secret must time out")
+
+        release.set()
+        assert deleted.wait(2)
+        assert (credential_store.SERVICE_NAME, account) not in FakeKeyring.values
+
+
+def check_chained_secret_service_probe() -> None:
+    locked = True
+    operation_calls = []
+
+    SecretServiceBackend = type("SecretServiceBackend", (), {"preferred_collection": "/default"})
+    SecretServiceBackend.__module__ = "keyring.backends.SecretService"
+    ChainerBackend = type("ChainerBackend", (), {})
+    ChainerBackend.__module__ = "keyring.backends.chainer"
+    chainer = ChainerBackend()
+    chainer.backends = [SecretServiceBackend()]
+
+    class BusContext:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, *_args):
+            return False
+
+    class Collection:
+        def __init__(self, _bus, _path):
+            pass
+
+        def is_locked(self):
+            return locked
+
+    secretstorage = types.ModuleType("secretstorage")
+    secretstorage.dbus_init = lambda: BusContext()
+    secretstorage.Collection = Collection
+
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(credential_store.keyring, "get_keyring", return_value=chainer),
+        patch.dict(sys.modules, {"secretstorage": secretstorage}),
+    ):
+        try:
+            credential_store._run_keyring(
+                lambda: operation_calls.append("called"),
+                preflight=("get", credential_store.SERVICE_NAME, "account"),
+            )
+        except CredentialStoreError as exc:
+            assert "Unlock the Secret Service collection" in str(exc)
+        else:
+            raise AssertionError("a locked chained Secret Service must fail early")
+        assert operation_calls == []
+
+        chainer.backends = [object()]
+        assert credential_store._run_keyring(
+            lambda: "ok",
+            preflight=("get", credential_store.SERVICE_NAME, "account"),
+        ) == "ok"
+
+        KWalletBackend = type(
+            "KWalletBackend",
+            (),
+            {
+                "get_password": lambda _self, _service, _account: "existing",
+                "set_password": lambda _self, _service, _account, _value: None,
+            },
+        )
+        KWalletBackend.__module__ = "keyring.backends.kwallet"
+        chainer.backends = [KWalletBackend(), SecretServiceBackend()]
+        operation_calls.clear()
+        assert credential_store._run_keyring(
+            lambda: operation_calls.append("primary-read"),
+            preflight=("get", credential_store.SERVICE_NAME, "account"),
+        ) is None
+        assert operation_calls == ["primary-read"]
+        operation_calls.clear()
+        assert credential_store._run_keyring(
+            lambda: operation_calls.append("primary-write"),
+            preflight=("set", credential_store.SERVICE_NAME, "account"),
+        ) is None
+        assert operation_calls == ["primary-write"]
+
+        KWalletBackend.get_password = lambda _self, _service, _account: None
+        operation_calls.clear()
+        try:
+            credential_store._run_keyring(
+                lambda: operation_calls.append(
+                    credential_store.keyring.get_password(
+                        credential_store.SERVICE_NAME, "account"
+                    )
+                ),
+                preflight=("get", credential_store.SERVICE_NAME, "account"),
+            )
+        except CredentialStoreError as exc:
+            assert "Unlock the Secret Service collection" in str(exc)
+        else:
+            raise AssertionError("a locked fallback Secret Service must fail early")
+        assert operation_calls == []
+
+
+def check_compensation_does_not_extend_timeout() -> None:
+    release = Event()
+    account = credential_store._username("test", "blocked-restore")
+    original_set_password = FakeKeyring.set_password
+    calls = 0
+
+    def failing_verify(service: str, key: str) -> str | None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("simulated verify failure")
+        return FakeKeyring.values.get((service, key))
+
+    def blocked_restore(service: str, key: str, value: str) -> None:
+        if value == "old-secret":
+            assert release.wait(2)
+        original_set_password(service, key, value)
+
+    FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(FakeKeyring, "get_password", side_effect=failing_verify),
+        patch.object(FakeKeyring, "set_password", side_effect=blocked_restore),
+    ):
+        started = time.monotonic()
+        try:
+            set_secret("test", "blocked-restore", "new-secret")
+        except CredentialStoreError:
+            elapsed = time.monotonic() - started
+        else:
+            raise AssertionError("a failed verification must raise")
+        assert elapsed < 1, "a blocked compensation must not extend the caller timeout"
+        release.set()
+
+
+def check_committed_write_is_reported_successfully() -> None:
+    release = Event()
+    verify_started = Event()
+    commit_ready = Event()
+    account = credential_store._username("test", "committed")
+    original_rlock = RLock
+    calls = 0
+
+    class TrackingLock:
+        def __init__(self):
+            self._lock = original_rlock()
+
+        def __enter__(self):
+            self._lock.acquire()
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            self._lock.release()
+            commit_ready.set()
+            return False
+
+    def delayed_verify(service: str, key: str) -> str | None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            verify_started.set()
+            assert release.wait(2)
+        return FakeKeyring.values.get((service, key))
+
+    FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
+    real_run_keyring = credential_store._run_keyring
+
+    def gate_timeout(operation, on_timeout=None, preflight=None):
+        def delayed_timeout():
+            assert commit_ready.wait(2)
+            return on_timeout() if on_timeout is not None else False
+
+        return real_run_keyring(operation, on_timeout=delayed_timeout, preflight=preflight)
+
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(credential_store, "RLock", TrackingLock),
+        patch.object(credential_store, "_run_keyring", side_effect=gate_timeout),
+        patch.object(FakeKeyring, "get_password", side_effect=delayed_verify),
+    ):
+        result = []
+        error = []
+
+        def call_set_secret():
+            try:
+                set_secret("test", "committed", "new-secret")
+                result.append("success")
+            except Exception as exc:
+                error.append(exc)
+
+        caller = Thread(target=call_set_secret)
+        caller.start()
+        assert verify_started.wait(2)
+        time.sleep(0.3)
+        release.set()
+        caller.join(2)
+        assert not caller.is_alive()
+        assert result == ["success"]
+        assert error == []
+        assert credential_store._linux_keyring_disabled is False
+
+
+def check_verify_mismatch_restores_previous() -> None:
+    account = credential_store._username("test", "mismatch")
+    FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(FakeKeyring, "get_password", side_effect=["old-secret", "wrong-secret"]),
+    ):
+        try:
+            set_secret("test", "mismatch", "new-secret")
+        except CredentialStoreError as exc:
+            assert "verification failed" in str(exc)
+        else:
+            raise AssertionError("a mismatched verification must raise")
+        assert FakeKeyring.values[(credential_store.SERVICE_NAME, account)] == "old-secret"
+
+
 def main() -> int:
     original_keyring = credential_store.keyring
     credential_store.keyring = FakeKeyring
@@ -678,6 +977,12 @@ def main() -> int:
         check_password_change_clears_active_cookie()
         check_sqlite_profile_secrets()
         check_timed_out_write_is_reverted()
+        check_verify_timeout_is_reverted()
+        check_timed_out_new_secret_is_deleted()
+        check_chained_secret_service_probe()
+        check_compensation_does_not_extend_timeout()
+        check_committed_write_is_reported_successfully()
+        check_verify_mismatch_restores_previous()
         check_hung_keyring_stops_blocking()
     finally:
         FakeKeyring.available = True

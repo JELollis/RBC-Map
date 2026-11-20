@@ -14,20 +14,6 @@ files and are less detailed than later entries.
 
 ---
 
-## Unreleased — on `dev` (target 1.0.4)
-
-### 🐛 Bug fixes and credential-store robustness
-- Timed-out Linux keyring writes now compensate inside the worker thread so a
-  late backend completion cannot replace a credential after the database
-  transaction has rolled back.
-- Credential-store migration checks explicitly run in keyring mode and no
-  longer inherit an exported SQLite-profile environment setting.
-- Added a delayed-write regression check for the Linux timeout path.
-- Reintegrated credential storage into the monolithic application file; the
-  standalone runtime module is no longer required.
-
----
-
 ## Version 0.1.0 — Tkinter prototype
 
 **💡 Summary**
@@ -1057,3 +1043,17 @@ under 0.14.0, plus:
 - Set a minimum navigation panel width that fits all three character buttons.
 - Restore automatic sign-in without a saved cookie by recognizing RavenBlack's login form fields.
 - Bounded Linux keyring waits and added an explicit SQLite profile for systems without a usable keyring.
+
+## Unreleased — on `dev` (target 1.0.4)
+
+### 🐛 Bug fixes and credential-store robustness
+- Timed-out Linux keyring writes now compensate inside the worker thread so a
+  late backend completion cannot replace a credential after the database
+  transaction has rolled back.
+- Credential-store migration checks explicitly run in keyring mode and no
+  longer inherit an exported SQLite-profile environment setting.
+- Added a delayed-write regression check for the Linux timeout path.
+- Reintegrated credential storage into the monolithic application file; the
+  standalone runtime module is no longer required.
+- Settled keyring writes atomically around timeout races, restored secrets
+  after failed verification, and added chained Secret Service preflight checks.
