@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_1.0.1
+# Filename: main_1.0.2
 
 """
 ======================
@@ -22,14 +22,14 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v1.0.1)
+RBC City Map Application (v1.0.2)
 =================================
 
 This application provides an interactive mapping and character management tool
 for the browser-based vampire RPG **Vampires! The Dark Alleyway**, set in the
 fictional RavenBlack City.
 
-Version 1.0.1 continues the 1.0.0 launch-time API sync and hardens update
+Version 1.0.2 continues the 1.0.0 launch-time API sync and hardens update
 failure reporting and building-payload handling.
 While still packaged as a single file, it redacts credentials from logs, adds
 request timeouts to the manual data update, fixes two latent bugs, and
@@ -66,7 +66,7 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v1.0.1:
+Updated in v1.0.2:
 -------------------
 - Redacted the 'ip' cookie password portion in debug logs (login/logout state
   is still distinguishable) so credentials no longer reach on-disk logs.
@@ -173,7 +173,7 @@ REQUIRED_DIRECTORIES = [
     SESSIONS_DIR,
 ]
 
-VERSION_NUMBER = "1.0.1"
+VERSION_NUMBER = "1.0.2"
 
 # Default timeout (seconds) for outbound HTTP calls made on the UI thread.
 HTTP_REQUEST_TIMEOUT = 10
@@ -360,6 +360,20 @@ COOKIE_SECRET_NAMESPACE = "cookie-value"
 CREDENTIAL_NAMESPACE_SETTING = "credential_namespace"
 CREDENTIAL_NAMESPACE = None
 SECRETS_MIGRATED = False
+
+# Login-form field selectors shared by the rejected-cookie page detector and
+# the credential injector so the two cannot drift apart.
+LOGIN_FORM_USER_SELECTOR = 'input[name="username"]'
+LOGIN_FORM_PASS_SELECTOR = 'input[name="password"]'
+
+# True when the page holds a single form containing both login fields. The
+# authenticated page's change-password inputs must not match (AUD-035).
+LOGIN_FORM_PRESENT_JS = (
+    "Array.from(document.querySelectorAll('form')).some(function (form) {"
+    f"return form.querySelector({json.dumps(LOGIN_FORM_USER_SELECTOR)})"
+    f" && form.querySelector({json.dumps(LOGIN_FORM_PASS_SELECTOR)});"
+    "})"
+)
 
 
 def ensure_credential_namespace(connection: sqlite3.Connection) -> str:
@@ -2745,6 +2759,10 @@ class RBCCommunityMap(QMainWindow):
         self.splash = splash
         self.is_updating_minimap = False
         self.login_needed = True
+        self.pending_login = False
+        self._pending_login_character = None
+        self._login_retry_count = 0
+        self._login_request_id = 0
         self.auto_login_enabled = True
         self.webview_loaded = False
 
@@ -2758,6 +2776,9 @@ class RBCCommunityMap(QMainWindow):
         self.character_y = None
         self.selected_character = None
         self.destination = None
+        self.pending_character_id_for_map = None
+        self._pending_cookie_character = None
+        self._pending_cookie_request_id = None
 
         # Self-learning building cache
         self._seen_buildings: set[tuple[str, str, str]] = set()
@@ -3725,8 +3746,8 @@ class RBCCommunityMap(QMainWindow):
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.WebGLEnabled, False)
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.Accelerated2dCanvasEnabled, False)
         self.website_frame.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
         self.website_frame.loadFinished.connect(self.on_webview_load_finished)
+        self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
 
         # Add Keybindings
         self.setup_keybindings()
@@ -4546,7 +4567,7 @@ class RBCCommunityMap(QMainWindow):
 
         # Mark destination and login to be handled on next page load
         self.pending_character_id_for_map = character_id
-        self.pending_login = True
+        self._queue_password_login(character_name)
         self.save_last_active_character(character_id)
         self.load_last_destination_for_character(character_id)
         self.update_minimap()
@@ -4571,6 +4592,10 @@ class RBCCommunityMap(QMainWindow):
 
                 if not row:
                     logging.error(f"No saved login cookie found for character '{character_name}'.")
+                    self._pending_cookie_character = None
+                    self._pending_cookie_request_id = None
+                    self._queue_password_login(character_name)
+                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
 
                 cookie_id, cookie_name, cookie_domain, cookie_path, stored_value = row
@@ -4579,6 +4604,10 @@ class RBCCommunityMap(QMainWindow):
                 )
                 if cookie_value is None:
                     logging.error("No credential-store value found for cookie ID %s", cookie_id)
+                    self._pending_cookie_character = None
+                    self._pending_cookie_request_id = None
+                    self._queue_password_login(character_name)
+                    self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl?action=logout"))
                     return
 
                 ip_cookie = QNetworkCookie(b'ip', cookie_value.encode('utf-8'))
@@ -4586,6 +4615,12 @@ class RBCCommunityMap(QMainWindow):
                 ip_cookie.setPath('/')
                 ip_cookie.setExpirationDate(QDateTime.currentDateTime().addDays(30))
 
+                self.pending_login = False
+                self._pending_login_character = None
+                self._login_retry_count = 0
+                self._login_request_id += 1
+                self._pending_cookie_character = character_name
+                self._pending_cookie_request_id = self._login_request_id
                 self.cookie_store.setCookie(ip_cookie, QUrl("https://quiz.ravenblack.net"))
                 logging.debug(f"Injected saved 'ip' cookie ID {cookie_id} for {character_name}.")
 
@@ -4595,7 +4630,29 @@ class RBCCommunityMap(QMainWindow):
         except (CredentialStoreError, sqlite3.Error) as e:
             logging.error(f"Failed to switch character '{character_name}': {e}")
 
-    def login_selected_character(self) -> None:
+    def _handle_cookie_login_page(self, request_id: int, character_name: str, is_login_form: bool) -> None:
+        """Fall back to password login when a saved cookie was rejected."""
+        if (
+            request_id != self._pending_cookie_request_id
+            or character_name != self._pending_cookie_character
+        ):
+            return
+
+        self._pending_cookie_character = None
+        self._pending_cookie_request_id = None
+        if is_login_form:
+            logging.info("Saved cookie was rejected for '%s'; using password login", character_name)
+            self._queue_password_login(character_name)
+            self.login_selected_character()
+
+    def _queue_password_login(self, character_name: str) -> None:
+        """Queue a password login and invalidate all earlier async attempts."""
+        self._login_request_id += 1
+        self.pending_login = True
+        self._pending_login_character = character_name
+        self._login_retry_count = 0
+
+    def login_selected_character(self, request_id=None) -> None:
         """Auto-fill and submit the RavenBlack login form for the selected character.
 
         Injects a small JavaScript snippet into the loaded page that populates the
@@ -4608,6 +4665,14 @@ class RBCCommunityMap(QMainWindow):
             # Default to True so a missing attribute doesn't silently disable login.
             if not getattr(self, "auto_login_enabled", True):
                 logging.info("Auto-login disabled; skipping login injection.")
+                return
+
+            if not getattr(self, "pending_login", False):
+                logging.debug("No pending password login; skipping login injection.")
+                return
+
+            if request_id is not None and request_id != self._login_request_id:
+                logging.debug("Ignoring stale auto-login request %s", request_id)
                 return
 
             if not getattr(self, "selected_character", None):
@@ -4627,6 +4692,11 @@ class RBCCommunityMap(QMainWindow):
                 logging.debug("Selected character missing name/password; skipping login.")
                 return
 
+            pending_name = getattr(self, "_pending_login_character", None)
+            if self.pending_login and pending_name and pending_name != name:
+                logging.debug("Ignoring stale auto-login request for '%s'", pending_name)
+                return
+
             # Embed credentials via json.dumps so they are always valid, escaped
             # JS string literals (guards against quotes/backslashes in the values).
             import json
@@ -4635,22 +4705,47 @@ class RBCCommunityMap(QMainWindow):
                 try {{
                     const u = {json.dumps(name)};
                     const p = {json.dumps(password)};
-                    const user = document.querySelector('input[name="username"]');
-                    const pass = document.querySelector('input[name="password"]');
-                    if (!user || !pass) return "Login fields not found";
+                    const userSel = {json.dumps(LOGIN_FORM_USER_SELECTOR)};
+                    const passSel = {json.dumps(LOGIN_FORM_PASS_SELECTOR)};
+                    const form = Array.from(document.querySelectorAll('form')).find(function (f) {{
+                        return f.querySelector(userSel) && f.querySelector(passSel);
+                    }});
+                    if (!form) return "Login fields not found";
+                    const user = form.querySelector(userSel);
+                    const pass = form.querySelector(passSel);
                     user.value = u;
                     pass.value = p;
-                    const form = user.closest('form');
-                    if (form) {{ form.submit(); return "Login submitted"; }}
-                    const btn = document.querySelector('input[type="submit"], button[type="submit"]');
-                    if (btn) {{ btn.click(); return "Login clicked"; }}
-                    return "No form/submit found";
+                    form.submit();
+                    return "Login submitted";
                 }} catch (e) {{
                     return "Login JS error: " + e;
                 }}
             }})();
             """
-            self.website_frame.page().runJavaScript(js, lambda result: logging.debug(f"Login result: {result}"))
+            request_id = self._login_request_id
+
+            def handle_login_result(result):
+                if request_id != self._login_request_id:
+                    logging.debug("Ignoring stale auto-login result for request %s", request_id)
+                    return
+                if not self.pending_login or self._pending_login_character != name:
+                    logging.debug("Ignoring auto-login result for inactive character '%s'", name)
+                    return
+                logging.debug(f"Login result: {result}")
+                if result in ("Login submitted", "Login clicked"):
+                    self.pending_login = False
+                    self._pending_login_character = None
+                    self._login_retry_count = 0
+                elif self.pending_login and self._login_retry_count < 10:
+                    self._login_retry_count += 1
+                    QTimer.singleShot(
+                        500,
+                        lambda request_id=request_id: self.login_selected_character(request_id),
+                    )
+                elif self.pending_login:
+                    logging.warning("Login form was not ready before the auto-login retry limit")
+
+            self.website_frame.page().runJavaScript(js, handle_login_result)
         except Exception as e:
             logging.exception(f"login_selected_character failed: {e}")
 
@@ -4687,7 +4782,9 @@ class RBCCommunityMap(QMainWindow):
                     # Select and login to generate cookie
                     self.selected_character = character
                     self.character_list.setCurrentRow(self.character_list.count() - 1)
-                    QTimer.singleShot(1000, self.login_selected_character)
+                    self._queue_password_login(name)
+                    if hasattr(self, "website_frame"):
+                        self.website_frame.setUrl(QUrl("https://quiz.ravenblack.net/blood.pl"))
 
                     logging.debug(f"First-run character '{name}' created and login initiated.")
 
@@ -4728,16 +4825,14 @@ class RBCCommunityMap(QMainWindow):
                 self.selected_character = character
                 self.character_list.setCurrentRow(self.character_list.count() - 1)
                 self.save_last_active_character(character_id)
+                self._queue_password_login(name)
 
                 logging.debug(f"New character '{name}' added and selected. Logging out current user...")
 
                 # 🚪 Force logout and prepare for JS login
                 self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl?action=logout'))
 
-                def delayed_login():
-                    self.login_selected_character()
-
-                QTimer.singleShot(1500, delayed_login)
+                # The load-finished handler retries until the login form is ready.
 
         except (CredentialStoreError, sqlite3.Error) as e:
             logging.error(f"Failed to add character '{name}': {e}")
@@ -4772,18 +4867,37 @@ class RBCCommunityMap(QMainWindow):
             return  # 🚨 Do not proceed if fields are blank
 
         secret_changed = False
+        password_changed = new_password != character.get("password")
+        active_cookie_id = None
         try:
             old_password = get_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character['id']))
             # Lock the database before changing the keyring so a failed write
             # cannot leave the keyring ahead of the committed character row.
             with sqlite3.connect(DB_PATH, timeout=10) as conn:
                 conn.execute("BEGIN IMMEDIATE")
+                active_cookie_row = conn.execute(
+                    "SELECT active_cookie FROM characters WHERE id = ?",
+                    (character['id'],),
+                ).fetchone()
+                active_cookie_id = active_cookie_row[0] if active_cookie_row else None
                 store_character_secret(character['id'], new_password)
                 secret_changed = True
                 conn.execute("""
-                    UPDATE characters SET name = ?, password = NULL WHERE id = ?
-                """, (new_name, character['id']))
+                    UPDATE characters SET name = ?, password = NULL,
+                        active_cookie = CASE WHEN ? THEN NULL ELSE active_cookie END
+                    WHERE id = ?
+                """, (new_name, password_changed, character['id']))
                 conn.commit()
+
+            if password_changed and active_cookie_id is not None:
+                try:
+                    delete_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(active_cookie_id))
+                except CredentialStoreError as cleanup_error:
+                    logging.warning(
+                        "Password changed for '%s', but old cookie cleanup failed: %s",
+                        new_name,
+                        cleanup_error,
+                    )
 
             # Update in-memory character and UI
             character['name'] = new_name
@@ -4894,12 +5008,6 @@ class RBCCommunityMap(QMainWindow):
                         # ✅ Inject correct cookie for selected character
                         self.switch_to_character(self.selected_character['name'])
 
-                        # ✅ After injecting cookie, navigate and login
-                        def delayed_login():
-                            self.login_selected_character()
-
-                        QTimer.singleShot(1500, delayed_login)
-
                     else:
                         logging.warning(f"Last active character ID '{character_id}' not found in character list.")
                         self.set_default_character()
@@ -4922,8 +5030,10 @@ class RBCCommunityMap(QMainWindow):
             self.character_list.setCurrentRow(0)
             logging.debug(f"No valid last active character; defaulting to: {self.selected_character['name']}")
             self.save_last_active_character(self.selected_character['id'])
-
-            self.website_frame.setUrl(QUrl('https://quiz.ravenblack.net/blood.pl'))
+            self.load_last_destination_for_character(self.selected_character['id'])
+            self.update_minimap()
+            self._queue_password_login(self.selected_character['name'])
+            self.switch_to_character(self.selected_character['name'])
         else:
             self.selected_character = None
             logging.warning("No characters available to set as default.")
@@ -5002,10 +5112,19 @@ class RBCCommunityMap(QMainWindow):
         css = self.load_current_css()
         self.apply_custom_css(css)
 
-        if self.login_needed:
+        if self._pending_cookie_character:
+            request_id = self._pending_cookie_request_id
+            character_name = self._pending_cookie_character
+            self.website_frame.page().runJavaScript(
+                "location.origin === 'https://quiz.ravenblack.net' && "
+                + LOGIN_FORM_PRESENT_JS,
+                lambda is_login_form, request_id=request_id, character_name=character_name:
+                    self._handle_cookie_login_page(request_id, character_name, bool(is_login_form)),
+            )
+
+        if self.pending_login:
             logging.debug("Logging in selected character via JS injection...")
             self.login_selected_character()
-            self.pending_login = False
             return
 
         if self.pending_character_id_for_map:

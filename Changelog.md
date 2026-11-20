@@ -2,7 +2,7 @@
 
 Release history for the RBC Community Map application, oldest first.
 
-- **Current development version:** 1.0.1, `main_1.0.1.py` on the `dev` branch.
+- **Current development version:** 1.0.2, `main_1.0.2.py` on the `dev` branch.
 - **Latest stable release:** [1.0.0](#version-100--first-stable-release), with
   the release snapshot on the
   [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
@@ -998,9 +998,11 @@ under 0.14.0, plus:
 ### 📘 Documentation
 - Refreshed the README, help documentation, and screenshots for the release.
 
-## Unreleased — on `dev` (target 1.0.1)
+## Unreleased — on `dev` (target 1.0.2)
 
 ### 🐛 Bug fixes
+- Characters without a saved session cookie now submit the saved credentials
+  after the login form is ready and capture the resulting session cookie.
 - Corrected stale BeautifulSoup and crowdsourced-reporting documentation.
 - Database update failures now propagate to their callers so startup and
   manual refreshes can report unsuccessful updates.

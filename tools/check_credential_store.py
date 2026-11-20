@@ -83,7 +83,7 @@ class FakeCookie:
 
 
 def load_migration_helpers() -> dict[str, object]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.1.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.2.py").read_text(encoding="utf-8"))
     names = {
         "CHARACTER_SECRET_NAMESPACE",
         "COOKIE_SECRET_NAMESPACE",
@@ -119,12 +119,12 @@ def load_migration_helpers() -> dict[str, object]:
         "uuid": __import__("uuid"),
         "sqlite3": sqlite3,
     }
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.2.py", "exec"), namespace)
     return namespace
 
 
 def load_cookie_callback() -> tuple[object, dict[str, object]]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.1.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.2.py").read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "on_cookie_added")
     namespace = {
@@ -133,6 +133,7 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
         "logging": logging,
         "CredentialStoreError": CredentialStoreError,
         "CHARACTER_SECRET_NAMESPACE": "character-password",
+        "COOKIE_SECRET_NAMESPACE": "cookie-value",
         "store_cookie_secret": lambda cookie_id, value: set_secret(
             "cookie-value", namespace["cookie_secret_id"](cookie_id), value
         ),
@@ -143,7 +144,7 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
     namespace.update({"_credential_namespace": helpers["_credential_namespace"]})
     namespace["CREDENTIAL_NAMESPACE"] = helpers["CREDENTIAL_NAMESPACE"]
     namespace["cookie_secret_id"] = helpers["cookie_secret_id"]
-    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
+    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.2.py", "exec"), namespace)
     return namespace["on_cookie_added"], namespace
 
 
@@ -318,7 +319,7 @@ class FakeMessageBox:
 
 
 def load_character_mutation_methods() -> dict[str, object]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.1.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.2.py").read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     wanted = {"firstrun_character_creation", "add_new_character", "modify_character"}
     methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
@@ -328,6 +329,7 @@ def load_character_mutation_methods() -> dict[str, object]:
         "logging": logging,
         "CredentialStoreError": CredentialStoreError,
         "CHARACTER_SECRET_NAMESPACE": "character-password",
+        "COOKIE_SECRET_NAMESPACE": "cookie-value",
         "QMessageBox": FakeMessageBox,
         "sys": sys,
         "get_secret": get_secret,
@@ -347,8 +349,9 @@ def load_character_mutation_methods() -> dict[str, object]:
         "CREDENTIAL_NAMESPACE": helpers["CREDENTIAL_NAMESPACE"],
         "_credential_namespace": helpers["_credential_namespace"],
         "character_secret_id": helpers["character_secret_id"],
+        "cookie_secret_id": helpers["cookie_secret_id"],
     })
-    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.1.py", "exec"), namespace)
+    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.2.py", "exec"), namespace)
     return namespace
 
 
@@ -413,8 +416,10 @@ def check_modify_character_atomicity() -> None:
     connection = None
     try:
         connection = sqlite3.connect(db_path)
-        connection.execute("CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT, password TEXT)")
-        connection.execute("INSERT INTO characters VALUES (1, 'Alice', NULL)")
+        connection.execute(
+            "CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT, password TEXT, active_cookie INTEGER)"
+        )
+        connection.execute("INSERT INTO characters VALUES (1, 'Alice', NULL, NULL)")
         connection.commit()
         connection.close()
         connection = None
@@ -460,6 +465,52 @@ def check_modify_character_atomicity() -> None:
         db_path.unlink(missing_ok=True)
 
 
+def check_password_change_clears_active_cookie() -> None:
+    namespace = load_character_mutation_methods()
+
+    def working_store(character_id, password):
+        set_secret("character-password", namespace["character_secret_id"](character_id), password)
+
+    namespace["store_character_secret"] = working_store
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as handle:
+        db_path = Path(handle.name)
+    connection = None
+    try:
+        connection = sqlite3.connect(db_path)
+        connection.execute(
+            "CREATE TABLE characters (id INTEGER PRIMARY KEY, name TEXT, password TEXT, active_cookie INTEGER)"
+        )
+        connection.execute("INSERT INTO characters VALUES (1, 'Alice', NULL, 7)")
+        connection.commit()
+        connection.close()
+        connection = None
+
+        namespace["DB_PATH"] = str(db_path)
+        namespace["CREDENTIAL_NAMESPACE"] = "cookie-clear-test"
+        set_secret("character-password", namespace["character_secret_id"](1), "old-password")
+        set_secret("cookie-value", namespace["cookie_secret_id"](7), "old-cookie")
+
+        character = {"id": 1, "name": "Alice", "password": "old-password"}
+        item = type("FakeItem", (), {"text": lambda _self: "Alice", "setText": lambda *_args: None})()
+        character_list = type("FakeList", (), {"currentItem": lambda _self: item})()
+        fake_self = type("FakeWindow", (), {})()
+        fake_self.characters = [character]
+        fake_self.character_list = character_list
+        namespace["dialog"] = FakeCharacterDialog("Alice", "new-password")
+
+        namespace["modify_character"](fake_self)
+        connection = sqlite3.connect(db_path)
+        assert connection.execute("SELECT active_cookie FROM characters WHERE id = 1").fetchone() == (None,)
+        assert get_secret("cookie-value", namespace["cookie_secret_id"](7)) is None
+        connection.close()
+        connection = None
+    finally:
+        if connection is not None:
+            connection.close()
+        gc.collect()
+        db_path.unlink(missing_ok=True)
+
+
 def main() -> int:
     original_keyring = credential_store.keyring
     credential_store.keyring = FakeKeyring
@@ -479,6 +530,7 @@ def main() -> int:
         check_database_secret_namespaces()
         check_failed_character_creates_roll_back()
         check_modify_character_atomicity()
+        check_password_change_clears_active_cookie()
     finally:
         FakeKeyring.available = True
         credential_store.keyring = original_keyring
