@@ -23,6 +23,8 @@ files and are less detailed than later entries.
 - Credential-store migration checks explicitly run in keyring mode and no
   longer inherit an exported SQLite-profile environment setting.
 - Added a delayed-write regression check for the Linux timeout path.
+- Reintegrated credential storage into the monolithic application file; the
+  standalone runtime module is no longer required.
 
 ---
 
