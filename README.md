@@ -97,6 +97,12 @@ Packagers must include `credential_store.py` and the platform-appropriate
 backend (for example, Windows Credential Locker) is included and available at
 runtime.
 
+### Run the auto-login regression checks
+
+Install Node.js and ensure the `node` command is on your PATH before running
+`python tools/check_auto_login.py`. The checker uses Node.js to test the generated
+login-form JavaScript. Node.js is only needed for this test.
+
 ## Data and privacy
 
 Character information, session metadata, and application preferences are stored in a local SQLite database. Passwords and session-cookie values are stored through the operating system credential store via `keyring` when that store is available; after a successful migration, the database keeps only non-secret metadata. If the credential store is unavailable or locked, migration fails closed and deliberately leaves existing plaintext credentials in SQLite so they are not lost; resolve the credential-store problem and restart the app before treating the data as protected. On first launch, data from an older version kept next to the script (`sessions/` or `testing/sessions/`) is copied into the per-user data folder automatically; the originals are left in place. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.

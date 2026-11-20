@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import logging
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -63,6 +64,12 @@ def check_login_detector_matches_injector(tree: ast.Module) -> None:
 
 
 def check_login_finder_behavior(tree: ast.Module) -> None:
+    node_executable = shutil.which("node")
+    if node_executable is None:
+        raise SystemExit(
+            "Auto-login regression checks require Node.js. Install Node.js and ensure 'node' is on PATH."
+        )
+
     names = {"LOGIN_FORM_FIELDS", "LOGIN_FORM_FINDER_JS"}
     assignments = [
         node for node in tree.body
@@ -73,7 +80,7 @@ def check_login_finder_behavior(tree: ast.Module) -> None:
     namespace = {"json": json}
     exec(compile(ast.Module(body=assignments, type_ignores=[]), str(MAIN), "exec"), namespace)
     subprocess.run(
-        ["node", str(ROOT / "tools" / "check_login_finder.js")],
+        [node_executable, str(ROOT / "tools" / "check_login_finder.js")],
         input=namespace["LOGIN_FORM_FINDER_JS"],
         text=True,
         check=True,
