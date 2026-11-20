@@ -36,7 +36,7 @@ jobs:
         run: python tools/check_update_database.py
       - name: Verify release tree essentials
         run: |
-          test -f main_1.0.3.py
+          test -f main_1.0.4.py
           test -f credential_store.py
           test -d images
           test -f requirements.txt
