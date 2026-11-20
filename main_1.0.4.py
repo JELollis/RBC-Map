@@ -140,7 +140,7 @@ import hashlib
 from concurrent.futures import Future, TimeoutError
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from threading import Event, Lock, Thread
+from threading import Event, Lock, RLock, Thread
 from typing import TYPE_CHECKING, Tuple, Type, TypeVar, cast
 
 import PySide6.QtGui  # kept for dynamic access
@@ -391,7 +391,20 @@ def _username(namespace: str, identifier: str) -> str:
 def _require_unlocked_secret_service() -> None:
     """Check the selected Secret Service collection without creating or unlocking it."""
     backend = keyring.get_keyring()
-    if type(backend).__module__ != "keyring.backends.SecretService":
+    if type(backend).__module__ == "keyring.backends.SecretService":
+        secret_service_backend = backend
+    elif type(backend).__module__ == "keyring.backends.chainer":
+        secret_service_backend = next(
+            (
+                candidate
+                for candidate in getattr(backend, "backends", ())
+                if type(candidate).__module__ == "keyring.backends.SecretService"
+            ),
+            None,
+        )
+        if secret_service_backend is None:
+            return
+    else:
         return
 
     import secretstorage
@@ -399,7 +412,7 @@ def _require_unlocked_secret_service() -> None:
     with secretstorage.dbus_init() as bus:
         collection = secretstorage.Collection(
             bus,
-            getattr(backend, "preferred_collection", "/org/freedesktop/secrets/aliases/default"),
+            getattr(secret_service_backend, "preferred_collection", "/org/freedesktop/secrets/aliases/default"),
         )
         if collection.is_locked():
             raise CredentialStoreError("Unlock the Secret Service collection before using saved credentials.")
@@ -427,9 +440,9 @@ def _run_keyring(operation, on_timeout=None):
         try:
             return result.result(timeout=KEYRING_TIMEOUT)
         except TimeoutError as exc:
+            if on_timeout is not None and on_timeout():
+                return result.result()
             _linux_keyring_disabled = True
-            if on_timeout is not None:
-                on_timeout()
             raise CredentialStoreError(
                 "OS credential store did not respond. Check Secret Service and restart the app."
             ) from exc
@@ -441,25 +454,53 @@ def set_secret(namespace: str, identifier: str, value: str) -> None:
         raise CredentialStoreError("refusing to store an empty or non-text secret")
     account = _username(namespace, identifier)
     abandoned = Event()
+    state_lock = RLock()
+    committed = False
+
+    def compensate(previous):
+        if previous is None:
+            keyring.delete_password(SERVICE_NAME, account)
+        else:
+            keyring.set_password(SERVICE_NAME, account, previous)
+
+    def handle_timeout():
+        nonlocal committed
+        with state_lock:
+            if committed:
+                return True
+            abandoned.set()
+            return False
 
     def write_and_verify():
+        nonlocal committed
         previous = keyring.get_password(SERVICE_NAME, account)
         if abandoned.is_set():
             return
-        keyring.set_password(SERVICE_NAME, account, value)
-        if abandoned.is_set():
-            # A timed-out caller may already have rolled back its transaction.
-            # Compensate in this worker so the late write cannot become live.
-            if previous is None:
-                keyring.delete_password(SERVICE_NAME, account)
-            else:
-                keyring.set_password(SERVICE_NAME, account, previous)
-            return
-        if keyring.get_password(SERVICE_NAME, account) != value:
-            raise CredentialStoreError("keyring write verification failed")
+        write_completed = False
+        try:
+            keyring.set_password(SERVICE_NAME, account, value)
+            write_completed = True
+            if abandoned.is_set():
+                with state_lock:
+                    if not committed:
+                        compensate(previous)
+                return
+            if keyring.get_password(SERVICE_NAME, account) != value:
+                raise CredentialStoreError("keyring write verification failed")
+            with state_lock:
+                if abandoned.is_set():
+                    compensate(previous)
+                    return
+                committed = True
+        except Exception:
+            if write_completed:
+                with state_lock:
+                    if not committed:
+                        compensate(previous)
+            raise
 
     try:
-        _run_keyring(write_and_verify, on_timeout=abandoned.set)
+        _run_keyring(write_and_verify, on_timeout=handle_timeout)
     except CredentialStoreError:
         raise
     except Exception as exc:  # keyring backends expose different exception types
