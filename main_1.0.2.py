@@ -3016,6 +3016,11 @@ class RBCCommunityMap(QMainWindow):
         self.minimap_label.setFixedSize(target_size, target_size)
         self.update_minimap()
 
+    def _schedule_navigation_resize(self) -> None:
+        """Debounce minimap redraws while the navigation splitter is dragged."""
+        if hasattr(self, "_navigation_resize_timer"):
+            self._navigation_resize_timer.start(75)
+
     def _on_startup_update_finished(self, ok: bool, msg: str):
         # Refresh any UI that depends on DB state (no heavy work here)
         try:
@@ -4124,6 +4129,10 @@ class RBCCommunityMap(QMainWindow):
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([300, 900])
         self.main_splitter = splitter
+        self._navigation_resize_timer = QTimer(self)
+        self._navigation_resize_timer.setSingleShot(True)
+        self._navigation_resize_timer.timeout.connect(self._update_navigation_sizes)
+        splitter.splitterMoved.connect(lambda *_args: self._schedule_navigation_resize())
         map_layout.addWidget(splitter)
 
         # Make sure the webview expands to fill the remaining space
