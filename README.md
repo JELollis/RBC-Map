@@ -1,6 +1,6 @@
 # RBC Community Map Application
 
-**Current development version: 1.0.2** · **Latest stable release: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+**Current development version: 1.0.3** · **Latest stable release: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
 
 RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
 
@@ -85,7 +85,7 @@ python -m pip install -r requirements.txt
 ### Run
 
 ```bash
-python main_1.0.2.py
+python main_1.0.3.py
 ```
 
 For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
@@ -107,7 +107,7 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 
 | Branch | Contents |
 | --- | --- |
-| `dev` | **Beta.** Active development, currently on 1.0.2 (`main_1.0.2.py`); bug fixes and feature work merge here through pull requests. |
+| `dev` | **Beta.** Active development, currently on 1.0.3 (`main_1.0.3.py`); bug fixes and feature work merge here through pull requests. |
 | `main` | **Stable.** Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. All releases are based on this branch. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
@@ -119,13 +119,13 @@ Each `version/<number>` branch holds that version as `main_<number>.py`, with a
 README and changelog for that version. Branches are snapshots for reference and
 are not maintained.
 
-The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.2.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
+The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.3.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
-| `main_1.0.2.py` | The current development application, packaged as a single file. |
+| `main_1.0.3.py` | The current development application, packaged as a single file. |
 | `requirements.txt` | Runtime dependencies. |
 | `images/`, `css/` | Icons, artwork, and stylesheets used by the app. |
 | `docs/help/` | Help documentation (HTML, PDF, CHM, EPUB, DOCX). |

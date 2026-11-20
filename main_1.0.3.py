@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Filename: main_1.0.2
+# Filename: main_1.0.3
 
 """
 ======================
@@ -22,14 +22,14 @@ limitations under the License.
 
 
 =================================
-RBC City Map Application (v1.0.2)
+RBC City Map Application (v1.0.3)
 =================================
 
 This application provides an interactive mapping and character management tool
 for the browser-based vampire RPG **Vampires! The Dark Alleyway**, set in the
 fictional RavenBlack City.
 
-Version 1.0.2 continues the 1.0.0 launch-time API sync and hardens update
+Version 1.0.3 continues the 1.0.0 launch-time API sync and hardens update
 failure reporting and building-payload handling.
 While still packaged as a single file, it redacts credentials from logs, adds
 request timeouts to the manual data update, fixes two latent bugs, and
@@ -66,7 +66,7 @@ Key Features:
 - **Shopping List Tool**: Calculate item costs and charisma-discounted totals.
 - **Power Reference Dialog**: Browse powers and set guild destinations for training.
 
-Updated in v1.0.2:
+Updated in v1.0.3:
 -------------------
 - Redacted the 'ip' cookie password portion in debug logs (login/logout state
   is still distinguishable) so credentials no longer reach on-disk logs.
@@ -78,6 +78,8 @@ Updated in v1.0.2:
   fetch_location_update() helper used by both the startup worker and update_data.
 - Database-update failures now reach both startup and manual-refresh error paths.
 - Incomplete or shop-only building payloads no longer erase local building data.
+- Fixed startup errors on fresh profiles and made the navigation panel
+  user-resizable with a responsive minimap.
 
 Carried over from v0.13.3.0 / v0.13.2:
 - Replaced runtime pip auto-install with fail-fast dependency reporting.
@@ -173,7 +175,7 @@ REQUIRED_DIRECTORIES = [
     SESSIONS_DIR,
 ]
 
-VERSION_NUMBER = "1.0.2"
+VERSION_NUMBER = "1.0.3"
 
 # Default timeout (seconds) for outbound HTTP calls made on the UI thread.
 HTTP_REQUEST_TIMEOUT = 10
