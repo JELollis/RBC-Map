@@ -9,6 +9,8 @@ import shutil
 import sqlite3
 import sys
 import tempfile
+from threading import Event
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -20,6 +22,10 @@ from credential_store import CredentialStoreError, delete_secret, get_secret, se
 class FakeKeyring:
     values: dict[tuple[str, str], str] = {}
     available = True
+
+    @classmethod
+    def get_keyring(cls):
+        return cls
 
     @classmethod
     def set_password(cls, service: str, account: str, value: str) -> None:
@@ -83,13 +89,16 @@ class FakeCookie:
 
 
 def load_migration_helpers() -> dict[str, object]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.3.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.4.py").read_text(encoding="utf-8"))
     names = {
         "CHARACTER_SECRET_NAMESPACE",
         "COOKIE_SECRET_NAMESPACE",
         "CREDENTIAL_NAMESPACE_SETTING",
         "CREDENTIAL_NAMESPACE",
         "SECRETS_MIGRATED",
+        "SQLITE_CREDENTIAL_STORAGE",
+        "store_character_secret",
+        "store_cookie_secret",
         "ensure_credential_namespace",
         "_credential_namespace",
         "_migrate_legacy_secret",
@@ -119,12 +128,16 @@ def load_migration_helpers() -> dict[str, object]:
         "uuid": __import__("uuid"),
         "sqlite3": sqlite3,
     }
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.3.py", "exec"), namespace)
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.4.py", "exec"), namespace)
+    # Keep migration checks in keyring mode even when the developer's shell
+    # exports the opt-in SQLite profile setting. The SQLite-specific check
+    # enables this explicitly after loading the helpers.
+    namespace["SQLITE_CREDENTIAL_STORAGE"] = False
     return namespace
 
 
 def load_cookie_callback() -> tuple[object, dict[str, object]]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.3.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.4.py").read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "on_cookie_added")
     namespace = {
@@ -134,7 +147,7 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
         "CredentialStoreError": CredentialStoreError,
         "CHARACTER_SECRET_NAMESPACE": "character-password",
         "COOKIE_SECRET_NAMESPACE": "cookie-value",
-        "store_cookie_secret": lambda cookie_id, value: set_secret(
+        "store_cookie_secret": lambda _connection, cookie_id, value: set_secret(
             "cookie-value", namespace["cookie_secret_id"](cookie_id), value
         ),
         "Qt": type("Qt", (), {"DateFormat": type("DateFormat", (), {"ISODate": object()})}),
@@ -144,7 +157,7 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
     namespace.update({"_credential_namespace": helpers["_credential_namespace"]})
     namespace["CREDENTIAL_NAMESPACE"] = helpers["CREDENTIAL_NAMESPACE"]
     namespace["cookie_secret_id"] = helpers["cookie_secret_id"]
-    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.3.py", "exec"), namespace)
+    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.4.py", "exec"), namespace)
     return namespace["on_cookie_added"], namespace
 
 
@@ -319,7 +332,7 @@ class FakeMessageBox:
 
 
 def load_character_mutation_methods() -> dict[str, object]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.3.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.4.py").read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     wanted = {"firstrun_character_creation", "add_new_character", "modify_character"}
     methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
@@ -335,6 +348,7 @@ def load_character_mutation_methods() -> dict[str, object]:
         "get_secret": get_secret,
         "set_secret": set_secret,
         "delete_secret": delete_secret,
+        "SQLITE_CREDENTIAL_STORAGE": False,
         "store_character_secret": lambda _character_id, _password: (_ for _ in ()).throw(
             CredentialStoreError("simulated unavailable keyring")
         ),
@@ -351,7 +365,7 @@ def load_character_mutation_methods() -> dict[str, object]:
         "character_secret_id": helpers["character_secret_id"],
         "cookie_secret_id": helpers["cookie_secret_id"],
     })
-    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.3.py", "exec"), namespace)
+    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.4.py", "exec"), namespace)
     return namespace
 
 
@@ -511,6 +525,93 @@ def check_password_change_clears_active_cookie() -> None:
         db_path.unlink(missing_ok=True)
 
 
+def check_sqlite_profile_secrets() -> None:
+    helpers = load_migration_helpers()
+    helpers["SQLITE_CREDENTIAL_STORAGE"] = True
+
+    def unexpected_keyring_call(*_args):
+        raise AssertionError("the SQLite profile must not call the keyring")
+
+    helpers.update(get_secret=unexpected_keyring_call, set_secret=unexpected_keyring_call)
+    with sqlite3.connect(":memory:") as db:
+        db.executescript(
+            "CREATE TABLE characters (id INTEGER PRIMARY KEY, password TEXT);"
+            "CREATE TABLE cookies (id INTEGER PRIMARY KEY, value TEXT);"
+            "INSERT INTO characters VALUES (1, NULL);"
+            "INSERT INTO cookies VALUES (1, NULL);"
+        )
+        password = helpers["store_character_secret"](1, "saved-password")
+        db.execute("UPDATE characters SET password = ? WHERE id = 1", (password,))
+        helpers["store_cookie_secret"](db, 1, "saved-cookie")
+        assert helpers["load_character_secret"](db, 1, password) == "saved-password"
+        value = db.execute("SELECT value FROM cookies WHERE id = 1").fetchone()[0]
+        assert helpers["load_cookie_secret"](db, 1, "ip", "", "/", value) == "saved-cookie"
+
+
+def check_hung_keyring_stops_blocking() -> None:
+    release = Event()
+    finished = Event()
+    calls = []
+
+    def hang(*_args):
+        calls.append("get")
+        try:
+            assert release.wait(5)
+        finally:
+            finished.set()
+
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(credential_store.keyring, "get_password", side_effect=hang),
+    ):
+        try:
+            for expected in ("did not respond", "timed out earlier"):
+                try:
+                    get_secret("test", "timeout")
+                except CredentialStoreError as exc:
+                    assert expected in str(exc)
+                else:
+                    raise AssertionError("a hung backend must fail")
+            assert calls == ["get"], "a timed-out backend must not be called again"
+        finally:
+            release.set()
+            assert finished.wait(2)
+
+
+def check_timed_out_write_is_reverted() -> None:
+    release = Event()
+    finished = Event()
+    account = credential_store._username("test", "late-write")
+    original_set_password = FakeKeyring.set_password
+
+    def delayed_set_password(service: str, key: str, value: str) -> None:
+        if value == "new-secret":
+            assert release.wait(2)
+        original_set_password(service, key, value)
+        if value == "old-secret":
+            finished.set()
+
+    FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
+    with (
+        patch.object(credential_store.sys, "platform", "linux"),
+        patch.object(credential_store, "KEYRING_TIMEOUT", 0.2),
+        patch.object(credential_store, "_linux_keyring_disabled", False),
+        patch.object(FakeKeyring, "set_password", side_effect=delayed_set_password),
+    ):
+        try:
+            set_secret("test", "late-write", "new-secret")
+        except CredentialStoreError as exc:
+            assert "did not respond" in str(exc)
+        else:
+            raise AssertionError("a delayed write must time out")
+
+        release.set()
+        assert finished.wait(2)
+        assert FakeKeyring.values[(credential_store.SERVICE_NAME, account)] == "old-secret"
+
+
 def main() -> int:
     original_keyring = credential_store.keyring
     credential_store.keyring = FakeKeyring
@@ -531,6 +632,9 @@ def main() -> int:
         check_failed_character_creates_roll_back()
         check_modify_character_atomicity()
         check_password_change_clears_active_cookie()
+        check_sqlite_profile_secrets()
+        check_timed_out_write_is_reverted()
+        check_hung_keyring_stops_blocking()
     finally:
         FakeKeyring.available = True
         credential_store.keyring = original_keyring
