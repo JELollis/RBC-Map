@@ -161,7 +161,8 @@ if os.name == "nt":
 else:
     _local_data_root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
 
-DATA_DIR = _local_data_root / "RBC-Map"
+SQLITE_CREDENTIAL_STORAGE = os.getenv("RBC_MAP_CREDENTIAL_STORAGE") == "sqlite"
+DATA_DIR = _local_data_root / ("RBC-Map-SQLite" if SQLITE_CREDENTIAL_STORAGE else "RBC-Map")
 BASE_DIR = DATA_DIR
 
 LOG_DIR = DATA_DIR / "logs"
@@ -445,6 +446,8 @@ def _migrate_legacy_secret(
 def load_character_secret(connection: sqlite3.Connection, character_id: int, stored_value: str | None) -> str | None:
     """Load a character password and migrate legacy plaintext when possible."""
     global SECRETS_MIGRATED
+    if SQLITE_CREDENTIAL_STORAGE:
+        return stored_value
     if stored_value:
         try:
             set_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character_id), stored_value)
@@ -474,8 +477,14 @@ def load_character_secret(connection: sqlite3.Connection, character_id: int, sto
         return None
 
 
-def store_character_secret(character_id: int, password: str) -> None:
+def store_character_secret(character_id: int, password: str) -> str | None:
+    """Return the value to persist in the selected profile's password column."""
+    if not password:
+        raise CredentialStoreError("refusing to store an empty password")
+    if SQLITE_CREDENTIAL_STORAGE:
+        return password
     set_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character_id), password)
+    return None
 
 
 def load_cookie_secret(
@@ -488,6 +497,8 @@ def load_cookie_secret(
 ) -> str | None:
     """Load a cookie value and migrate legacy plaintext when possible."""
     global SECRETS_MIGRATED
+    if SQLITE_CREDENTIAL_STORAGE:
+        return stored_value
     identifier = cookie_secret_id(cookie_id)
     if stored_value:
         try:
@@ -517,8 +528,13 @@ def load_cookie_secret(
         return None
 
 
-def store_cookie_secret(cookie_id: int, value: str) -> None:
-    set_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(cookie_id), value)
+def store_cookie_secret(connection: sqlite3.Connection, cookie_id: int, value: str) -> None:
+    if not value:
+        raise CredentialStoreError("refusing to store an empty cookie")
+    if SQLITE_CREDENTIAL_STORAGE:
+        connection.execute("UPDATE cookies SET value = ? WHERE id = ?", (value, cookie_id))
+    else:
+        set_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(cookie_id), value)
 
 
 def vacuum_migrated_secrets(connection: sqlite3.Connection) -> None:
@@ -696,6 +712,12 @@ def ensure_directories_exist(
 
 
 # Validate directories at startup
+if SQLITE_CREDENTIAL_STORAGE:
+    DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if os.name == "posix":
+        DATA_DIR.chmod(0o700)
+    logging.warning("SQLite credential storage is enabled for the separate RBC-Map-SQLite profile.")
+
 if not ensure_directories_exist():
     logging.warning(
         "Some directories could not be created. "
@@ -859,7 +881,7 @@ def migrate_legacy_data(
     return f"Migrated saved data from {source_dir} to {sessions_dir}"
 
 
-LEGACY_MIGRATION_MESSAGE = migrate_legacy_data()
+LEGACY_MIGRATION_MESSAGE = None if SQLITE_CREDENTIAL_STORAGE else migrate_legacy_data()
 
 
 def remove_persistent_browser_cookies(sessions_dir: Path = SESSIONS_DIR) -> None:
@@ -2257,7 +2279,7 @@ def save_cookie_to_db(cookie: QNetworkCookie) -> bool:
                     (name, domain, path, expiration, secure, httponly),
                 )
                 cookie_id = cursor.lastrowid
-            store_cookie_secret(cookie_id, value)
+            store_cookie_secret(conn, cookie_id, value)
 
             conn.commit()
 
@@ -2341,7 +2363,7 @@ def clear_cookie_db() -> bool:
             cursor.execute("DELETE FROM cookies")
             conn.commit()
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            for cookie_id, name in cookie_keys:
+            for cookie_id, name in cookie_keys if not SQLITE_CREDENTIAL_STORAGE else ():
                 try:
                     delete_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(cookie_id))
                 except CredentialStoreError as exc:
@@ -3685,7 +3707,7 @@ class RBCCommunityMap(QMainWindow):
                         cookie.expirationDate().toString(Qt.DateFormat.ISODate) if not cookie.isSessionCookie() else None,
                         int(cookie.isSecure()), int(cookie.isHttpOnly()), new_cookie_id,
                     ))
-                    logging.debug("Updated cookie '%s' in the OS credential store", name)
+                    logging.debug("Updated cookie '%s'", name)
                 else:
                     cursor.execute("""
                         INSERT INTO cookies (name, value, domain, path, expiration, secure, httponly)
@@ -3696,9 +3718,9 @@ class RBCCommunityMap(QMainWindow):
                         int(cookie.isSecure()), int(cookie.isHttpOnly())
                     ))
                     new_cookie_id = cursor.lastrowid
-                    logging.debug("Saved cookie '%s' in the OS credential store", name)
+                    logging.debug("Saved cookie '%s'", name)
 
-                store_cookie_secret(new_cookie_id, value)
+                store_cookie_secret(conn, new_cookie_id, value)
                 conn.commit()
                 logging.debug(f"Saved cookie '{name}' (ID {new_cookie_id}) for domain '{domain}'")
 
@@ -3751,7 +3773,7 @@ class RBCCommunityMap(QMainWindow):
                     ))
                     cookie_id = cursor.lastrowid
 
-                store_cookie_secret(cookie_id, value)
+                store_cookie_secret(conn, cookie_id, value)
 
                 # Set this cookie as active, clear others
                 cursor.execute("UPDATE characters SET active_cookie = NULL")
@@ -4575,10 +4597,10 @@ class RBCCommunityMap(QMainWindow):
             cursor = connection.cursor()
             for character in self.characters:
                 if character.get('password'):
-                    store_character_secret(character['id'], character['password'])
+                    stored_password = store_character_secret(character['id'], character['password'])
                     cursor.execute(
-                        "UPDATE characters SET name = ?, password = NULL WHERE id = ?",
-                        (character['name'], character['id']),
+                        "UPDATE characters SET name = ?, password = ? WHERE id = ?",
+                        (character['name'], stored_password, character['id']),
                     )
                 else:
                     # Preserve the legacy value when the keyring is unavailable;
@@ -4588,9 +4610,9 @@ class RBCCommunityMap(QMainWindow):
                         (character['name'], character['id']),
                     )
             connection.commit()
-            logging.debug("Characters saved successfully with passwords in the OS credential store.")
+            logging.debug("Characters saved successfully.")
         except CredentialStoreError as e:
-            logging.error(f"Failed to save character credentials to the OS credential store: {e}")
+            logging.error(f"Failed to save character credentials: {e}")
             QMessageBox.critical(self, "Credential Storage Error", str(e))
         except sqlite3.Error as e:
             logging.error(f"Failed to save characters to database: {e}")
@@ -4827,7 +4849,10 @@ class RBCCommunityMap(QMainWindow):
             try:
                 with sqlite3.connect(DB_PATH) as conn:
                     cursor = conn.cursor()
-                    cursor.execute('INSERT INTO characters (name, password) VALUES (?, NULL)', (name,))
+                    cursor.execute(
+                        'INSERT INTO characters (name, password) VALUES (?, ?)',
+                        (name, password if SQLITE_CREDENTIAL_STORAGE else None),
+                    )
                     character_id = cursor.lastrowid
                     store_character_secret(character_id, password)
                     cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
@@ -4873,7 +4898,10 @@ class RBCCommunityMap(QMainWindow):
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute('INSERT INTO characters (name, password) VALUES (?, NULL)', (name,))
+                cursor.execute(
+                    'INSERT INTO characters (name, password) VALUES (?, ?)',
+                    (name, password if SQLITE_CREDENTIAL_STORAGE else None),
+                )
                 character_id = cursor.lastrowid
                 store_character_secret(character_id, password)
                 cursor.execute('INSERT INTO coins (character_id, pocket, bank) VALUES (?, 0, 0)', (character_id,))
@@ -4933,7 +4961,9 @@ class RBCCommunityMap(QMainWindow):
         password_changed = new_password != character.get("password")
         active_cookie_id = None
         try:
-            old_password = get_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character['id']))
+            old_password = None
+            if not SQLITE_CREDENTIAL_STORAGE:
+                old_password = get_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(character['id']))
             # Lock the database before changing the keyring so a failed write
             # cannot leave the keyring ahead of the committed character row.
             with sqlite3.connect(DB_PATH, timeout=10) as conn:
@@ -4943,16 +4973,18 @@ class RBCCommunityMap(QMainWindow):
                     (character['id'],),
                 ).fetchone()
                 active_cookie_id = active_cookie_row[0] if active_cookie_row else None
-                store_character_secret(character['id'], new_password)
-                secret_changed = True
+                stored_password = store_character_secret(character['id'], new_password)
+                secret_changed = not SQLITE_CREDENTIAL_STORAGE
                 conn.execute("""
-                    UPDATE characters SET name = ?, password = NULL,
+                    UPDATE characters SET name = ?, password = ?,
                         active_cookie = CASE WHEN ? THEN NULL ELSE active_cookie END
                     WHERE id = ?
-                """, (new_name, password_changed, character['id']))
+                """, (new_name, stored_password, password_changed, character['id']))
+                if SQLITE_CREDENTIAL_STORAGE and password_changed and active_cookie_id is not None:
+                    conn.execute("UPDATE cookies SET value = NULL WHERE id = ?", (active_cookie_id,))
                 conn.commit()
 
-            if password_changed and active_cookie_id is not None:
+            if password_changed and active_cookie_id is not None and not SQLITE_CREDENTIAL_STORAGE:
                 try:
                     delete_secret(COOKIE_SECRET_NAMESPACE, cookie_secret_id(active_cookie_id))
                 except CredentialStoreError as cleanup_error:
@@ -5016,7 +5048,8 @@ class RBCCommunityMap(QMainWindow):
             return
 
         try:
-            delete_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(char_id))
+            if not SQLITE_CREDENTIAL_STORAGE:
+                delete_secret(CHARACTER_SECRET_NAMESPACE, character_secret_id(char_id))
         except CredentialStoreError as e:
             logging.warning("Character %s was deleted but its keyring entry remains: %s", char_id, e)
 

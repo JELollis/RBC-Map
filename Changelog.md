@@ -1042,3 +1042,4 @@ under 0.14.0, plus:
 - Added startup-layout and auto-login regression checks.
 - Set a minimum navigation panel width that fits all three character buttons.
 - Restore automatic sign-in without a saved cookie by recognizing RavenBlack's login form fields.
+- Bounded Linux keyring waits and added an explicit SQLite profile for systems without a usable keyring.
