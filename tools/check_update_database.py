@@ -170,6 +170,14 @@ def transit_names_are_canonical_and_unique(root: Path) -> None:
         assert rows == [("Calliope",)]
         assert upsert(fake, cursor, "transit", "Clio", "Zelkova", "50th") == "inserted"
         assert connection.execute("SELECT COUNT(*) FROM transits").fetchone()[0] == 2
+
+        for names in (("Calliope Station", "Calliope"), ("Calliope", "Calliope Station")):
+            cursor.execute("DELETE FROM transits")
+            for name in names:
+                upsert(fake, cursor, "transit", name, "Mongoose", "25th")
+                assert cursor.execute('SELECT Name, "Column", "Row" FROM transits').fetchall() == [
+                    ("Calliope", "Mongoose", "25th")
+                ], names
     finally:
         connection.close()
 
