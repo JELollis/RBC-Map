@@ -482,21 +482,28 @@ def set_secret(namespace: str, identifier: str, value: str) -> None:
             write_completed = True
             if abandoned.is_set():
                 with state_lock:
-                    if not committed:
-                        compensate(previous)
+                    must_compensate = not committed
+                if must_compensate:
+                    compensate(previous)
                 return
             if keyring.get_password(SERVICE_NAME, account) != value:
                 raise CredentialStoreError("keyring write verification failed")
             with state_lock:
                 if abandoned.is_set():
-                    compensate(previous)
-                    return
-                committed = True
+                    must_compensate = True
+                else:
+                    committed = True
+                    must_compensate = False
+            if must_compensate:
+                compensate(previous)
         except Exception:
             if write_completed:
                 with state_lock:
-                    if not committed:
-                        compensate(previous)
+                    must_compensate = not committed
+                    if must_compensate:
+                        abandoned.set()
+                if must_compensate:
+                    compensate(previous)
             raise
 
     try:

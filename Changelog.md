@@ -1055,3 +1055,5 @@ under 0.14.0, plus:
 - Added a delayed-write regression check for the Linux timeout path.
 - Reintegrated credential storage into the monolithic application file; the
   standalone runtime module is no longer required.
+- Settled keyring writes atomically around timeout races, restored secrets
+  after failed verification, and added chained Secret Service preflight checks.
