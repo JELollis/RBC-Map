@@ -152,6 +152,10 @@ from PySide6 import QtCore
 
 def _application_dir() -> Path:
     """Return the directory containing the source or packaged executable."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # PyInstaller stores onedir data under its bundle directory, which is
+        # not the same directory as the executable on macOS.
+        return Path(sys._MEIPASS).resolve()
     if getattr(sys, "frozen", False) or "__compiled__" in globals():
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
@@ -10460,6 +10464,15 @@ class CompassOverlay(QDialog):
 # -----------------------
 
 def main() -> None:
+    if "--self-check" in sys.argv:
+        backend = keyring.get_keyring()
+        backend_name = f"{type(backend).__module__}.{type(backend).__name__}"
+        print(f"RBC Community Map {VERSION_NUMBER}")
+        print(f"keyring_backend={backend_name}")
+        if backend_name.endswith("fail.Keyring"):
+            raise SystemExit("Frozen build resolved to fail.Keyring")
+        return
+
     app = QApplication(sys.argv)
 
     images_dir = APP_DIR / "images"

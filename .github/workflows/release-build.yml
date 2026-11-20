@@ -16,6 +16,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.13"
+  RELEASE_VERSION: "1.0.4"
 
 jobs:
   windows:
@@ -37,12 +38,19 @@ jobs:
           --output-dir=build/windows
           --output-filename="RBC Community Map.exe"
           --windows-icon-from-ico=images/favicon.ico
+          --assume-yes-for-downloads
+          --windows-company-name="RBC Map Team"
+          --windows-product-name="RBC Community Map"
+          --windows-file-description="RBC Community Map"
+          --file-version=${{ env.RELEASE_VERSION }}
+          --product-version=${{ env.RELEASE_VERSION }}
           --include-data-dir=images=images
           --include-data-dir=css=css
           --include-data-dir=docs=docs
           --include-distribution-metadata=keyring
           --include-module=keyring.backends.Windows
           --include-module=keyring.backends.chainer
+          --include-package=win32ctypes
           main_1.0.4.py
       - name: Verify Windows bundle layout
         shell: pwsh
@@ -52,18 +60,21 @@ jobs:
           foreach ($path in @("images", "css", "docs/help")) {
             if (-not (Test-Path "$dist/$path")) { throw "Bundle path missing: $path" }
           }
+          $check = & "$dist/RBC Community Map.exe" --self-check 2>&1
+          $check | Tee-Object -FilePath windows-self-check.txt
+          if ($LASTEXITCODE -ne 0 -or ($check -join "`n") -match "fail\.Keyring") { throw "Frozen keyring self-check failed" }
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Build unsigned NSIS installer
-        run: makensis "tools/packaging/RBC Community Map.nsi"
+        run: makensis /DVERSION=${{ env.RELEASE_VERSION }} "tools/packaging/RBC Community Map.nsi"
       - name: Hash Windows installer
         shell: pwsh
-        run: Get-FileHash "tools/packaging/RBC-Map-Installer-1.0.4.exe" -Algorithm SHA256 | Format-Table | Out-File windows.sha256.txt
+        run: Get-FileHash "tools/packaging/RBC-Map-Installer-${{ env.RELEASE_VERSION }}.exe" -Algorithm SHA256 | Format-Table | Out-File windows.sha256.txt
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-windows-1.0.4
           path: |
-            tools/packaging/RBC-Map-Installer-1.0.4.exe
+            tools/packaging/RBC-Map-Installer-${{ env.RELEASE_VERSION }}.exe
             windows.sha256.txt
 
   deb:
@@ -79,6 +90,11 @@ jobs:
         run: python -m pip install -r requirements.txt pyinstaller
       - name: Build PyInstaller bundle
         run: python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Verify frozen bundle
+        run: |
+          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
+          printf '%s\n' "$result"
+          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
       - name: Assemble deb package
         run: |
           set -eux
@@ -125,6 +141,11 @@ jobs:
         run: python -m pip install -r requirements.txt pyinstaller
       - name: Build unsigned app bundle
         run: python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Verify frozen bundle
+        run: |
+          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
+          printf '%s\n' "$result"
+          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
       - name: Create unsigned DMG
         run: |
           mkdir -p build/dmg
@@ -147,6 +168,11 @@ jobs:
         run: dnf install -y python3 python3-pip gcc gcc-c++ make rpm-build libxcb libxkbcommon nss alsa-lib mesa-libEGL mesa-libgbm gnome-keyring libsecret dbus-daemon xdg-utils
       - name: Build PyInstaller bundle
         run: python3 -m pip install --break-system-packages -r requirements.txt pyinstaller && python3 -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Verify frozen bundle
+        run: |
+          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
+          printf '%s\n' "$result"
+          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
       - name: Assemble RPM
         run: |
           set -eux
@@ -194,6 +220,11 @@ jobs:
         run: pacman -Syu --noconfirm python python-pip base-devel libxcb libxkbcommon nss alsa-lib mesa gnome-keyring libsecret xdg-utils
       - name: Build PyInstaller bundle
         run: python -m pip install --break-system-packages -r requirements.txt pyinstaller && python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+      - name: Verify frozen bundle
+        run: |
+          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
+          printf '%s\n' "$result"
+          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
       - name: Build Arch package
         run: |
           set -eux

@@ -1,8 +1,14 @@
 !include MUI2.nsh
 !include LogicLib.nsh
 
+Unicode true
+
+!ifndef VERSION
+    !error "VERSION must be supplied with /DVERSION=x.y.z"
+!endif
+
 !define PRODUCT_NAME "RBC Community Map"
-!define PRODUCT_VERSION "1.0.4"
+!define PRODUCT_VERSION "${VERSION}"
 !define PRODUCT_PUBLISHER "RBC Community Map Team"
 !define PRODUCT_WEB_SITE "https://github.com/JELollis/RBC-Map"
 !define APP_EXE "RBC Community Map.exe"
@@ -12,8 +18,10 @@ OutFile "RBC-Map-Installer-${PRODUCT_VERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\RBC-Map"
 RequestExecutionLevel user
 
+Icon "build\windows\main_1.0.4.dist\images\favicon.ico"
+UninstallIcon "build\windows\main_1.0.4.dist\images\favicon.ico"
+
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
