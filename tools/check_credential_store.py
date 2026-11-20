@@ -4,19 +4,63 @@ from __future__ import annotations
 
 import ast
 import gc
+import hashlib
 import logging
 import shutil
 import sqlite3
 import sys
 import tempfile
-from threading import Event
+import types
+from concurrent.futures import Future, TimeoutError
+from threading import Event, Lock, Thread
 from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import credential_store
-from credential_store import CredentialStoreError, delete_secret, get_secret, set_secret
+def load_credential_store():
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.4.py").read_text(encoding="utf-8"))
+    names = {
+        "SERVICE_NAME",
+        "KEYRING_TIMEOUT",
+        "_linux_keyring_lock",
+        "_linux_keyring_disabled",
+        "CredentialStoreError",
+        "_username",
+        "_require_unlocked_secret_service",
+        "_run_keyring",
+        "set_secret",
+        "get_secret",
+        "delete_secret",
+    }
+    nodes = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id in names for target in node.targets
+        ):
+            nodes.append(node)
+        elif isinstance(node, (ast.ClassDef, ast.FunctionDef)) and node.name in names:
+            nodes.append(node)
+    module = types.ModuleType("credential_store")
+    module.__dict__.update({
+        "hashlib": hashlib,
+        "sys": sys,
+        "Future": Future,
+        "TimeoutError": TimeoutError,
+        "Event": Event,
+        "Lock": Lock,
+        "Thread": Thread,
+        "keyring": None,
+    })
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.4.py", "exec"), module.__dict__)
+    return module
+
+
+credential_store = load_credential_store()
+CredentialStoreError = credential_store.CredentialStoreError
+delete_secret = credential_store.delete_secret
+get_secret = credential_store.get_secret
+set_secret = credential_store.set_secret
 
 
 class FakeKeyring:

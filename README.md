@@ -92,10 +92,10 @@ python main_1.0.4.py
 
 For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
 
-Packagers must include `credential_store.py` and the platform-appropriate
-`keyring` backend modules. For frozen builds, verify that the selected
-backend (for example, Windows Credential Locker) is included and available at
-runtime.
+Packagers must include the monolithic `main_1.0.4.py` application and the
+platform-appropriate `keyring` backend modules. For frozen builds, verify that
+the selected backend (for example, Windows Credential Locker) is included and
+available at runtime.
 
 ### Run the auto-login regression checks
 
