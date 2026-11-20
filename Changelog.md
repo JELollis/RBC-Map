@@ -2,7 +2,7 @@
 
 Release history for the RBC Community Map application, oldest first.
 
-- **Current development version:** 1.0.2, `main_1.0.2.py` on the `dev` branch.
+- **Current development version:** 1.0.3, `main_1.0.3.py` on the `dev` branch.
 - **Latest stable release:** [1.0.0](#version-100--first-stable-release), with
   the release snapshot on the
   [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
@@ -1030,3 +1030,14 @@ under 0.14.0, plus:
 - **Help:** "Update Data" is now described as requesting shop, guild, and
   community building locations from the update service, not from A View in the
   Dark.
+
+## Unreleased — on `dev` (target 1.0.3)
+
+### 🐛 Bug fixes and Linux layout
+- Initialized webview destination state before early load callbacks.
+- Made first-launch logging tolerate a schema that has not been created yet.
+- Made the navigation panel width user-resizable and its contents responsive to
+  available window height and panel width; dragging the splitter now rescales
+  the minimap.
+- Added startup-layout and auto-login regression checks.
+- Set a minimum navigation panel width that fits all three character buttons.

@@ -83,7 +83,7 @@ class FakeCookie:
 
 
 def load_migration_helpers() -> dict[str, object]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.2.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.3.py").read_text(encoding="utf-8"))
     names = {
         "CHARACTER_SECRET_NAMESPACE",
         "COOKIE_SECRET_NAMESPACE",
@@ -119,12 +119,12 @@ def load_migration_helpers() -> dict[str, object]:
         "uuid": __import__("uuid"),
         "sqlite3": sqlite3,
     }
-    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.2.py", "exec"), namespace)
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "main_1.0.3.py", "exec"), namespace)
     return namespace
 
 
 def load_cookie_callback() -> tuple[object, dict[str, object]]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.2.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.3.py").read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     method = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == "on_cookie_added")
     namespace = {
@@ -144,7 +144,7 @@ def load_cookie_callback() -> tuple[object, dict[str, object]]:
     namespace.update({"_credential_namespace": helpers["_credential_namespace"]})
     namespace["CREDENTIAL_NAMESPACE"] = helpers["CREDENTIAL_NAMESPACE"]
     namespace["cookie_secret_id"] = helpers["cookie_secret_id"]
-    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.2.py", "exec"), namespace)
+    exec(compile(ast.Module(body=[method], type_ignores=[]), "main_1.0.3.py", "exec"), namespace)
     return namespace["on_cookie_added"], namespace
 
 
@@ -319,7 +319,7 @@ class FakeMessageBox:
 
 
 def load_character_mutation_methods() -> dict[str, object]:
-    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.2.py").read_text(encoding="utf-8"))
+    tree = ast.parse((Path(__file__).resolve().parents[1] / "main_1.0.3.py").read_text(encoding="utf-8"))
     cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     wanted = {"firstrun_character_creation", "add_new_character", "modify_character"}
     methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in wanted]
@@ -351,7 +351,7 @@ def load_character_mutation_methods() -> dict[str, object]:
         "character_secret_id": helpers["character_secret_id"],
         "cookie_secret_id": helpers["cookie_secret_id"],
     })
-    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.2.py", "exec"), namespace)
+    exec(compile(ast.Module(body=methods, type_ignores=[]), "main_1.0.3.py", "exec"), namespace)
     return namespace
 
 
