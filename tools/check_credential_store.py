@@ -590,7 +590,8 @@ def check_timed_out_write_is_reverted() -> None:
         if value == "new-secret":
             assert release.wait(2)
         original_set_password(service, key, value)
-        finished.set()
+        if value == "old-secret":
+            finished.set()
 
     FakeKeyring.values[(credential_store.SERVICE_NAME, account)] = "old-secret"
     with (
