@@ -69,23 +69,18 @@ def check_login_detector_matches_injector(tree: ast.Module) -> None:
     """AUD-035: the rejected-cookie detector must match only the real login
     form, and must share its field selectors with the credential injector."""
     assigned = module_assignments(tree)
-    assert "'input[name=\"username\"]'" in assigned.get("LOGIN_FORM_USER_SELECTOR", "")
-    assert "'input[name=\"password\"]'" in assigned.get("LOGIN_FORM_PASS_SELECTOR", "")
+    field_pairs = ast.literal_eval(assigned["LOGIN_FORM_FIELDS"])
+    assert ("iam", "passwd") in field_pairs, "support the live signed-out login form"
+    assert ("username", "password") in field_pairs, "preserve the alternate login form"
 
-    detector_js = assigned.get("LOGIN_FORM_PRESENT_JS", "")
-    assert "querySelectorAll('form')" in detector_js
-    assert "LOGIN_FORM_USER_SELECTOR" in detector_js
-    assert "LOGIN_FORM_PASS_SELECTOR" in detector_js
+    finder_js = assigned["LOGIN_FORM_FINDER_JS"]
+    assert "querySelectorAll('form')" in finder_js
+    assert "LOGIN_FORM_FIELDS" in finder_js
+    assert "location.origin" in finder_js
 
-    detector_source = ast.unparse(class_method(tree, "on_webview_load_finished"))
-    assert "LOGIN_FORM_PRESENT_JS" in detector_source
-    # The old detector matched any password input, including the
-    # authenticated page's change-password form.
-    assert 'input[type="password"]' not in detector_source
-
-    injector_source = ast.unparse(class_method(tree, "login_selected_character"))
-    assert "LOGIN_FORM_USER_SELECTOR" in injector_source
-    assert "LOGIN_FORM_PASS_SELECTOR" in injector_source
+    for method in ("on_webview_load_finished", "login_selected_character"):
+        source = ast.unparse(class_method(tree, method))
+        assert "LOGIN_FORM_FINDER_JS" in source, f"{method} must share the login form finder"
 
 
 def check_pending_map_state_initialized(tree: ast.Module) -> None:
