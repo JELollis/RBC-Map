@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN = ROOT / "main_1.0.3.py"
+MAIN = ROOT / "main_1.0.4.py"
 BUILDING_TABLES = ("banks", "taverns", "transits", "userbuildings", "placesofinterest")
 
 

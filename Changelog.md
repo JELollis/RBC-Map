@@ -2,7 +2,7 @@
 
 Release history for the RBC Community Map application, oldest first.
 
-- **Current development version:** 1.0.3, `main_1.0.3.py` on the `dev` branch.
+- **Current development version:** 1.0.4, `main_1.0.4.py` on the `dev` branch.
 - **Latest stable release:** [1.0.0](#version-100--first-stable-release), with
   the release snapshot on the
   [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
@@ -11,6 +11,18 @@ Release history for the RBC Community Map application, oldest first.
 
 Entries for versions before 0.12.0 were reconstructed from the archived source
 files and are less detailed than later entries.
+
+---
+
+## Unreleased — on `dev` (target 1.0.4)
+
+### 🐛 Bug fixes and credential-store robustness
+- Timed-out Linux keyring writes now compensate inside the worker thread so a
+  late backend completion cannot replace a credential after the database
+  transaction has rolled back.
+- Credential-store migration checks explicitly run in keyring mode and no
+  longer inherit an exported SQLite-profile environment setting.
+- Added a delayed-write regression check for the Linux timeout path.
 
 ---
 
@@ -1031,7 +1043,7 @@ under 0.14.0, plus:
   community building locations from the update service, not from A View in the
   Dark.
 
-## Unreleased — on `dev` (target 1.0.3)
+## Version 1.0.3 — prior development cycle
 
 ### 🐛 Bug fixes and Linux layout
 - Initialized webview destination state before early load callbacks.

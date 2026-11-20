@@ -1,6 +1,6 @@
 # RBC Community Map Application
 
-**Current development version: 1.0.3** · **Latest stable release: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+**Current development version: 1.0.4** · **Latest stable release: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
 
 RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
 
@@ -87,7 +87,7 @@ python -m pip install -r requirements.txt
 ### Run
 
 ```bash
-python main_1.0.3.py
+python main_1.0.4.py
 ```
 
 For a packaged build, check the repository's [releases](https://github.com/JELollis/RBC-Map/releases) for available downloads and release-specific instructions.
@@ -107,7 +107,7 @@ login-form JavaScript. Node.js is only needed for this test.
 
 Character information, session metadata, and application preferences are stored in a local SQLite database. Passwords and session-cookie values are stored through the operating system credential store via `keyring` when that store is available; after a successful migration, the database keeps only non-secret metadata. If the credential store is unavailable or locked, migration fails closed and deliberately leaves existing plaintext credentials in SQLite so they are not lost; resolve the credential-store problem and restart the app before treating the data as protected. On first launch, data from an older version kept next to the script (`sessions/` or `testing/sessions/`) is copied into the per-user data folder automatically; the originals are left in place. The app keeps its logs, sessions, and database in a per-user data folder (`%LOCALAPPDATA%\RBC-Map` on Windows, `$XDG_DATA_HOME/RBC-Map`, by default `~/.local/share/RBC-Map`, on macOS and Linux), outside the repository. Don't commit or share that folder.
 
-On Linux, the keyring needs an available, unlocked Secret Service collection. If it does not respond, the app stops waiting and retries the backend only after a restart. If you cannot use a keyring, launch with `RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.3.py` to use a separate `RBC-Map-SQLite` profile. Add your characters again in that profile. Its SQLite database stores saved passwords and session cookies in plaintext. Launch without the environment variable to return to the original keyring-backed profile.
+On Linux, the keyring needs an available, unlocked Secret Service collection. If it does not respond, the app stops waiting and retries the backend only after a restart. If you cannot use a keyring, launch with `RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.4.py` to use a separate `RBC-Map-SQLite` profile. Add your characters again in that profile. Its SQLite database stores saved passwords and session cookies in plaintext. Launch without the environment variable to return to the original keyring-backed profile.
 
 After confirming your characters, settings, and sign-in work in the new data folder, consider deleting the old copies in `sessions/` or `testing/sessions/` next to the old installation and any `rbc_map_data.db.pre-migration` backup in the new sessions folder. These backups may contain plaintext passwords or session cookies. Keep them if you still need rollback, and protect any copies you retain.
 
@@ -119,7 +119,7 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 
 | Branch | Contents |
 | --- | --- |
-| `dev` | **Beta.** Active development, currently on 1.0.3 (`main_1.0.3.py`); bug fixes and feature work merge here through pull requests. |
+| `dev` | **Beta.** Active development, currently on 1.0.4 (`main_1.0.4.py`); bug fixes and feature work merge here through pull requests. |
 | `main` | **Stable.** Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. All releases are based on this branch. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
@@ -131,13 +131,13 @@ Each `version/<number>` branch holds that version as `main_<number>.py`, with a
 README and changelog for that version. Branches are snapshots for reference and
 are not maintained.
 
-The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.3.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
+The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.4.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
-| `main_1.0.3.py` | The current development application, packaged as a single file. |
+| `main_1.0.4.py` | The current development application, packaged as a single file. |
 | `requirements.txt` | Runtime dependencies. |
 | `images/`, `css/` | Icons, artwork, and stylesheets used by the app. |
 | `docs/help/` | Help documentation (HTML, PDF, CHM, EPUB, DOCX). |

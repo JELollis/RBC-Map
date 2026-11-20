@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import sys
 from concurrent.futures import Future, TimeoutError
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 
 import keyring
 
@@ -43,7 +43,7 @@ def _require_unlocked_secret_service() -> None:
             raise CredentialStoreError("Unlock the Secret Service collection before using saved credentials.")
 
 
-def _run_keyring(operation):
+def _run_keyring(operation, on_timeout=None):
     """Bound Linux keyring calls and quarantine a backend that hangs."""
     global _linux_keyring_disabled
     if not sys.platform.startswith("linux"):
@@ -66,6 +66,8 @@ def _run_keyring(operation):
             return result.result(timeout=KEYRING_TIMEOUT)
         except TimeoutError as exc:
             _linux_keyring_disabled = True
+            if on_timeout is not None:
+                on_timeout()
             raise CredentialStoreError(
                 "OS credential store did not respond. Check Secret Service and restart the app."
             ) from exc
@@ -76,13 +78,26 @@ def set_secret(namespace: str, identifier: str, value: str) -> None:
     if not isinstance(value, str) or not value:
         raise CredentialStoreError("refusing to store an empty or non-text secret")
     account = _username(namespace, identifier)
+    abandoned = Event()
+
     def write_and_verify():
+        previous = keyring.get_password(SERVICE_NAME, account)
+        if abandoned.is_set():
+            return
         keyring.set_password(SERVICE_NAME, account, value)
+        if abandoned.is_set():
+            # A timed-out caller may already have rolled back its transaction.
+            # Compensate in this worker so the late write cannot become live.
+            if previous is None:
+                keyring.delete_password(SERVICE_NAME, account)
+            else:
+                keyring.set_password(SERVICE_NAME, account, previous)
+            return
         if keyring.get_password(SERVICE_NAME, account) != value:
             raise CredentialStoreError("keyring write verification failed")
 
     try:
-        _run_keyring(write_and_verify)
+        _run_keyring(write_and_verify, on_timeout=abandoned.set)
     except CredentialStoreError:
         raise
     except Exception as exc:  # keyring backends expose different exception types

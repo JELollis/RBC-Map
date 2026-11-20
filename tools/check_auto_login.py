@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN = ROOT / "main_1.0.3.py"
+MAIN = ROOT / "main_1.0.4.py"
 
 
 def class_method(tree: ast.Module, name: str) -> ast.FunctionDef:
