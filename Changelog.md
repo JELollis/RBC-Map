@@ -1000,6 +1000,12 @@ under 0.14.0, plus:
 
 ## Unreleased — on `dev` (target 1.0.2)
 
+### 🐛 Bug fixes and Linux layout
+- Initialized webview destination state before early load callbacks.
+- Made first-launch logging tolerate a schema that has not been created yet.
+- Made the navigation panel width user-resizable and its contents responsive to
+  available window height and panel width.
+
 ### 🐛 Bug fixes
 - Characters without a saved session cookie now submit the saved credentials
   after the login form is ready and capture the resulting session cookie.

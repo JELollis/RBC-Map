@@ -276,6 +276,12 @@ def get_logging_level_from_db(default: int = logging.INFO) -> int:
             row = cursor.fetchone()
             if row:
                 return int(row[0])
+    except sqlite3.OperationalError as exc:
+        # The schema is created after logging is configured. A missing settings
+        # table is therefore expected on a first launch, not an application
+        # failure worth printing to stderr.
+        if "no such table" not in str(exc).lower():
+            print(f"Failed to load log level from DB: {exc}", file=sys.stderr)
     except Exception as exc:
         print(f"Failed to load log level from DB: {exc}", file=sys.stderr)
     return default
@@ -347,6 +353,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QMessageBox, QPushButton, QScrollArea, QSplashScreen,
     QStyle, QTabWidget, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget, QInputDialog, QSizePolicy, QStackedWidget,
+    QSplitter,
 )
 
 from PySide6.QtWebChannel import QWebChannel
@@ -2776,6 +2783,7 @@ class RBCCommunityMap(QMainWindow):
         self.character_y = None
         self.selected_character = None
         self.destination = None
+        # Webview loadFinished can fire before the first character selection.
         self.pending_character_id_for_map = None
         self._pending_cookie_character = None
         self._pending_cookie_request_id = None
@@ -2983,6 +2991,30 @@ class RBCCommunityMap(QMainWindow):
 
         except Exception as e:
             logging.error(f"Failed to start startup update worker: {e}")
+
+    def resizeEvent(self, event) -> None:
+        """Keep the navigation panel usable as the window is resized."""
+        super().resizeEvent(event)
+        self._update_navigation_sizes()
+
+    def _update_navigation_sizes(self) -> None:
+        """Scale the minimap to the available navigation-panel space."""
+        if not hasattr(self, "left_frame") or not hasattr(self, "minimap_label"):
+            return
+
+        panel_width = max(0, self.left_frame.width() - 16)
+        panel_height = max(0, self.left_frame.height())
+        # Keep the square minimap readable while leaving room for the controls
+        # below it. The panel itself follows the window height automatically.
+        target_size = min(280, panel_width, max(160, panel_height // 3))
+        target_size = max(160, target_size)
+        if target_size == self.minimap_size:
+            return
+
+        self.minimap_size = target_size
+        self.minimap_frame.setFixedSize(target_size, target_size)
+        self.minimap_label.setFixedSize(target_size, target_size)
+        self.update_minimap()
 
     def _on_startup_update_finished(self, ok: bool, msg: str):
         # Refresh any UI that depends on DB state (no heavy work here)
@@ -3846,21 +3878,28 @@ class RBCCommunityMap(QMainWindow):
 
         # Main layout for map and controls
         map_layout = QHBoxLayout()
-        main_layout.addLayout(map_layout)
+        map_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addLayout(map_layout, stretch=1)
 
         # Left layout containing the minimap and control buttons
         left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(5, 5, 5, 5)
+        left_layout.setSpacing(4)
         left_frame = QFrame()
         left_frame.setObjectName("leftFrame")
         left_frame.setFrameShape(QFrame.Shape.Box)
-        left_frame.setFixedWidth(300)
+        left_frame.setMinimumWidth(220)
+        left_frame.setMaximumWidth(480)
+        left_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         left_frame.setLayout(left_layout)
+        self.left_frame = left_frame
 
         # Minimap setup
         minimap_frame = QFrame()
         minimap_frame.setObjectName("minimapFrame")
         minimap_frame.setFrameShape(QFrame.Shape.Box)
         minimap_frame.setFixedSize(self.minimap_size, self.minimap_size)
+        self.minimap_frame = minimap_frame
         minimap_layout = QVBoxLayout()
         minimap_layout.setContentsMargins(0, 0, 0, 0)
         minimap_frame.setLayout(minimap_layout)
@@ -3868,6 +3907,7 @@ class RBCCommunityMap(QMainWindow):
         # Label to display the minimap
         self.minimap_label = QLabel()
         self.minimap_label.setFixedSize(self.minimap_size, self.minimap_size)
+        self.minimap_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.minimap_label.setStyleSheet("background-color: lightgrey;")
         minimap_layout.addWidget(self.minimap_label)
         left_layout.addWidget(minimap_frame)
@@ -3876,7 +3916,7 @@ class RBCCommunityMap(QMainWindow):
         info_frame = QFrame()
         info_frame.setObjectName("infoFrame")
         info_frame.setFrameShape(QFrame.Shape.Box)
-        info_frame.setFixedHeight(260)
+        info_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         info_layout = QVBoxLayout()
         info_layout.setSpacing(5)
         info_frame.setLayout(info_layout)
@@ -3897,7 +3937,8 @@ class RBCCommunityMap(QMainWindow):
         self.bank_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.bank_label.setStyleSheet(label_style.format(color="blue"))
         self.bank_label.setWordWrap(True)
-        self.bank_label.setFixedHeight(45)
+        self.bank_label.setMinimumHeight(32)
+        self.bank_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         info_layout.addWidget(self.bank_label)
 
         # Closest Transit Info
@@ -3905,7 +3946,8 @@ class RBCCommunityMap(QMainWindow):
         self.transit_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.transit_label.setStyleSheet(label_style.format(color="red"))
         self.transit_label.setWordWrap(True)
-        self.transit_label.setFixedHeight(45)
+        self.transit_label.setMinimumHeight(32)
+        self.transit_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         info_layout.addWidget(self.transit_label)
 
         # Closest Tavern Info
@@ -3913,7 +3955,8 @@ class RBCCommunityMap(QMainWindow):
         self.tavern_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.tavern_label.setStyleSheet(label_style.format(color="orange"))
         self.tavern_label.setWordWrap(True)
-        self.tavern_label.setFixedHeight(45)
+        self.tavern_label.setMinimumHeight(32)
+        self.tavern_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         info_layout.addWidget(self.tavern_label)
 
         # Set Destination Info
@@ -3921,7 +3964,8 @@ class RBCCommunityMap(QMainWindow):
         self.destination_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.destination_label.setStyleSheet(label_style.format(color="green"))
         self.destination_label.setWordWrap(True)
-        self.destination_label.setFixedHeight(45)
+        self.destination_label.setMinimumHeight(32)
+        self.destination_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         info_layout.addWidget(self.destination_label)
 
         # Transit-Based AP for Set Destination Info
@@ -3929,7 +3973,8 @@ class RBCCommunityMap(QMainWindow):
         self.transit_destination_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.transit_destination_label.setStyleSheet(label_style.format(color="purple"))
         self.transit_destination_label.setWordWrap(True)
-        self.transit_destination_label.setFixedHeight(45)
+        self.transit_destination_label.setMinimumHeight(32)
+        self.transit_destination_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         info_layout.addWidget(self.transit_destination_label)
 
         # ComboBox and Go Button
@@ -4067,14 +4112,23 @@ class RBCCommunityMap(QMainWindow):
         character_buttons_layout.addWidget(delete_button)
         character_layout.addLayout(character_buttons_layout)
 
-        left_layout.addWidget(character_frame)
+        left_layout.addWidget(character_frame, stretch=1)
 
-        # Add the webview_container and left_frame to the map layout
-        map_layout.addWidget(left_frame)
-        map_layout.addWidget(webview_container, stretch=1)
+        # Let the user resize the navigation width while the panel height and
+        # browser area follow the window geometry automatically.
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.addWidget(left_frame)
+        splitter.addWidget(webview_container)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([300, 900])
+        self.main_splitter = splitter
+        map_layout.addWidget(splitter)
 
         # Make sure the webview expands to fill the remaining space
         self.website_frame.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._update_navigation_sizes()
 
         # Directly process coins from HTML within `process_html`
         if self.selected_character:
