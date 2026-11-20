@@ -3895,7 +3895,7 @@ class RBCCommunityMap(QMainWindow):
         left_frame = QFrame()
         left_frame.setObjectName("leftFrame")
         left_frame.setFrameShape(QFrame.Shape.Box)
-        left_frame.setMinimumWidth(220)
+        left_frame.setMinimumWidth(270)
         left_frame.setMaximumWidth(480)
         left_frame.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         left_frame.setLayout(left_layout)

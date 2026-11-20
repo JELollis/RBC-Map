@@ -1040,3 +1040,4 @@ under 0.14.0, plus:
   available window height and panel width; dragging the splitter now rescales
   the minimap.
 - Added startup-layout and auto-login regression checks.
+- Set a minimum navigation panel width that fits all three character buttons.

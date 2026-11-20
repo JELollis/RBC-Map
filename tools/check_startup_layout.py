@@ -98,6 +98,14 @@ def check_other_operational_errors_are_reported(tree: ast.Module) -> None:
 
 def check_splitter_resizes_navigation(tree: ast.Module) -> None:
     setup = _function(tree, "setup_ui_components")
+    minimum_width = next(
+        node.args[0]
+        for node in ast.walk(setup)
+        if isinstance(node, ast.Call)
+        and ast.unparse(node.func) == "left_frame.setMinimumWidth"
+    )
+    assert ast.literal_eval(minimum_width) >= 270, "the character buttons need a 270 px navigation panel"
+
     calls = {ast.unparse(node) for node in ast.walk(setup) if isinstance(node, ast.Call)}
     assert "splitter.splitterMoved.connect(lambda *_args: self._schedule_navigation_resize())" in calls
     assert (
