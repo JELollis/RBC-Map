@@ -84,10 +84,14 @@ def check_other_operational_errors_are_reported(tree: ast.Module) -> None:
         def connect(_path):
             return LockedConnection()
 
-    helper.__globals__["sqlite3"] = FakeSqlite
+    original_sqlite = helper.__globals__["sqlite3"]
     output = io.StringIO()
-    helper.__globals__["sys"].stderr = output
-    assert helper(23) == 23
+    try:
+        helper.__globals__["sqlite3"] = FakeSqlite
+        with contextlib.redirect_stderr(output):
+            assert helper(23) == 23
+    finally:
+        helper.__globals__["sqlite3"] = original_sqlite
     assert "database is locked" in output.getvalue()
 
 
