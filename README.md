@@ -27,6 +27,7 @@ RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleywa
 ### Characters and controls
 - Store character login details locally and switch between characters.
 - Resize the navigation panel using its divider. The panel has a minimum width to keep the character buttons visible.
+- Sign in automatically with a saved password when no session cookie is available.
 - Restore destinations, themes, and other preferences between sessions.
 - Choose **WASD** or **arrow keys** for movement; movement shortcuts are suppressed while typing into input fields.
 
@@ -95,6 +96,12 @@ Packagers must include `credential_store.py` and the platform-appropriate
 `keyring` backend modules. For frozen builds, verify that the selected
 backend (for example, Windows Credential Locker) is included and available at
 runtime.
+
+### Run the auto-login regression checks
+
+Install Node.js and ensure the `node` command is on your PATH before running
+`python tools/check_auto_login.py`. The checker uses Node.js to test the generated
+login-form JavaScript. Node.js is only needed for this test.
 
 ## Data and privacy
 

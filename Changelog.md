@@ -1041,3 +1041,4 @@ under 0.14.0, plus:
   the minimap.
 - Added startup-layout and auto-login regression checks.
 - Set a minimum navigation panel width that fits all three character buttons.
+- Restore automatic sign-in without a saved cookie by recognizing RavenBlack's login form fields.

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import ast
+import json
 import logging
+import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -53,39 +56,35 @@ def check_password_change_and_default_paths(tree: ast.Module) -> None:
     assert "switch_to_character" in default_source
 
 
-def module_assignments(tree: ast.Module) -> dict[str, str]:
-    assigned = {}
-    for node in tree.body:
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-        ):
-            assigned[node.targets[0].id] = ast.unparse(node.value)
-    return assigned
-
-
 def check_login_detector_matches_injector(tree: ast.Module) -> None:
-    """AUD-035: the rejected-cookie detector must match only the real login
-    form, and must share its field selectors with the credential injector."""
-    assigned = module_assignments(tree)
-    assert "'input[name=\"username\"]'" in assigned.get("LOGIN_FORM_USER_SELECTOR", "")
-    assert "'input[name=\"password\"]'" in assigned.get("LOGIN_FORM_PASS_SELECTOR", "")
+    """Keep cookie detection and credential injection on the same finder."""
+    for method in ("on_webview_load_finished", "login_selected_character"):
+        source = ast.unparse(class_method(tree, method))
+        assert "LOGIN_FORM_FINDER_JS" in source, f"{method} must share the login form finder"
 
-    detector_js = assigned.get("LOGIN_FORM_PRESENT_JS", "")
-    assert "querySelectorAll('form')" in detector_js
-    assert "LOGIN_FORM_USER_SELECTOR" in detector_js
-    assert "LOGIN_FORM_PASS_SELECTOR" in detector_js
 
-    detector_source = ast.unparse(class_method(tree, "on_webview_load_finished"))
-    assert "LOGIN_FORM_PRESENT_JS" in detector_source
-    # The old detector matched any password input, including the
-    # authenticated page's change-password form.
-    assert 'input[type="password"]' not in detector_source
+def check_login_finder_behavior(tree: ast.Module) -> None:
+    node_executable = shutil.which("node")
+    if node_executable is None:
+        raise SystemExit(
+            "Auto-login regression checks require Node.js. Install Node.js and ensure 'node' is on PATH."
+        )
 
-    injector_source = ast.unparse(class_method(tree, "login_selected_character"))
-    assert "LOGIN_FORM_USER_SELECTOR" in injector_source
-    assert "LOGIN_FORM_PASS_SELECTOR" in injector_source
+    names = {"LOGIN_FORM_FIELDS", "LOGIN_FORM_FINDER_JS"}
+    assignments = [
+        node for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in names
+    ]
+    namespace = {"json": json}
+    exec(compile(ast.Module(body=assignments, type_ignores=[]), str(MAIN), "exec"), namespace)
+    subprocess.run(
+        [node_executable, str(ROOT / "tools" / "check_login_finder.js")],
+        input=namespace["LOGIN_FORM_FINDER_JS"],
+        text=True,
+        check=True,
+    )
 
 
 def check_pending_map_state_initialized(tree: ast.Module) -> None:
@@ -109,6 +108,7 @@ def main() -> int:
     check_rejected_cookie_queues_password(tree)
     check_password_change_and_default_paths(tree)
     check_login_detector_matches_injector(tree)
+    check_login_finder_behavior(tree)
     check_pending_map_state_initialized(tree)
     print("auto-login checks passed")
     return 0

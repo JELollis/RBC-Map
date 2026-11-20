@@ -370,19 +370,22 @@ CREDENTIAL_NAMESPACE_SETTING = "credential_namespace"
 CREDENTIAL_NAMESPACE = None
 SECRETS_MIGRATED = False
 
-# Login-form field selectors shared by the rejected-cookie page detector and
-# the credential injector so the two cannot drift apart.
-LOGIN_FORM_USER_SELECTOR = 'input[name="username"]'
-LOGIN_FORM_PASS_SELECTOR = 'input[name="password"]'
-
-# True when the page holds a single form containing both login fields. The
-# authenticated page's change-password inputs must not match (AUD-035).
-LOGIN_FORM_PRESENT_JS = (
-    "Array.from(document.querySelectorAll('form')).some(function (form) {"
-    f"return form.querySelector({json.dumps(LOGIN_FORM_USER_SELECTOR)})"
-    f" && form.querySelector({json.dumps(LOGIN_FORM_PASS_SELECTOR)});"
-    "})"
-)
+# Match both known sign-in forms without matching account password changes.
+LOGIN_FORM_FIELDS = (("iam", "passwd"), ("username", "password"))
+LOGIN_FORM_FINDER_JS = f"""
+(() => {{
+    if (location.origin !== 'https://quiz.ravenblack.net') return null;
+    const fieldPairs = {json.dumps(LOGIN_FORM_FIELDS)};
+    for (const form of document.querySelectorAll('form')) {{
+        for (const [userName, passName] of fieldPairs) {{
+            const user = form.querySelector(`input[name="${{userName}}"]`);
+            const pass = form.querySelector(`input[name="${{passName}}"]`);
+            if (user && pass) return {{form, user, pass}};
+        }}
+    }}
+    return null;
+}})()
+"""
 
 
 def ensure_credential_namespace(connection: sqlite3.Connection) -> str:
@@ -4770,14 +4773,9 @@ class RBCCommunityMap(QMainWindow):
                 try {{
                     const u = {json.dumps(name)};
                     const p = {json.dumps(password)};
-                    const userSel = {json.dumps(LOGIN_FORM_USER_SELECTOR)};
-                    const passSel = {json.dumps(LOGIN_FORM_PASS_SELECTOR)};
-                    const form = Array.from(document.querySelectorAll('form')).find(function (f) {{
-                        return f.querySelector(userSel) && f.querySelector(passSel);
-                    }});
-                    if (!form) return "Login fields not found";
-                    const user = form.querySelector(userSel);
-                    const pass = form.querySelector(passSel);
+                    const login = {LOGIN_FORM_FINDER_JS};
+                    if (!login) return "Login fields not found";
+                    const {{form, user, pass}} = login;
                     user.value = u;
                     pass.value = p;
                     form.submit();
@@ -5181,8 +5179,7 @@ class RBCCommunityMap(QMainWindow):
             request_id = self._pending_cookie_request_id
             character_name = self._pending_cookie_character
             self.website_frame.page().runJavaScript(
-                "location.origin === 'https://quiz.ravenblack.net' && "
-                + LOGIN_FORM_PRESENT_JS,
+                f"Boolean({LOGIN_FORM_FINDER_JS})",
                 lambda is_login_form, request_id=request_id, character_name=character_name:
                     self._handle_cookie_login_page(request_id, character_name, bool(is_login_form)),
             )
