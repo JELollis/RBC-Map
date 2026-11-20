@@ -1,4 +1,4 @@
-"""Regression checks for startup state and responsive navigation wiring."""
+"""Regression checks for startup state and responsive navigation."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import io
 import logging
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -97,10 +98,47 @@ def check_other_operational_errors_are_reported(tree: ast.Module) -> None:
 
 def check_splitter_resizes_navigation(tree: ast.Module) -> None:
     setup = _function(tree, "setup_ui_components")
-    source = ast.unparse(setup)
-    assert "splitter.splitterMoved.connect" in source
-    assert "_schedule_navigation_resize" in source
-    assert "_navigation_resize_timer" in source
+    calls = {ast.unparse(node) for node in ast.walk(setup) if isinstance(node, ast.Call)}
+    assert "splitter.splitterMoved.connect(lambda *_args: self._schedule_navigation_resize())" in calls
+    assert (
+        "self._navigation_resize_timer.timeout.connect(self._update_navigation_sizes)" in calls
+    ), "the resize timer must call the navigation sizing helper"
+
+
+def check_navigation_sizes(tree: ast.Module) -> None:
+    helper = _function(tree, "_update_navigation_sizes")
+    namespace = {}
+    exec(compile(ast.Module(body=[helper], type_ignores=[]), str(MAIN), "exec"), namespace)
+    update_sizes = namespace["_update_navigation_sizes"]
+
+    for width, height, initial_size, expected_size in (
+        (300, 900, 280, 280),
+        (220, 900, 280, 204),
+        (300, 300, 280, 160),
+    ):
+        frame_sizes = []
+        label_sizes = []
+        redraws = []
+        window = SimpleNamespace(
+            left_frame=SimpleNamespace(width=lambda: width, height=lambda: height),
+            minimap_size=initial_size,
+            minimap_frame=SimpleNamespace(setFixedSize=lambda w, h: frame_sizes.append((w, h))),
+            minimap_label=SimpleNamespace(setFixedSize=lambda w, h: label_sizes.append((w, h))),
+            update_minimap=lambda: redraws.append(window.minimap_size),
+        )
+
+        update_sizes(window)
+        update_sizes(window)
+        panel = f"{width}×{height} panel"
+        assert window.minimap_size == expected_size, panel
+        expected_sizes = [(expected_size, expected_size)] if initial_size != expected_size else []
+        assert frame_sizes == label_sizes == expected_sizes, panel
+        assert redraws == ([expected_size] if expected_sizes else []), panel
+
+    # An early resize can arrive before the navigation widgets exist.
+    window = SimpleNamespace(minimap_label=object(), minimap_size=280)
+    update_sizes(window)
+    assert window.minimap_size == 280
 
 
 def main() -> int:
@@ -109,6 +147,7 @@ def main() -> int:
     check_missing_settings_table_is_quiet(tree)
     check_other_operational_errors_are_reported(tree)
     check_splitter_resizes_navigation(tree)
+    check_navigation_sizes(tree)
     print("startup/layout checks passed")
     return 0
 
