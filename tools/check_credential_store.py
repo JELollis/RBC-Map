@@ -813,6 +813,23 @@ def check_chained_secret_service_probe() -> None:
         ) is None
         assert operation_calls == ["primary-write"]
 
+        KWalletBackend.get_password = lambda _self, _service, _account: None
+        operation_calls.clear()
+        try:
+            credential_store._run_keyring(
+                lambda: operation_calls.append(
+                    credential_store.keyring.get_password(
+                        credential_store.SERVICE_NAME, "account"
+                    )
+                ),
+                preflight=("get", credential_store.SERVICE_NAME, "account"),
+            )
+        except CredentialStoreError as exc:
+            assert "Unlock the Secret Service collection" in str(exc)
+        else:
+            raise AssertionError("a locked fallback Secret Service must fail early")
+        assert operation_calls == []
+
 
 def check_compensation_does_not_extend_timeout() -> None:
     release = Event()

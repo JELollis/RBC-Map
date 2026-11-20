@@ -402,17 +402,20 @@ def _probe_secret_service_backend(backend) -> None:
 
 
 def _require_unlocked_secret_service(operation_name=None, service=None, account=None) -> None:
-    """Check the collection that a keyring operation will actually reach."""
+    """Check Secret Service before a chained read can fall through to it."""
     backend = keyring.get_keyring()
     if type(backend).__module__ == "keyring.backends.SecretService":
         _probe_secret_service_backend(backend)
         return
     if type(backend).__module__ != "keyring.backends.chainer":
         return
-    candidates = list(getattr(backend, "backends", ()))
-    if not candidates or type(candidates[0]).__module__ != "keyring.backends.SecretService":
-        return
-    _probe_secret_service_backend(candidates[0])
+    for candidate in getattr(backend, "backends", ()):
+        if type(candidate).__module__ == "keyring.backends.SecretService":
+            _probe_secret_service_backend(candidate)
+            return
+        get_password = getattr(candidate, "get_password", None)
+        if get_password is not None and get_password(service, account) is not None:
+            return
 
 
 def _run_keyring(operation, on_timeout=None, preflight=None):
