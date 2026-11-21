@@ -63,7 +63,7 @@ jobs:
           if (-not $process.WaitForExit(120000)) { Stop-Process -Id $process.Id -Force; throw "Frozen self-check timed out" }
           if ($process.ExitCode -ne 0 -or -not (Test-Path $checkPath)) { throw "Frozen self-check failed ($($process.ExitCode))" }
           $check = Get-Content $checkPath -Raw
-          if ($check -notmatch "version=1\.0\.4" -or $check -notmatch "keyring_backend=keyring\.backends\.Windows\.WinVaultKeyring" -or $check -notmatch "resource_images=True" -or $check -notmatch "resource_css=True" -or $check -notmatch "resource_help=True") { throw "Frozen self-check assertions failed`n$check" }
+          if ($check -notmatch ("(?m)^version=" + [regex]::Escape($env:RELEASE_VERSION) + "\r?$") -or $check -notmatch "keyring_backend=keyring\.backends\.Windows\.WinVaultKeyring" -or $check -notmatch "resource_images=True" -or $check -notmatch "resource_css=True" -or $check -notmatch "resource_help=True") { throw "Frozen self-check assertions failed`n$check" }
           $guiProcess = Start-Process -FilePath $exe -ArgumentList "--self-check-gui" -PassThru
           if (-not $guiProcess.WaitForExit(120000)) { Stop-Process -Id $guiProcess.Id -Force; throw "Frozen Qt WebEngine self-check timed out" }
           if ($guiProcess.ExitCode -ne 0) { throw "Frozen Qt WebEngine self-check failed ($($guiProcess.ExitCode))" }
