@@ -34,6 +34,8 @@ jobs:
         run: python tools/check_auto_login.py
       - name: Run database update regression checks
         run: python tools/check_update_database.py
+      - name: Run legacy migration regression checks
+        run: python tools/check_legacy_migration.py
       - name: Verify release tree essentials
         run: |
           test -f main_1.0.4.py
