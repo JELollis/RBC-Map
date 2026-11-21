@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import sqlite3
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -19,7 +20,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.4.py"
 WANTED = {"_connect_read_only", "_count_characters", "_mark_migration_done",
-          "_copy_if_absent", "migrate_legacy_data", "remove_persistent_browser_cookies"}
+          "_copy_if_absent", "migrate_legacy_data", "remove_persistent_browser_cookies",
+          "_legacy_sessions_dirs", "_secure_data_permissions"}
 
 
 def load_functions():
@@ -28,11 +30,14 @@ def load_functions():
     assert {n.name for n in nodes} == WANTED, f"missing functions in {MAIN.name}"
     # Default arguments reference module globals; bind placeholders, tests pass real values.
     ns = {"Path": Path, "os": os, "shutil": shutil, "sqlite3": sqlite3, "logging": logging,
-          "SESSIONS_DIR": Path("unused"), "LEGACY_SESSIONS_DIRS": [],
+          "APP_DIR": Path("unused"), "DATA_DIR": Path("unused"), "SESSIONS_DIR": Path("unused"),
+          "LEGACY_SESSIONS_DIRS": [],
           "LEGACY_DB_NAME": "rbc_map_data.db",
           "LEGACY_MIGRATION_MARKER": ".legacy-migration-done"}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(MAIN), "exec"), ns)
-    return ns["migrate_legacy_data"], ns["_count_characters"], ns["remove_persistent_browser_cookies"]
+    return (ns["migrate_legacy_data"], ns["_count_characters"],
+            ns["remove_persistent_browser_cookies"], ns["_legacy_sessions_dirs"],
+            ns["_secure_data_permissions"])
 
 
 def make_db(path: Path, characters: list[str]):
@@ -59,7 +64,7 @@ def run(name, fn):
     print(f"ok   {name}")
 
 
-migrate, count, remove_cookie_store = load_functions()
+migrate, count, remove_cookie_store, legacy_dirs_fn, secure_perms = load_functions()
 
 
 def fresh_install_no_legacy(t: Path):
@@ -264,6 +269,65 @@ def schema_less_target_is_migrated(t: Path):
     assert names(t / "new2/rbc_map_data.db") == ["Bob"]
 
 
+def windows_install_dirs_are_scanned(t: Path):
+    """W1: pre-1.0 Windows installs under LOCALAPPDATA/Program Files are found."""
+    src = t / "Program Files" / "RBC-Map" / "sessions"
+    make_db(src / "rbc_map_data.db", ["Carol"])
+    if os.name == "nt":
+        saved = {k: os.environ.get(k) for k in ("LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)")}
+        try:
+            os.environ["LOCALAPPDATA"] = str(t / "Local")
+            os.environ["ProgramFiles"] = str(t / "Program Files")
+            os.environ.pop("ProgramFiles(x86)", None)
+            dirs = legacy_dirs_fn()
+        finally:
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        local = t / "Local"
+        expected = [
+            local / "RBC Community Map" / "sessions",
+            local / "RBCCommunityMap" / "sessions",
+            src,
+        ]
+        for path in expected:
+            assert path in dirs, f"{path} missing from {dirs}"
+        msg = migrate(t / "new", dirs)
+    else:
+        # POSIX builds only scan APP_DIR; pass the install path explicitly.
+        msg = migrate(t / "new", [src])
+    assert msg and "Migrated" in msg, msg
+    assert names(t / "new/rbc_map_data.db") == ["Carol"]
+
+
+def posix_data_permissions_are_private(t: Path):
+    """W2: data/sessions dirs are 0700 and DB-family files 0600 on POSIX."""
+    if os.name != "posix":
+        return
+    data_dir = t / "data"
+    sessions = data_dir / "sessions"
+    sessions.mkdir(parents=True)
+    for path in (data_dir, sessions):
+        os.chmod(path, 0o755)
+    db = sessions / "rbc_map_data.db"
+    sqlite3.connect(db).close()
+    for suffix in ("-wal", "-shm", ".migrating", ".pre-migration"):
+        (sessions / f"rbc_map_data.db{suffix}").write_text("x")
+    other = sessions / "cookies.txt"
+    other.write_text("x")
+    for path in sessions.iterdir():
+        os.chmod(path, 0o644)
+    secure_perms(data_dir, sessions)
+    for path in (data_dir, sessions):
+        assert stat.S_IMODE(path.stat().st_mode) == 0o700, oct(stat.S_IMODE(path.stat().st_mode))
+    for path in sessions.iterdir():
+        if path.name.startswith("rbc_map_data.db"):
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600, f"{path.name}: {oct(stat.S_IMODE(path.stat().st_mode))}"
+    assert stat.S_IMODE(other.stat().st_mode) == 0o644, "unrelated files untouched"
+
+
 def removes_old_cookie_store(t: Path):
     sessions = t / "new"
     sessions.mkdir(parents=True)
@@ -288,6 +352,8 @@ for case in [fresh_install_no_legacy, migrates_root_sessions, prefers_newest_leg
              empty_legacy_is_not_migrated,
              interrupted_profile_copy_is_repaired,
              schema_less_target_is_migrated,
+             windows_install_dirs_are_scanned,
+             posix_data_permissions_are_private,
              removes_old_cookie_store]:
     run(case.__name__, case)
 print("all legacy-migration checks passed")

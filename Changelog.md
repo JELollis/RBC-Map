@@ -1077,6 +1077,11 @@ under 0.14.0, plus:
 - Fixed the Arch packaging job to install every declared dependency before
   the package install test, and added the legacy-migration regression suite
   to CI so it runs on every validation build.
+- Extended legacy data migration to pre-1.0 Windows install locations
+  (`%LOCALAPPDATA%` and Program Files session folders), hardened POSIX data
+  directory and database file permissions to `0700`/`0600`, and added a real
+  X11 (Xvfb) smoke check for installed Linux packages alongside the existing
+  offscreen check.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application

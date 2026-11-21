@@ -179,6 +179,12 @@ IMAGES_DIR = APP_DIR / "images"
 
 DB_PATH = SESSIONS_DIR / "rbc_map_data.db"
 
+# Defined here (not in the migration block below) because
+# _secure_data_permissions() runs at import time and reads LEGACY_DB_NAME.
+LEGACY_DB_NAME = "rbc_map_data.db"
+# Written once the legacy question is settled; after that, never migrate again.
+LEGACY_MIGRATION_MARKER = ".legacy-migration-done"
+
 REQUIRED_DIRECTORIES = [
     LOG_DIR,
     SESSIONS_DIR,
@@ -901,6 +907,34 @@ def ensure_directories_exist(
     return success
 
 
+def _secure_data_permissions(
+        data_dir: Path = DATA_DIR,
+        sessions_dir: Path = SESSIONS_DIR,
+) -> None:
+    """POSIX-only: keep credential-bearing data private.
+
+    Migration can leave plaintext passwords and cookies in SQLite when the
+    keyring is unavailable, so the data and sessions directories are kept at
+    0700 and the database family of files at 0600 regardless of umask.
+    """
+    if os.name != "posix":
+        return
+    for directory in (data_dir, sessions_dir):
+        try:
+            if directory.is_dir():
+                directory.chmod(0o700)
+        except OSError:
+            pass
+    if not sessions_dir.is_dir():
+        return
+    for path in sessions_dir.iterdir():
+        if path.name.startswith(LEGACY_DB_NAME):
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
+
+
 # Validate directories at startup
 if SQLITE_CREDENTIAL_STORAGE:
     DATA_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -913,6 +947,7 @@ if not ensure_directories_exist():
         "Some directories could not be created. "
         "Application may encounter issues."
     )
+_secure_data_permissions()
 
 
 # -----------------------
@@ -921,14 +956,28 @@ if not ensure_directories_exist():
 
 # Before 1.0.0 the app kept its data next to the script: ``sessions/`` at the
 # repository root (0.13.x and earlier) or ``testing/sessions/`` (the former
-# 0.13.3.x / 0.14.0 development line). 1.0.0 moved it to DATA_DIR.
-LEGACY_SESSIONS_DIRS = [
-    APP_DIR / "sessions",
-    APP_DIR / "testing" / "sessions",
-]
-LEGACY_DB_NAME = "rbc_map_data.db"
-# Written once the legacy question is settled; after that, never migrate again.
-LEGACY_MIGRATION_MARKER = ".legacy-migration-done"
+# 0.13.3.x / 0.14.0 development line). 1.0.0 moved it to DATA_DIR. On Windows,
+# pre-1.0 installs also kept data under per-user install directories.
+def _legacy_sessions_dirs() -> list[Path]:
+    dirs = [
+        APP_DIR / "sessions",
+        APP_DIR / "testing" / "sessions",
+    ]
+    if os.name == "nt":
+        local_appdata = os.environ.get("LOCALAPPDATA")
+        if local_appdata:
+            dirs += [
+                Path(local_appdata) / "RBC Community Map" / "sessions",
+                Path(local_appdata) / "RBCCommunityMap" / "sessions",
+            ]
+        for var in ("ProgramFiles", "ProgramFiles(x86)"):
+            root = os.environ.get(var)
+            if root:
+                dirs.append(Path(root) / "RBC-Map" / "sessions")
+    return dirs
+
+
+LEGACY_SESSIONS_DIRS = _legacy_sessions_dirs()
 
 
 def _connect_read_only(db_path: Path) -> sqlite3.Connection:
@@ -1072,6 +1121,7 @@ def migrate_legacy_data(
 
 
 LEGACY_MIGRATION_MESSAGE = None if SQLITE_CREDENTIAL_STORAGE else migrate_legacy_data()
+_secure_data_permissions()
 
 
 def remove_persistent_browser_cookies(sessions_dir: Path = SESSIONS_DIR) -> None:
@@ -2139,6 +2189,7 @@ if not ensure_directories_exist():  # Ensure directories exist first
     logging.error("Required directories could not be created. Aborting database initialization.")
 elif not initialize_database(DB_PATH):
     logging.warning("Database initialization failed. Application may encounter issues.")
+_secure_data_permissions()
 
 # -----------------------
 # Load Data from Database
