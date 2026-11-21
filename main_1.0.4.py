@@ -979,7 +979,8 @@ def _legacy_sessions_dirs(is_windows: bool | None = None) -> list[Path]:
         for var in ("ProgramFiles", "ProgramFiles(x86)"):
             root = os.environ.get(var)
             if root:
-                dirs.append(Path(root) / "RBC-Map" / "sessions")
+                for folder_name in ("RBC-Map", "RBC Community Map"):
+                    dirs.append(Path(root) / folder_name / "sessions")
     return dirs
 
 

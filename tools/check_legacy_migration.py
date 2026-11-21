@@ -278,7 +278,7 @@ def windows_install_dirs_are_scanned(t: Path):
     try:
         os.environ["LOCALAPPDATA"] = str(t / "Local")
         os.environ["ProgramFiles"] = str(t / "Program Files")
-        os.environ.pop("ProgramFiles(x86)", None)
+        os.environ["ProgramFiles(x86)"] = str(t / "Program Files (x86)")
         # Real detection on Windows; forced nt branch elsewhere.
         dirs = legacy_dirs_fn() if os.name == "nt" else legacy_dirs_fn(is_windows=True)
         # Startup's actual call: the default must include Windows paths only on nt.
@@ -286,7 +286,10 @@ def windows_install_dirs_are_scanned(t: Path):
         windows_paths = {
             local / "RBC Community Map" / "sessions",
             local / "RBCCommunityMap" / "sessions",
-            src,
+            t / "Program Files" / "RBC-Map" / "sessions",
+            t / "Program Files" / "RBC Community Map" / "sessions",
+            t / "Program Files (x86)" / "RBC-Map" / "sessions",
+            t / "Program Files (x86)" / "RBC Community Map" / "sessions",
         }
         assert bool(windows_paths & set(native)) == (os.name == "nt"), native
     finally:
@@ -298,7 +301,10 @@ def windows_install_dirs_are_scanned(t: Path):
     expected = [
         local / "RBC Community Map" / "sessions",
         local / "RBCCommunityMap" / "sessions",
-        src,
+        t / "Program Files" / "RBC-Map" / "sessions",
+        t / "Program Files" / "RBC Community Map" / "sessions",
+        t / "Program Files (x86)" / "RBC-Map" / "sessions",
+        t / "Program Files (x86)" / "RBC Community Map" / "sessions",
     ]
     for path in expected:
         assert path in dirs, f"{path} missing from {dirs}"

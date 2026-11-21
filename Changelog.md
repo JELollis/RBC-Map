@@ -1082,6 +1082,9 @@ under 0.14.0, plus:
   directory and database file permissions to `0700`/`0600`, and added a real
   X11 (Xvfb) smoke check for installed Linux packages alongside the existing
   offscreen check.
+- Added the historical `RBC Community Map` Program Files folder name to
+  Windows legacy-data migration so upgrades from 32-bit and older installers
+  retain their saved characters and settings.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application
