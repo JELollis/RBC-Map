@@ -1071,6 +1071,7 @@ under 0.14.0, plus:
 - Runtime dependencies are pinned to the locally validated versions.
 - Added a Python validation workflow with syntax, Unicode-token,
   regression, and release-tree checks.
+- CI now runs the Shopping List Charisma repricing regression check (AUD-048).
 - Added startup-layout, auto-login, credential-store, database-update, and
   legacy-migration regression checks, including Linux keyring timeout and
   chained-backend coverage.
