@@ -10,16 +10,24 @@ from pathlib import Path
 from typing import Type
 from unittest.mock import Mock
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (
-    QApplication, QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-    QPushButton, QTextEdit, QVBoxLayout,
-)
+try:
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import (
+        QApplication, QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+        QPushButton, QTextEdit, QVBoxLayout,
+    )
+    _QT_AVAILABLE = True
+except (ImportError, OSError) as _qt_exc:
+    _QT_AVAILABLE = False
+    _QT_IMPORT_ERROR = _qt_exc
 
 MAIN = Path(__file__).resolve().parents[1] / "main_1.0.4.py"
 
 
 def main() -> None:
+    if not _QT_AVAILABLE:
+        print(f"powers details checks skipped: Qt unavailable ({_QT_IMPORT_ERROR})")
+        return
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
     dialog = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "PowersDialog")
     names = {"_build_ui", "_create_labeled_field", "load_power_info"}
