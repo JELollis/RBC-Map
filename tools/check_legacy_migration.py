@@ -278,8 +278,8 @@ def windows_install_dirs_are_scanned(t: Path):
         os.environ["LOCALAPPDATA"] = str(t / "Local")
         os.environ["ProgramFiles"] = str(t / "Program Files")
         os.environ.pop("ProgramFiles(x86)", None)
-        # is_windows=True exercises the nt branch on any host OS.
-        dirs = legacy_dirs_fn(is_windows=True)
+        # Real detection on Windows; forced nt branch elsewhere.
+        dirs = legacy_dirs_fn() if os.name == "nt" else legacy_dirs_fn(is_windows=True)
     finally:
         for k, v in saved.items():
             if v is None:
