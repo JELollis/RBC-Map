@@ -9185,7 +9185,7 @@ class ShoppingListTool(QDialog):
         # ---- Signals ----
         self.add_item_button.clicked.connect(self.add_item)
         self.remove_item_button.clicked.connect(self.remove_item)
-        self.shop_combobox.currentIndexChanged.connect(self.load_items)
+        self.shop_combobox.currentIndexChanged.connect(lambda _i: self.load_items())
         self.charisma_combobox.currentIndexChanged.connect(self._refresh_prices)
 
         self.update_total()
@@ -9206,8 +9206,12 @@ class ShoppingListTool(QDialog):
         except sqlite3.Error as exc:
             logging.error("Failed to populate shop dropdown: %s", exc)
 
-    def load_items(self) -> None:
-        selected_row = self.available_items_list.currentRow()
+    def load_items(self, preserve_selection: bool = False) -> None:
+        selected_name = None
+        if preserve_selection:
+            item = self.available_items_list.currentItem()
+            if item is not None:
+                selected_name = item.text().split(" - ")[0]
         self.available_items_list.clear()
 
         if not self.sqlite_cursor:
@@ -9236,8 +9240,12 @@ class ShoppingListTool(QDialog):
         except sqlite3.Error as exc:
             logging.error("Failed to load items: %s", exc)
 
-        if 0 <= selected_row < self.available_items_list.count():
-            self.available_items_list.setCurrentRow(selected_row)
+        if selected_name is not None:
+            for row in range(self.available_items_list.count()):
+                row_item = self.available_items_list.item(row)
+                if row_item is not None and row_item.text().split(" - ")[0] == selected_name:
+                    self.available_items_list.setCurrentRow(row)
+                    break
 
     def _price_column(self) -> str:
         return {
@@ -9304,7 +9312,7 @@ class ShoppingListTool(QDialog):
         if not self.sqlite_cursor:
             return
 
-        self.load_items()
+        self.load_items(preserve_selection=True)
 
         shop = self.shop_combobox.currentText()
         if not shop or not self.shopping_items:

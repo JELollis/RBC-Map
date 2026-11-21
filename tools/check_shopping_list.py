@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import logging
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -46,6 +47,9 @@ class Combo:
     def currentText(self) -> str:
         return self._text
 
+    def setText(self, text: str) -> None:
+        self._text = text
+
 
 class ItemList:
     """Minimal QListWidget stand-in backed by an external sink list."""
@@ -70,6 +74,14 @@ class ItemList:
     def setCurrentRow(self, row: int) -> None:
         self.current = row if 0 <= row < len(self.sink) else -1
 
+    def item(self, row: int):
+        if 0 <= row < len(self.sink):
+            return SimpleNamespace(text=lambda t=self.sink[row]: t)
+        return None
+
+    def currentItem(self):
+        return self.item(self.current)
+
 
 def class_method(tree: ast.Module, name: str) -> ast.FunctionDef:
     cls = next(
@@ -91,7 +103,7 @@ def make_fake(namespace: dict, prices, available=None, cart_display=None, cart=N
     fake.shopping_items = cart if cart is not None else {}
     fake.update_total = lambda: None
     for name in ("load_items", "_price_column", "_refresh_shopping_list"):
-        setattr(fake, name, lambda n=name: namespace[n](fake))
+        setattr(fake, name, lambda *a, n=name, **k: namespace[n](fake, *a, **k))
     return fake
 
 
@@ -129,8 +141,8 @@ def check_charisma_reloads_available_items(tree: ast.Module) -> None:
     assert not any("70000" in row for row in available), (
         f"stale base-price rows must not survive the reload: {available}"
     )
-    # Selection on the same row index is preserved across the reload.
-    assert fake.available_items_list.current == 0
+    # Selection is preserved by item identity, not row index.
+    assert available[fake.available_items_list.current].startswith("Diamond Ring - 67900")
 
 
 def check_charisma_reprices_cart(tree: ast.Module) -> None:
@@ -147,10 +159,34 @@ def check_charisma_reprices_cart(tree: ast.Module) -> None:
     assert cart_display == ["Diamond Ring - 67900 Coins - 2x"], cart_display
 
 
+def check_shop_switch_clears_selection(tree: ast.Module) -> None:
+    """A shop change must not carry the old selection onto a different product
+    that happens to sit at the same row index."""
+    namespace = exec_methods(tree)
+    prices = {
+        ("Discount Magic", "Diamond Ring", "base_price"): 70000,
+        ("Discount Magic", "Diamond Ring", "charisma_level_1"): 67900,
+        ("Other Shop", "Rusty Knife", "base_price"): 50,
+        ("Other Shop", "Rusty Knife", "charisma_level_1"): 48,
+    }
+    available: list[str] = []
+    fake = make_fake(namespace, prices, available=available)
+    namespace["load_items"](fake)
+    fake.available_items_list.setCurrentRow(0)
+    assert fake.available_items_list.currentItem().text().startswith("Diamond Ring")
+
+    # Switch shops: index 0 is now a different product; selection must clear.
+    fake.shop_combobox.setText("Other Shop")
+    namespace["load_items"](fake)
+    assert available == ["Rusty Knife - 48 Coins"], available
+    assert fake.available_items_list.current == -1
+
+
 def main() -> int:
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
     check_charisma_reloads_available_items(tree)
     check_charisma_reprices_cart(tree)
+    check_shop_switch_clears_selection(tree)
     print("shopping-list checks passed")
     return 0
 
