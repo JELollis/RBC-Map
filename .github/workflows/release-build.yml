@@ -323,12 +323,14 @@ jobs:
           if [ -n "$capabilities" ]; then
             setcap -r "$daemon"
           fi
+          useradd --create-home builder
       - name: Build PyInstaller bundle
         run: uv python install 3.13 && uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r requirements.txt pyinstaller && .venv/bin/python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
       - name: Verify frozen bundle
         run: |
           check=build/rbc-map-self-check.txt
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          install -o builder -m 600 /dev/null "$check"
+          runuser -u builder -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
           test -s "$check"
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
@@ -358,7 +360,6 @@ jobs:
             printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=RBC Community Map' 'Exec=rbc-map' 'Icon=rbc-map' 'Categories=Game;' > "$pkgdir/usr/share/applications/rbc-map.desktop"
           }
           EOF
-          useradd --create-home builder
           chown -R builder:builder build/arch
           su builder -c 'cd build/arch && makepkg --noconfirm --nodeps'
           pacman -U --noconfirm build/arch/*.pkg.tar.zst
@@ -368,11 +369,12 @@ jobs:
           cp build/arch/*.pkg.tar.zst "$artifact_dir/"
           (cd "$artifact_dir" && sha256sum ./*.pkg.tar.zst > RBC-Map-1.0.4-arch.sha256)
           command -v rbc-map
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
+          install -o builder -m 600 /dev/null "$artifact_dir/installed-self-check.txt"
+          runuser -u builder -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
-          timeout 60 rbc-map --self-check-gui=negative
+          runuser -u builder -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
+          runuser -u builder -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
+          runuser -u builder -- timeout 60 rbc-map --self-check-gui=negative
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-arch-1.0.4
