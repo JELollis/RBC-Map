@@ -148,7 +148,7 @@ jobs:
           Section: games
           Priority: optional
           Architecture: amd64
-          Depends: libxcb-cursor0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-shape0, libxcb-xfixes0, libxcb-xkb1, libxkbcommon0, libxkbcommon-x11-0, libx11-xcb1, libnss3, libglib2.0-0, libdbus-1-3, libfontconfig1, libegl1, libgl1, libasound2 | libasound2t64, libxcomposite1, libxdamage1, libxrandr2, libxtst6, libxkbfile1, libxshmfence1, libdrm2, libgbm1, libsecret-1-0, dbus-user-session
+          Depends: libstdc++6, libgcc-s1, libxcb-cursor0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-shape0, libxcb-xfixes0, libxcb-xkb1, libxkbcommon0, libxkbcommon-x11-0, libx11-xcb1, libnss3, libglib2.0-0 | libglib2.0-0t64, libdbus-1-3, libfontconfig1, libegl1, libgl1, libasound2 | libasound2t64, libxcomposite1, libxdamage1, libxrandr2, libxtst6, libxkbfile1, libxshmfence1, libdrm2, libgbm1, libsecret-1-0, dbus-user-session
           Recommends: gnome-keyring | kwalletmanager
           Maintainer: RBC Community Map Team <rbc-map@users.noreply.github.com>
           Description: RBC Community Map desktop application
@@ -166,6 +166,41 @@ jobs:
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
           timeout 60 rbc-map --self-check-gui=negative
+      - name: Validate Debian package on clean Ubuntu 24.04
+        run: |
+          docker run --rm -i --shm-size=256m \
+            --mount "type=bind,source=$PWD/build/deb/artifacts,target=/package,readonly" \
+            --env DEBIAN_FRONTEND=noninteractive ubuntu:24.04 sh -s <<'NOBLE'
+          set -eu
+          (cd /package && sha256sum --check RBC-Map-1.0.4-amd64.deb.sha256)
+          apt-get update
+          apt-get install -y --no-install-recommends /package/RBC-Map-1.0.4-amd64.deb
+
+          # Verify the install before test dependencies can supply missing libraries.
+          bundle=/opt/rbc-map
+          bundled_runtime=$(find "$bundle" \
+            \( -name 'libstdc++.so*' -o -name 'libgcc_s.so*' \
+               -o -name 'libglib-2.0.so*' -o -name 'libgio-2.0.so*' \
+               -o -name 'libgobject-2.0.so*' -o -name 'libgmodule-2.0.so*' \
+               -o -name 'libgthread-2.0.so*' -o -name 'libgbm.so*' \) -print -quit)
+          if [ -n "$bundled_runtime" ]; then
+            echo "Unexpected bundled Linux runtime: $bundled_runtime" >&2
+            exit 1
+          fi
+          helper=$(find "$bundle" -name QtWebEngineProcess -print -quit)
+          test -n "$helper"
+          LD_LIBRARY_PATH="$bundle:$bundle/PySide6/Qt/lib" \
+            ldd -v "$bundle/RBC Community Map" "$helper" > /tmp/linux-linkage.txt
+          if grep -F 'not found' /tmp/linux-linkage.txt; then
+            exit 1
+          fi
+
+          apt-get install -y --no-install-recommends xvfb xauth dbus-x11 gnome-keyring libgl1-mesa-dri
+          useradd --create-home smoke
+          cd /home/smoke
+          runuser -u smoke -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ \
+            xvfb-run -a env QT_QPA_PLATFORM=xcb rbc-map --self-check-gui
+          NOBLE
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-deb-1.0.4
@@ -269,7 +304,7 @@ jobs:
           Summary: RBC Community Map desktop application
           License: Apache-2.0
           BuildArch: x86_64
-          Requires: xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 libxkbcommon libXcomposite libXdamage libXrandr libXtst libX11-xcb libxkbfile libxshmfence libdrm nss alsa-lib mesa-libEGL mesa-libgbm libsecret
+          Requires: libstdc++ libgcc glib2 xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 libxkbcommon libXcomposite libXdamage libXrandr libXtst libX11-xcb libxkbfile libxshmfence libdrm nss alsa-lib mesa-libEGL mesa-libgbm libsecret
           %description
           RBC Community Map desktop application.
           %prep
@@ -345,7 +380,7 @@ jobs:
           pkgdesc='RBC Community Map desktop application'
           arch=('x86_64')
           license=('Apache')
-          depends=('xcb-util-cursor' 'xcb-util-wm' 'xcb-util-image' 'xcb-util-keysyms' 'xcb-util-renderutil' 'libxkbcommon-x11' 'libxkbcommon' 'libxcomposite' 'libxdamage' 'libxrandr' 'libxtst' 'libxkbfile' 'libxshmfence' 'libdrm' 'nss' 'alsa-lib' 'mesa' 'libsecret')
+          depends=('libstdc++' 'libgcc' 'glib2' 'xcb-util-cursor' 'xcb-util-wm' 'xcb-util-image' 'xcb-util-keysyms' 'xcb-util-renderutil' 'libxkbcommon-x11' 'libxkbcommon' 'libxcomposite' 'libxdamage' 'libxrandr' 'libxtst' 'libxkbfile' 'libxshmfence' 'libdrm' 'nss' 'alsa-lib' 'mesa' 'libsecret')
           optdepends=('gnome-keyring: Secret Service credential storage' 'kwallet: KDE credential storage')
           options=('!strip' '!debug')
           package() {
