@@ -998,7 +998,11 @@ under 0.14.0, plus:
 ### 📘 Documentation
 - Refreshed the README, help documentation, and screenshots for the release.
 
-## Unreleased — on `dev` (target 1.0.4)
+## Version 1.0.5 — Keyring credentials, packaged installers & fixes
+
+The first release with packaged installers (Windows, macOS, Debian/Ubuntu,
+Fedora and Arch). Development versions 1.0.3 and 1.0.4 lived only on `dev` and
+were never released separately; their changes ship here as 1.0.5.
 
 ### 🔐 Saved sign-in and credential storage
 - Characters without a saved session cookie now submit the saved credentials
@@ -1052,6 +1056,7 @@ under 0.14.0, plus:
   buttons.
 
 ### 🛠️ Maintenance
+- Bumped the version to 1.0.5; the entry point is now `main_1.0.5.py`.
 - **Shopping List Tool:** changing the Charisma level now reloads the
   Available Items list at the selected discount prices instead of only
   repricing items already on the list, so prices update even with an

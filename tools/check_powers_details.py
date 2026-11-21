@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Type
 from unittest.mock import Mock
 
-MAIN = Path(__file__).resolve().parents[1] / "main_1.0.4.py"
+MAIN = Path(__file__).resolve().parents[1] / "main_1.0.5.py"
 
 _QT_WIDGET_NAMES = (
     "QApplication", "QDialog", "QHBoxLayout", "QLabel", "QListWidget",
