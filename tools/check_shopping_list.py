@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN = ROOT / "main_1.0.4.py"
+MAIN = ROOT / "main_1.0.5.py"
 
 PRICE_COLUMNS = ("base_price", "charisma_level_1", "charisma_level_2", "charisma_level_3")
 

@@ -59,7 +59,7 @@ sudo apt install -y python3 python3-pip python3-venv \
 <pre><code>python3 -m venv ~/.venvs/rbc-map
 ~/.venvs/rbc-map/bin/python -m pip install --upgrade pip
 ~/.venvs/rbc-map/bin/python -m pip install -r requirements.txt
-~/.venvs/rbc-map/bin/python main_1.0.4.py</code></pre>
+~/.venvs/rbc-map/bin/python main_1.0.5.py</code></pre>
 <p>Using a virtual environment avoids conflicts with a distribution-managed Python. If the distribution blocks system-wide pip installation, do not remove that protection; use the virtual environment instead. <code>--break-system-packages</code> is appropriate only for a disposable test machine.</p>
 
 <h2>Package-name alternatives</h2>
@@ -76,7 +76,7 @@ sudo apt install -y python3 python3-pip python3-venv \
 <h2>Credential-store fallback</h2>
 <div class="warning"><strong>Warning:</strong> the SQLite profile stores saved passwords and session cookies in plaintext. Use it only when the OS credential store cannot be made available, and do not share or commit its data directory.</div>
 <pre><code>source ~/.venvs/rbc-map/bin/activate
-RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.4.py</code></pre>
+RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.5.py</code></pre>
 <p>This uses a separate <code>RBC-Map-SQLite</code> data directory. Add the characters again in that profile. Remove the environment variable to return to the normal keyring-backed profile.</p>
 
 <h2>Virtual machines and software rendering</h2>
@@ -84,7 +84,7 @@ RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.4.py</code></pre>
 
 <h2>Quick verification</h2>
 <pre><code>~/.venvs/rbc-map/bin/python -c "import PySide6, keyring; print(PySide6.__version__); print(keyring.get_keyring())"
-~/.venvs/rbc-map/bin/python -m py_compile main_1.0.4.py
+~/.venvs/rbc-map/bin/python -m py_compile main_1.0.5.py
 ~/.venvs/rbc-map/bin/python tools/check_credential_store.py</code></pre>
 <p>Run the checks from a source checkout. A working Mint setup normally reports a chained keyring containing Secret Service/libsecret backends. The credential-store checker uses fakes and does not replace a live GUI sign-in test.</p>
 </body>

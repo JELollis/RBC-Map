@@ -42,6 +42,6 @@ jobs:
         run: python tools/check_legacy_migration.py
       - name: Verify release tree essentials
         run: |
-          test -f main_1.0.4.py
+          test -f main_1.0.5.py
           test -d images
           test -f requirements.txt
