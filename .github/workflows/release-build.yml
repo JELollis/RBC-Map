@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ inputs.source_ref || github.ref }}
       - id: resolve
         run: echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
@@ -37,6 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ needs.resolve.outputs.source_sha }}
       - uses: actions/setup-python@v5
         with:
@@ -115,6 +117,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ needs.resolve.outputs.source_sha }}
       - uses: actions/setup-python@v5
         with:
@@ -185,6 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ needs.resolve.outputs.source_sha }}
       - uses: actions/setup-python@v5
         with:
@@ -225,6 +229,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ needs.resolve.outputs.source_sha }}
       - name: Install Fedora build dependencies
         run: dnf install -y python3 python3-pip gcc gcc-c++ make rpm-build libxcb libxkbcommon nss alsa-lib mesa-libEGL mesa-libgbm libXcomposite libXdamage libXrandr libXtst libX11-xcb libxkbfile libxshmfence libdrm gnome-keyring libsecret dbus-daemon dbus-tools xdg-utils
@@ -304,6 +309,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          persist-credentials: false
           ref: ${{ needs.resolve.outputs.source_sha }}
       - name: Install Arch build dependencies
         run: pacman -Syu --noconfirm python python-pip uv base-devel libxcb libxkbcommon libxcomposite libxdamage libxrandr libxtst libxkbfile libxshmfence libdrm nss alsa-lib mesa dbus gnome-keyring libsecret xdg-utils
