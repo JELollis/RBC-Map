@@ -7,6 +7,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,20 +19,66 @@ MAIN = ROOT / "main_1.0.4.py"
 BUILDING_TABLES = ("banks", "taverns", "transits", "userbuildings", "placesofinterest")
 
 
-def _provision_qt_widgets():
-    """Install Qt native libraries on CI runners, then import the widgets."""
+_QT_PROVISION_MARKER = Path("/tmp/.rbc-map-qt-native-provisioned")
+
+
+def _provision_qt_native_libs() -> bool:
+    """Install Qt native libraries on CI runners, at most once per runner."""
+    if _QT_PROVISION_MARKER.exists():
+        return True
     try:
-        subprocess.run(["sudo", "apt-get", "update"], check=True, capture_output=True)
+        subprocess.run(["sudo", "apt-get", "update"], check=True)
         subprocess.run(
             ["sudo", "apt-get", "install", "-y",
              "libegl1", "libgl1", "libxkbcommon0", "libfontconfig1"],
-            check=True, capture_output=True,
+            check=True,
         )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"Qt native library provisioning failed: {exc}")
+        return False
+    _QT_PROVISION_MARKER.touch()
+    return True
+
+
+def _bind_qt_widgets():
+    try:
         from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
-    except (OSError, subprocess.CalledProcessError, ImportError) as exc:
-        print(f"Qt provisioning failed: {exc}")
+    except (ImportError, OSError) as exc:
+        print(f"Qt import failed: {exc}")
         return None
     return QApplication, QTableWidget, QTableWidgetItem, QTabWidget
+
+
+_QT_PROBE = (
+    "import os; os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen');"
+    "from PySide6.QtCore import Qt;"
+    "from PySide6.QtWidgets import QApplication;"
+    "app = QApplication.instance() or QApplication([])"
+)
+
+
+def _probe_qt() -> bool:
+    """Verify Qt imports and the offscreen plugin loads, in a subprocess so
+    a platform-plugin abort cannot kill this checker before provisioning."""
+    result = subprocess.run(
+        [sys.executable, "-c", _QT_PROBE],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"Qt offscreen probe failed (exit {result.returncode}): {result.stderr.strip()[-400:]}")
+        return False
+    return True
+
+
+def _qt_widgets():
+    """Return the Qt widget classes when Qt works; provision and re-verify on CI."""
+    widgets = _bind_qt_widgets() if _probe_qt() else None
+    if widgets is not None:
+        return widgets
+    if not os.environ.get("CI") or not _provision_qt_native_libs():
+        return None
+    widgets = _bind_qt_widgets() if _probe_qt() else None
+    return widgets
 
 
 class FakeRequests:
@@ -315,19 +362,13 @@ def shops_remain_available_without_coordinates(root: Path) -> None:
 
 
 def shop_viewer_displays_unknown_coordinates_as_blank(_root: Path) -> None:
-    widgets = None
-    try:
-        from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
-        widgets = (QApplication, QTableWidget, QTableWidgetItem, QTabWidget)
-    except (ImportError, OSError) as exc:
+    widgets = _qt_widgets()
+    if widgets is None:
+        message = "shop_viewer_displays_unknown_coordinates_as_blank skipped: Qt unavailable"
         if os.environ.get("CI"):
-            widgets = _provision_qt_widgets()
-        if widgets is None:
-            message = f"shop_viewer_displays_unknown_coordinates_as_blank skipped: Qt unavailable ({exc})"
-            if os.environ.get("CI"):
-                raise SystemExit(f"{message} (CI requires Qt; install native Qt libraries)")
-            print(message)
-            return
+            raise SystemExit(f"{message} (CI requires Qt; install native Qt libraries)")
+        print(message)
+        return
     QApplication, QTableWidget, QTableWidgetItem, QTabWidget = widgets
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
