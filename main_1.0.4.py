@@ -10477,11 +10477,11 @@ def _self_check(output_path: str | None = None) -> int:
     entry_point_names = sorted(entry_point.name for entry_point in entry_points)
 
     expected_backends = {
-        "nt": ("Windows", "keyring.backends.Windows"),
+        "win32": ("Windows", "keyring.backends.Windows"),
         "darwin": ("macOS", "keyring.backends.macOS"),
     }.get(sys.platform, ("SecretService", "libsecret", "chainer"))
     import_errors = []
-    for module_name in expected_backends[1:] if sys.platform in {"nt", "darwin"} else (
+    for module_name in expected_backends[1:] if sys.platform in {"win32", "darwin"} else (
         "keyring.backends.SecretService",
         "keyring.backends.libsecret",
         "keyring.backends.chainer",
@@ -10518,7 +10518,7 @@ def _self_check(output_path: str | None = None) -> int:
     )
     # Linux CI usually has no unlocked Secret Service collection. The package
     # check verifies bundled backends there; live availability is tested on Mint.
-    if sys.platform in {"nt", "darwin"}:
+    if sys.platform in {"win32", "darwin"}:
         valid = valid and not backend_name.endswith("fail.Keyring")
     return 0 if valid else 1
 

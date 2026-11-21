@@ -114,6 +114,12 @@ and Linux/macOS artifacts with platform-appropriate onedir packaging. Every
 frozen artifact runs a self-check for its version, resource directories, and
 keyring backend before it is uploaded.
 
+### Run the auto-login regression checks
+
+Install Node.js and ensure the `node` command is on your PATH before running
+`python tools/check_auto_login.py`. The checker uses Node.js to test the generated
+login-form JavaScript. Node.js is only needed for this test.
+
 ## Code signing policy
 
 Windows release artifacts may use the SignPath Foundation open-source signing
@@ -125,16 +131,11 @@ unsigned and their release notes document the SmartScreen or Gatekeeper steps.
   changes reviewed through pull requests.
 - Approver: Jonathan Lollis (`JELollis`), the repository owner, approves each
   signing request and release artifact.
-- Privacy: this program does not transfer information to other networked
-  systems unless specifically requested by the user or the person installing
-  or operating it. Optional community location reporting is disclosed in the
-  Data and privacy section and is disabled unless the user enables it.
-
-### Run the auto-login regression checks
-
-Install Node.js and ensure the `node` command is on your PATH before running
-`python tools/check_auto_login.py`. The checker uses Node.js to test the generated
-login-form JavaScript. Node.js is only needed for this test.
+- Privacy: apart from loading the RavenBlack game website and downloading
+  public map data from the community update service, the program does not
+  transfer information to other networked systems unless the user enables
+  **Contribute Discovered Locations**. That feature is opt-in and disclosed
+  below.
 
 ## Data and privacy
 

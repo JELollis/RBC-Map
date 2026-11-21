@@ -2,12 +2,15 @@
 # Windows uses Nuitka because the project has historically produced fewer
 # Defender false positives with that toolchain.
 
+import sys
+import os
 from pathlib import Path
 
 from PyInstaller.utils.hooks import copy_metadata
 
 
 ROOT = Path(SPECPATH).parent.parent
+VERSION = os.environ.get("RBC_MAP_VERSION", "1.0.4")
 datas = [
     (str(ROOT / "images"), "images"),
     (str(ROOT / "css"), "css"),
@@ -71,8 +74,8 @@ if sys.platform == "darwin":
         icon=str(ROOT / "tools" / "packaging" / "macos" / "icon.icns"),
         bundle_identifier="com.jelollis.rbcommunitymap",
         info_plist={
-            "CFBundleShortVersionString": "1.0.4",
-            "CFBundleVersion": "1.0.4",
+            "CFBundleShortVersionString": VERSION,
+            "CFBundleVersion": VERSION,
             "NSHighResolutionCapable": True,
         },
     )
