@@ -45,6 +45,39 @@ def check_rejected_cookie_queues_password(tree: ast.Module) -> None:
     assert calls == [], "stale cookie-page callbacks must not start another login"
 
 
+def check_password_login_clears_pending_cookie(tree: ast.Module) -> None:
+    """Queueing a password login must invalidate a pending cookie check so a
+    stale callback cannot clobber the newer login attempt."""
+    methods = [
+        class_method(tree, "_queue_password_login"),
+        class_method(tree, "_handle_cookie_login_page"),
+    ]
+    namespace = {"logging": logging}
+    exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
+
+    calls: list[str] = []
+    fake = type("FakeWindow", (), {})()
+    fake._login_request_id = 4
+    fake.pending_login = False
+    fake._pending_login_character = None
+    fake._login_retry_count = 0
+    fake._pending_cookie_character = "Alice"
+    fake._pending_cookie_request_id = 4
+    fake.login_selected_character = lambda: calls.append("login")
+    fake._queue_password_login = lambda name: namespace["_queue_password_login"](fake, name)
+
+    # Bob's password login is queued while Alice's cookie check is pending.
+    namespace["_queue_password_login"](fake, "Bob")
+    assert fake._pending_cookie_character is None
+    assert fake._pending_cookie_request_id is None
+    # Alice's stale cookie-page callback then arrives.
+    namespace["_handle_cookie_login_page"](fake, 4, "Alice", True)
+
+    assert fake._pending_login_character == "Bob"
+    assert fake.pending_login is True
+    assert calls == [], "stale cookie callback must not start another login"
+
+
 def check_password_change_and_default_paths(tree: ast.Module) -> None:
     modify_source = ast.unparse(class_method(tree, "modify_character"))
     assert "active_cookie" in modify_source
@@ -106,6 +139,7 @@ def check_pending_map_state_initialized(tree: ast.Module) -> None:
 def main() -> int:
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
     check_rejected_cookie_queues_password(tree)
+    check_password_login_clears_pending_cookie(tree)
     check_password_change_and_default_paths(tree)
     check_login_detector_matches_injector(tree)
     check_login_finder_behavior(tree)

@@ -27,7 +27,7 @@ RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleywa
 ### Characters and controls
 - Store character login details locally and switch between characters.
 - Resize the navigation panel using its divider. The panel has a minimum width to keep the character buttons visible.
-- Sign in automatically with a saved password when no session cookie is available.
+- Sign in automatically with a saved password when no session cookie is available; stale sign-in callbacks from a previously selected character are discarded.
 - Restore destinations, themes, and other preferences between sessions.
 - Choose **WASD** or **arrow keys** for movement; movement shortcuts are suppressed while typing into input fields.
 

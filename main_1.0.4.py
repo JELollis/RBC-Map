@@ -4996,6 +4996,8 @@ class RBCCommunityMap(QMainWindow):
         self.pending_login = True
         self._pending_login_character = character_name
         self._login_retry_count = 0
+        self._pending_cookie_character = None
+        self._pending_cookie_request_id = None
 
     def login_selected_character(self, request_id=None) -> None:
         """Auto-fill and submit the RavenBlack login form for the selected character.

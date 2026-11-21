@@ -1008,7 +1008,9 @@ under 0.14.0, plus:
 - Asynchronous login callbacks and retries are bound to a per-request ID so
   stale results from a previous character cannot clear or consume the
   current login's state; switching to a character without a saved cookie
-  signs out first so another session is not reused.
+  signs out first so another session is not reused. Queueing a newer
+  password login also invalidates any pending saved-cookie check, so a
+  stale callback cannot displace the newer attempt.
 - Passwords and session-cookie values are stored through the operating
   system credential store (`keyring`) instead of plaintext SQLite values,
   with legacy-data migration on startup. Entries are scoped by a persistent
