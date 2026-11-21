@@ -11,27 +11,19 @@ from pathlib import Path
 from typing import Type
 from unittest.mock import Mock
 
-try:
-    from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import (
-        QApplication, QDialog, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-        QPushButton, QTextEdit, QVBoxLayout,
-    )
-    _QT_AVAILABLE = True
-except (ImportError, OSError) as _qt_exc:
-    _QT_AVAILABLE = False
-    _QT_IMPORT_ERROR = _qt_exc
-
 MAIN = Path(__file__).resolve().parents[1] / "main_1.0.4.py"
 
 _QT_WIDGET_NAMES = (
     "QApplication", "QDialog", "QHBoxLayout", "QLabel", "QListWidget",
     "QListWidgetItem", "QPushButton", "QTextEdit", "QVBoxLayout",
 )
+_QT_PROVISION_MARKER = Path("/tmp/.rbc-map-qt-native-provisioned")
 
 
-def _provision_qt() -> bool:
-    """Install Qt native libraries on CI runners, then retry the imports."""
+def _provision_qt_native_libs() -> bool:
+    """Install Qt native libraries on CI runners, at most once per runner."""
+    if _QT_PROVISION_MARKER.exists():
+        return True
     try:
         subprocess.run(["sudo", "apt-get", "update"], check=True, capture_output=True)
         subprocess.run(
@@ -39,20 +31,33 @@ def _provision_qt() -> bool:
              "libegl1", "libgl1", "libxkbcommon0", "libfontconfig1"],
             check=True, capture_output=True,
         )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        print(f"Qt native library provisioning failed: {exc}")
+        return False
+    _QT_PROVISION_MARKER.touch()
+    return True
+
+
+def _bind_qt() -> bool:
+    try:
         from PySide6 import QtCore, QtWidgets
-    except (OSError, subprocess.CalledProcessError, ImportError) as exc:
-        print(f"Qt provisioning failed: {exc}")
+    except (ImportError, OSError) as exc:
+        print(f"Qt import failed: {exc}")
         return False
     globals().update(Qt=QtCore.Qt, **{name: getattr(QtWidgets, name) for name in _QT_WIDGET_NAMES})
     return True
 
 
+def _ensure_qt() -> bool:
+    """Provision native Qt libraries before any Qt use on CI, then bind them."""
+    if os.environ.get("CI"):
+        _provision_qt_native_libs()
+    return _bind_qt()
+
+
 def main() -> None:
-    global _QT_AVAILABLE
-    if not _QT_AVAILABLE and os.environ.get("CI"):
-        _QT_AVAILABLE = _provision_qt()
-    if not _QT_AVAILABLE:
-        message = f"powers details checks skipped: Qt unavailable ({_QT_IMPORT_ERROR})"
+    if not _ensure_qt():
+        message = "powers details checks skipped: Qt unavailable"
         if os.environ.get("CI"):
             raise SystemExit(f"{message} (CI requires Qt; install native Qt libraries)")
         print(message)
