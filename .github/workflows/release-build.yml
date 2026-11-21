@@ -166,33 +166,23 @@ jobs:
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
           timeout 60 rbc-map --self-check-gui=negative
-      - uses: actions/upload-artifact@v4
-        with:
-          name: RBC-Map-deb-1.0.4
-          path: build/deb/artifacts/*
-
-  deb-noble-smoke:
-    name: Debian package smoke test on Ubuntu 24.04
-    runs-on: ubuntu-24.04
-    needs: deb
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: RBC-Map-deb-1.0.4
-      - name: Install the Ubuntu 22.04-built package with APT
+      - name: Validate Debian package on clean Ubuntu 24.04
         run: |
-          sha256sum --check RBC-Map-1.0.4-amd64.deb.sha256
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ./RBC-Map-1.0.4-amd64.deb xvfb xauth dbus-x11 gnome-keyring libgl1-mesa-dri
-      - name: Verify system runtime libraries and X11 rendering
-        run: |
+          docker run --rm -i --shm-size=256m \
+            --mount "type=bind,source=$PWD/build/deb/artifacts,target=/package,readonly" \
+            --env DEBIAN_FRONTEND=noninteractive ubuntu:24.04 sh -s <<'NOBLE'
           set -eu
+          (cd /package && sha256sum --check RBC-Map-1.0.4-amd64.deb.sha256)
+          apt-get update
+          apt-get install -y --no-install-recommends /package/RBC-Map-1.0.4-amd64.deb
+
+          # Verify the install before test dependencies can supply missing libraries.
           bundle=/opt/rbc-map
           bundled_runtime=$(find "$bundle" \
             \( -name 'libstdc++.so*' -o -name 'libgcc_s.so*' \
                -o -name 'libglib-2.0.so*' -o -name 'libgio-2.0.so*' \
                -o -name 'libgobject-2.0.so*' -o -name 'libgmodule-2.0.so*' \
-               -o -name 'libgthread-2.0.so*' \) -print -quit)
+               -o -name 'libgthread-2.0.so*' -o -name 'libgbm.so*' \) -print -quit)
           if [ -n "$bundled_runtime" ]; then
             echo "Unexpected bundled Linux runtime: $bundled_runtime" >&2
             exit 1
@@ -200,12 +190,21 @@ jobs:
           helper=$(find "$bundle" -name QtWebEngineProcess -print -quit)
           test -n "$helper"
           LD_LIBRARY_PATH="$bundle:$bundle/PySide6/Qt/lib" \
-            ldd -v "$bundle/RBC Community Map" "$helper" > linux-linkage.txt
-          if grep -F 'not found' linux-linkage.txt; then
+            ldd -v "$bundle/RBC Community Map" "$helper" > /tmp/linux-linkage.txt
+          if grep -F 'not found' /tmp/linux-linkage.txt; then
             exit 1
           fi
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ \
+
+          apt-get install -y --no-install-recommends xvfb xauth dbus-x11 gnome-keyring libgl1-mesa-dri
+          useradd --create-home smoke
+          cd /home/smoke
+          runuser -u smoke -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ \
             xvfb-run -a env QT_QPA_PLATFORM=xcb rbc-map --self-check-gui
+          NOBLE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RBC-Map-deb-1.0.4
+          path: build/deb/artifacts/*
 
   macos:
     name: macOS (${{ matrix.arch }})

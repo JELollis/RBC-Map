@@ -47,7 +47,7 @@ if sys.platform.startswith("linux"):
     host_runtime_patterns = (
         "libstdc++.so*", "libgcc_s.so*", "libglib-2.0.so*",
         "libgio-2.0.so*", "libgobject-2.0.so*", "libgmodule-2.0.so*",
-        "libgthread-2.0.so*",
+        "libgthread-2.0.so*", "libgbm.so*",
     )
     a.binaries = [
         binary for binary in a.binaries
