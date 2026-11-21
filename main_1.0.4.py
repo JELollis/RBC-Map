@@ -10516,10 +10516,10 @@ def _self_check(output_path: str | None = None) -> int:
         and required_entry_point.intersection(entry_point_names)
         and not import_errors
     )
-    # Linux CI usually has no unlocked Secret Service collection. The package
-    # check verifies bundled backends there; live availability is tested on Mint.
-    if sys.platform in {"win32", "darwin"}:
-        valid = valid and not backend_name.endswith("fail.Keyring")
+    # A frozen package must never silently fall back to fail.Keyring. Linux
+    # package jobs verify backend availability through their installed smoke test;
+    # live unlocked-collection behavior remains covered on the Mint VM.
+    valid = valid and not backend_name.endswith("fail.Keyring")
     return 0 if valid else 1
 
 
