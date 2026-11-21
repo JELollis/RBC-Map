@@ -1082,6 +1082,13 @@ under 0.14.0, plus:
   directory and database file permissions to `0700`/`0600`, and added a real
   X11 (Xvfb) smoke check for installed Linux packages alongside the existing
   offscreen check.
+- Added the historical `RBC Community Map` Program Files folder name and
+  UAC VirtualStore locations to Windows legacy-data migration so upgrades
+  from 32-bit, older, and virtualized installs retain their saved characters
+  and settings.
+- Strengthened the GUI self-check to verify WebEngine actually paints pixels
+  (shown window, exposed handle, non-blank frame) on X11/Windows/macOS; the
+  offscreen Linux run keeps a load-only mode.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application

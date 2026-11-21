@@ -278,15 +278,23 @@ def windows_install_dirs_are_scanned(t: Path):
     try:
         os.environ["LOCALAPPDATA"] = str(t / "Local")
         os.environ["ProgramFiles"] = str(t / "Program Files")
-        os.environ.pop("ProgramFiles(x86)", None)
+        os.environ["ProgramFiles(x86)"] = str(t / "Program Files (x86)")
         # Real detection on Windows; forced nt branch elsewhere.
         dirs = legacy_dirs_fn() if os.name == "nt" else legacy_dirs_fn(is_windows=True)
         # Startup's actual call: the default must include Windows paths only on nt.
         native = legacy_dirs_fn()
+        virtual = local / "VirtualStore"
         windows_paths = {
             local / "RBC Community Map" / "sessions",
             local / "RBCCommunityMap" / "sessions",
-            src,
+            t / "Program Files" / "RBC-Map" / "sessions",
+            t / "Program Files" / "RBC Community Map" / "sessions",
+            t / "Program Files (x86)" / "RBC-Map" / "sessions",
+            t / "Program Files (x86)" / "RBC Community Map" / "sessions",
+            virtual / "Program Files" / "RBC Community Map" / "sessions",
+            virtual / "Program Files" / "RBC-Map" / "sessions",
+            virtual / "Program Files (x86)" / "RBC Community Map" / "sessions",
+            virtual / "Program Files (x86)" / "RBC-Map" / "sessions",
         }
         assert bool(windows_paths & set(native)) == (os.name == "nt"), native
     finally:
@@ -295,16 +303,49 @@ def windows_install_dirs_are_scanned(t: Path):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+    virtual = local / "VirtualStore"
     expected = [
         local / "RBC Community Map" / "sessions",
         local / "RBCCommunityMap" / "sessions",
-        src,
+        t / "Program Files" / "RBC-Map" / "sessions",
+        t / "Program Files" / "RBC Community Map" / "sessions",
+        t / "Program Files (x86)" / "RBC-Map" / "sessions",
+        t / "Program Files (x86)" / "RBC Community Map" / "sessions",
+        virtual / "Program Files" / "RBC Community Map" / "sessions",
+        virtual / "Program Files" / "RBC-Map" / "sessions",
+        virtual / "Program Files (x86)" / "RBC Community Map" / "sessions",
+        virtual / "Program Files (x86)" / "RBC-Map" / "sessions",
     ]
     for path in expected:
         assert path in dirs, f"{path} missing from {dirs}"
     msg = migrate(t / "new", dirs)
     assert msg and "Migrated" in msg, msg
     assert names(t / "new/rbc_map_data.db") == ["Carol"]
+
+    # Realistic 0.12-0.13 case: DB under Program Files (x86)\RBC Community Map.
+    # migrate() picks the newest populated legacy DB, so give it a later mtime.
+    legacy_x86 = t / "Program Files (x86)" / "RBC Community Map" / "sessions"
+    make_db(legacy_x86 / "rbc_map_data.db", ["Dave"])
+    future = os.stat(src / "rbc_map_data.db").st_mtime + 60
+    os.utime(legacy_x86 / "rbc_map_data.db", (future, future))
+    msg = migrate(t / "new2", dirs)
+    assert msg and "Migrated" in msg, msg
+    assert names(t / "new2/rbc_map_data.db") == ["Dave"]
+    # Legacy sources are read-only: both source databases stay unchanged.
+    assert names(src / "rbc_map_data.db") == ["Carol"], "Program Files source modified"
+    assert names(legacy_x86 / "rbc_map_data.db") == ["Dave"], "Program Files (x86) source modified"
+
+    # UAC-virtualized install: VirtualStore competies with the Program Files
+    # databases; the newest populated DB wins, as at real startup.
+    vsrc = virtual / "Program Files (x86)" / "RBC Community Map" / "sessions"
+    make_db(vsrc / "rbc_map_data.db", ["Eve"])
+    newest = os.stat(legacy_x86 / "rbc_map_data.db").st_mtime + 60
+    os.utime(vsrc / "rbc_map_data.db", (newest, newest))
+    assert vsrc in dirs
+    msg = migrate(t / "new3", dirs)
+    assert msg and "Migrated" in msg, msg
+    assert names(t / "new3/rbc_map_data.db") == ["Eve"]
+    assert names(vsrc / "rbc_map_data.db") == ["Eve"], "VirtualStore source modified"
 
 
 def posix_data_permissions_are_private(t: Path):
