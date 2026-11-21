@@ -94,6 +94,8 @@ Starting with the 1.0.4 release, each release will publish a packaged build
 with an installer on the [releases](https://github.com/JELollis/RBC-Map/releases)
 page; installers bundle everything the app needs and require no Python setup.
 For macOS, choose the `arm64` DMG for Apple Silicon or the `x86_64` DMG for Intel.
+On Debian-based Linux, install the downloaded package with
+`sudo apt install ./RBC-Map-1.0.4-amd64.deb` so APT can resolve the system runtime dependencies.
 
 ```bash
 python main_1.0.4.py

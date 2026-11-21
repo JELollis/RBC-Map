@@ -1099,6 +1099,8 @@ under 0.14.0, plus:
 - Build separate Apple Silicon and Intel macOS DMGs. In Arch CI, run the
   packaged-app smoke checks as the unprivileged builder so GNOME Keyring
   starts inside the build container.
+- Use the host C++ and GLib runtimes in Linux packages to avoid graphics-driver
+  and desktop-module conflicts. Check the Debian installer on Ubuntu 24.04.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application
