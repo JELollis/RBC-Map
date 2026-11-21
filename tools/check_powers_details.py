@@ -25,11 +25,11 @@ def _provision_qt_native_libs() -> bool:
     if _QT_PROVISION_MARKER.exists():
         return True
     try:
-        subprocess.run(["sudo", "apt-get", "update"], check=True, capture_output=True)
+        subprocess.run(["sudo", "apt-get", "update"], check=True)
         subprocess.run(
             ["sudo", "apt-get", "install", "-y",
              "libegl1", "libgl1", "libxkbcommon0", "libfontconfig1"],
-            check=True, capture_output=True,
+            check=True,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         print(f"Qt native library provisioning failed: {exc}")
@@ -50,8 +50,8 @@ def _bind_qt() -> bool:
 
 def _ensure_qt() -> bool:
     """Provision native Qt libraries before any Qt use on CI, then bind them."""
-    if os.environ.get("CI"):
-        _provision_qt_native_libs()
+    if os.environ.get("CI") and not _provision_qt_native_libs():
+        return False
     return _bind_qt()
 
 

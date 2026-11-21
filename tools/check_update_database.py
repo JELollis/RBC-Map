@@ -26,11 +26,11 @@ def _provision_qt_native_libs() -> bool:
     if _QT_PROVISION_MARKER.exists():
         return True
     try:
-        subprocess.run(["sudo", "apt-get", "update"], check=True, capture_output=True)
+        subprocess.run(["sudo", "apt-get", "update"], check=True)
         subprocess.run(
             ["sudo", "apt-get", "install", "-y",
              "libegl1", "libgl1", "libxkbcommon0", "libfontconfig1"],
-            check=True, capture_output=True,
+            check=True,
         )
     except (OSError, subprocess.CalledProcessError) as exc:
         print(f"Qt native library provisioning failed: {exc}")
@@ -41,8 +41,8 @@ def _provision_qt_native_libs() -> bool:
 
 def _qt_widgets():
     """Return the Qt widget classes, provisioning native libs first on CI."""
-    if os.environ.get("CI"):
-        _provision_qt_native_libs()
+    if os.environ.get("CI") and not _provision_qt_native_libs():
+        return None
     try:
         from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
     except (ImportError, OSError) as exc:
