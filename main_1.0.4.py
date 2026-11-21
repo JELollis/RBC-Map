@@ -139,6 +139,7 @@ import webbrowser
 import hashlib
 from concurrent.futures import Future, TimeoutError
 from datetime import datetime, timedelta, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from threading import Event, Lock, RLock, Thread
 from typing import TYPE_CHECKING, Tuple, Type, TypeVar, cast
@@ -152,6 +153,10 @@ from PySide6 import QtCore
 
 def _application_dir() -> Path:
     """Return the directory containing the source or packaged executable."""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # PyInstaller stores onedir data under its bundle directory, which is
+        # not the same directory as the executable on macOS.
+        return Path(sys._MEIPASS).resolve()
     if getattr(sys, "frozen", False) or "__compiled__" in globals():
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
@@ -4043,7 +4048,9 @@ class RBCCommunityMap(QMainWindow):
 
         # Compass Icon Button
         self.compass_button = QPushButton()
-        self.compass_button.setIcon(PySide6.QtGui.QIcon(PySide6.QtGui.QPixmap("images/compass.png")))
+        self.compass_button.setIcon(
+            PySide6.QtGui.QIcon(PySide6.QtGui.QPixmap(str(IMAGES_DIR / "compass.png")))
+        )
         self.compass_button.setIconSize(QSize(28, 28))  # Adjust as needed
         self.compass_button.setFixedSize(34, 34)
         self.compass_button.setStyleSheet("background-color: transparent; border: none;")
@@ -4712,19 +4719,18 @@ class RBCCommunityMap(QMainWindow):
         - Windows: .chm file
         - macOS/Linux: .html file
         """
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        help_dir = os.path.join(base_dir, "docs", "help")
+        help_dir = APP_DIR / "docs" / "help"
         system = platform.system()
 
         if system == "Windows":
-            help_path = os.path.join(help_dir, "RBC Community Map Help.chm")
-            if os.path.exists(help_path):
-                os.startfile(help_path)
+            help_path = help_dir / "RBC Community Map Help.chm"
+            if help_path.exists():
+                os.startfile(str(help_path))
                 return
         else:
-            html_path = os.path.join(help_dir, "RBC_Map_Help.html")
-            if os.path.exists(html_path):
-                webbrowser.open(f"file://{html_path}")
+            html_path = help_dir / "RBC_Map_Help.html"
+            if html_path.exists():
+                webbrowser.open(html_path.as_uri())
                 return
 
         # If neither file is found
@@ -10460,7 +10466,91 @@ class CompassOverlay(QDialog):
 # Main Entry Point
 # -----------------------
 
+def _self_check(output_path: str | None = None) -> int:
+    """Validate frozen resources and keyring packaging without starting Qt."""
+    backend = keyring.get_keyring()
+    backend_name = f"{type(backend).__module__}.{type(backend).__name__}"
+    try:
+        entry_points = importlib_metadata.entry_points(group="keyring.backends")
+    except TypeError:  # Python versions with the older entry-points API
+        entry_points = importlib_metadata.entry_points().get("keyring.backends", ())
+    entry_point_names = sorted(entry_point.name for entry_point in entry_points)
+
+    expected_backends = {
+        "win32": ("Windows", "keyring.backends.Windows"),
+        "darwin": ("macOS", "keyring.backends.macOS"),
+    }.get(sys.platform, ("SecretService", "libsecret", "chainer"))
+    import_errors = []
+    for module_name in expected_backends[1:] if sys.platform in {"win32", "darwin"} else (
+        "keyring.backends.SecretService",
+        "keyring.backends.libsecret",
+        "keyring.backends.chainer",
+    ):
+        try:
+            __import__(module_name)
+        except Exception as exc:  # pragma: no cover - platform-specific imports
+            import_errors.append(f"{module_name}: {exc}")
+
+    resources = {
+        "images": IMAGES_DIR,
+        "css": APP_DIR / "css",
+        "help": APP_DIR / "docs" / "help",
+    }
+    lines = [
+        f"version={VERSION_NUMBER}",
+        f"keyring_backend={backend_name}",
+        f"keyring_entry_points={','.join(entry_point_names)}",
+        f"app_dir={APP_DIR}",
+        *(f"resource_{name}={path.exists()}:{path}" for name, path in resources.items()),
+        f"backend_import_errors={';'.join(import_errors)}",
+    ]
+    output = "\n".join(lines) + "\n"
+    if output_path:
+        Path(output_path).write_text(output, encoding="utf-8")
+    elif getattr(sys, "stdout", None) is not None:
+        print(output, end="")
+
+    required_entry_point = set(expected_backends[:1])
+    valid = (
+        all(path.exists() for path in resources.values())
+        and required_entry_point.intersection(entry_point_names)
+        and not import_errors
+    )
+    # A frozen package must never silently fall back to fail.Keyring. Linux
+    # package jobs verify backend availability through their installed smoke test;
+    # live unlocked-collection behavior remains covered on the Mint VM.
+    valid = valid and not backend_name.endswith("fail.Keyring")
+    return 0 if valid else 1
+
+
+def _gui_self_check() -> int:
+    """Load a blank page through Qt WebEngine and exit when it is ready."""
+    app = QApplication(sys.argv)
+    webview = QWebEngineView()
+    result = {"ok": False}
+
+    def finish(ok: bool) -> None:
+        result["ok"] = ok
+        app.quit()
+
+    webview.loadFinished.connect(finish)
+    webview.setUrl(QUrl("about:blank"))
+    QTimer.singleShot(20_000, app.quit)
+    app.exec()
+    webview.deleteLater()
+    return 0 if result["ok"] else 1
+
+
 def main() -> None:
+    self_check_path = next(
+        (arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--self-check=")),
+        None,
+    )
+    if "--self-check" in sys.argv or self_check_path:
+        raise SystemExit(_self_check(self_check_path))
+    if "--self-check-gui" in sys.argv:
+        raise SystemExit(_gui_self_check())
+
     app = QApplication(sys.argv)
 
     images_dir = APP_DIR / "images"

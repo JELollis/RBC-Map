@@ -109,13 +109,33 @@ For a packaged build, check the repository's [releases](https://github.com/JELol
 Packagers must include the monolithic `main_1.0.4.py` application and the
 platform-appropriate `keyring` backend modules. For frozen builds, verify that
 the selected backend (for example, Windows Credential Locker) is included and
-available at runtime.
+available at runtime. The release workflow builds Windows with Nuitka and NSIS,
+and Linux/macOS artifacts with platform-appropriate onedir packaging. Every
+frozen artifact runs a self-check for its version, resource directories, and
+keyring backend before it is uploaded.
 
 ### Run the auto-login regression checks
 
 Install Node.js and ensure the `node` command is on your PATH before running
 `python tools/check_auto_login.py`. The checker uses Node.js to test the generated
 login-form JavaScript. Node.js is only needed for this test.
+
+## Code signing policy
+
+Windows release artifacts may use the SignPath Foundation open-source signing
+program. **Free code signing provided by SignPath.io, certificate by SignPath
+Foundation.** Until acceptance is confirmed, Windows and macOS artifacts are
+unsigned and their release notes document the SmartScreen or Gatekeeper steps.
+
+- Committers and reviewers: authorized RBC-Map GitHub collaborators, with
+  changes reviewed through pull requests.
+- Approver: Jonathan Lollis (`JELollis`), the repository owner, approves each
+  signing request and release artifact.
+- Privacy: apart from loading the RavenBlack game website and downloading
+  public map data from the community update service, the program does not
+  transfer information to other networked systems unless the user enables
+  **Contribute Discovered Locations**. That feature is opt-in and disclosed
+  below.
 
 ## Data and privacy
 
@@ -129,12 +149,12 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 
 ## Versions and branches
 
-> **Looking for a stable build?** Use [`main`](https://github.com/JELollis/RBC-Map/tree/main) or the latest [release](https://github.com/JELollis/RBC-Map/releases). `dev` is the **beta** branch — it holds the newest work and may be less stable. `main` is the **stable** branch, and every numbered release is based on `main`.
+> **Looking for a stable build?** Use [`release`](https://github.com/JELollis/RBC-Map/tree/release) or the latest [release](https://github.com/JELollis/RBC-Map/releases). `dev` is the **beta** branch — it holds the newest work and may be less stable. `release` is the **stable** branch, and every numbered release is based on `release`.
 
 | Branch | Contents |
 | --- | --- |
 | `dev` | **Beta.** Active development, currently on 1.0.4 (`main_1.0.4.py`); bug fixes and feature work merge here through pull requests. |
-| `main` | **Stable.** Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. All releases are based on this branch. |
+| `release` | **Stable.** Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. All releases are based on `release`. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
 | `version/0.3.2` … `version/0.7.0` | Archived PyQt5 versions. |
@@ -145,7 +165,7 @@ Each `version/<number>` branch holds that version as `main_<number>.py`, with a
 README and changelog for that version. Branches are snapshots for reference and
 are not maintained.
 
-The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.4.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds.
+The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.4.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds from `release`.
 
 ## Repository layout
 
