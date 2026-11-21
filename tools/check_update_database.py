@@ -3,6 +3,7 @@
 import ast
 import gc
 import logging
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -84,6 +85,7 @@ def load_function(function_name: str):
         "fetch_location_update": lambda **kwargs: {},
         "DB_PATH": None,
         "BUILDING_CLASS_MAP": {},
+        "QTabWidget": object,
     }
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace[function_name], namespace
@@ -191,6 +193,8 @@ def make_database(path: Path) -> None:
                                  next_update TEXT, last_scraped TEXT);
             CREATE TABLE shops (Name TEXT PRIMARY KEY, "Column" TEXT, "Row" TEXT,
                                 next_update TEXT, last_scraped TEXT);
+            CREATE TABLE shop_items (shop_name TEXT, item_name TEXT, base_price INTEGER,
+                                     charisma_level_1 INTEGER, charisma_level_2 INTEGER, charisma_level_3 INTEGER);
             CREATE TABLE settings (setting_name TEXT PRIMARY KEY, setting_value TEXT);
             CREATE TABLE banks (Name TEXT, "Column" TEXT, "Row" TEXT);
             CREATE TABLE taverns (Name TEXT, "Column" TEXT, "Row" TEXT);
@@ -232,6 +236,89 @@ class FakeMap:
             f'INSERT INTO {table} (Name, "Column", "Row") VALUES (?, ?, ?)',
             (name, column, row),
         )
+
+
+def shops_remain_available_without_coordinates(root: Path) -> None:
+    db = root / "map.db"
+    make_database(db)
+    with sqlite3.connect(db) as conn:
+        conn.executemany(
+            "INSERT INTO shop_items VALUES (?, ?, 100, 95, 90, 85)",
+            [
+                ("Discount Magic", "Vial of Holy Water"),
+                ("Discount Magic", "Garlic Spray"),
+                ("Discount Magic", "Wooden Stake"),
+                ("Known Shop", "Garlic Spray"),
+                ("  ", "Garlic Spray"),
+                (None, "Garlic Spray"),
+            ],
+        )
+        conn.execute('INSERT INTO shops (Name, "Column", Row) VALUES (?, ?, ?)', ("Known Shop", "B", "2nd"))
+
+    initialize, namespace = load_function("initialize_database")
+    namespace.update(
+        sqlite3=sqlite3,
+        create_tables=lambda _conn: None,
+        ensure_credential_namespace=lambda _conn: None,
+        migrate_schema=lambda _conn: None,
+        insert_initial_data=lambda _conn: None,
+    )
+    assert initialize(db)
+    query = 'SELECT Name, "Column", Row FROM shops ORDER BY Name'
+    with sqlite3.connect(db) as conn:
+        assert conn.execute(query).fetchall() == [("Discount Magic", "NA", "NA"), ("Known Shop", "B", "2nd")]
+
+    FakeMap(db).update({"shops": {}})
+    with sqlite3.connect(db) as conn:
+        assert conn.execute(query).fetchall() == [("Discount Magic", "NA", "NA"), ("Known Shop", "NA", "NA")]
+
+        tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+        cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "DamageCalculator")
+        method_names = {"_load_valid_shops", "_load_shop_inventory", "_inventory_is_valid"}
+        methods = [node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name in method_names]
+        weapons = next(
+            node for node in tree.body if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "REQUIRED_WEAPONS" for target in node.targets)
+        )
+        namespace = {"sqlite3": sqlite3, "logging": logging, "Weapon": SimpleNamespace}
+        exec(compile(ast.Module(body=[weapons, *methods], type_ignores=[]), str(MAIN), "exec"), namespace)
+        options = []
+        calculator = SimpleNamespace(
+            db_connection=conn,
+            shop_dropdown=SimpleNamespace(addItems=options.extend, setCurrentText=lambda _name: None),
+        )
+        calculator._load_shop_inventory = namespace["_load_shop_inventory"].__get__(calculator)
+        calculator._inventory_is_valid = namespace["_inventory_is_valid"].__func__
+        namespace["_load_valid_shops"](calculator)
+        assert options == ["Discount Magic"]
+
+    FakeMap(db).update({"shops": {"Discount Magic": {"column": "C", "row": "3rd"}}})
+    with sqlite3.connect(db) as conn:
+        assert conn.execute(query).fetchall() == [("Discount Magic", "C", "3rd"), ("Known Shop", "NA", "NA")]
+
+
+def shop_viewer_displays_unknown_coordinates_as_blank(_root: Path) -> None:
+    try:
+        from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
+    except (ImportError, OSError) as exc:
+        print(f"shop_viewer_displays_unknown_coordinates_as_blank skipped: Qt unavailable ({exc})")
+        return
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    app = QApplication.instance() or QApplication([])
+    render, namespace = load_function("add_table_tab")
+    namespace.update(QTableWidget=QTableWidget, QTableWidgetItem=QTableWidgetItem)
+    tabs = QTabWidget()
+    render(
+        None, tabs, "shops", ["Name", "Column", "Row"],
+        [("Discount Magic", "NA", "NA"), ("Known Shop", "B", "2nd")],
+    )
+    table = tabs.widget(0)
+    assert [
+        [table.item(row, col).text() for col in range(3)] for row in range(2)
+    ] == [["Discount Magic", "", ""], ["Known Shop", "B", "2nd"]]
+    tabs.close()
+    app.processEvents()
 
 
 def count_rows(db_path: Path, table: str) -> int:
@@ -399,6 +486,8 @@ def run_case(name, case) -> None:
 
 
 for case in (
+    shops_remain_available_without_coordinates,
+    shop_viewer_displays_unknown_coordinates_as_blank,
     malformed_payload_is_reported,
     manual_update_reports_database_failure,
     startup_worker_reports_database_failure,
