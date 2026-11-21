@@ -273,31 +273,28 @@ def windows_install_dirs_are_scanned(t: Path):
     """W1: pre-1.0 Windows installs under LOCALAPPDATA/Program Files are found."""
     src = t / "Program Files" / "RBC-Map" / "sessions"
     make_db(src / "rbc_map_data.db", ["Carol"])
-    if os.name == "nt":
-        saved = {k: os.environ.get(k) for k in ("LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)")}
-        try:
-            os.environ["LOCALAPPDATA"] = str(t / "Local")
-            os.environ["ProgramFiles"] = str(t / "Program Files")
-            os.environ.pop("ProgramFiles(x86)", None)
-            dirs = legacy_dirs_fn()
-        finally:
-            for k, v in saved.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
-        local = t / "Local"
-        expected = [
-            local / "RBC Community Map" / "sessions",
-            local / "RBCCommunityMap" / "sessions",
-            src,
-        ]
-        for path in expected:
-            assert path in dirs, f"{path} missing from {dirs}"
-        msg = migrate(t / "new", dirs)
-    else:
-        # POSIX builds only scan APP_DIR; pass the install path explicitly.
-        msg = migrate(t / "new", [src])
+    saved = {k: os.environ.get(k) for k in ("LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)")}
+    try:
+        os.environ["LOCALAPPDATA"] = str(t / "Local")
+        os.environ["ProgramFiles"] = str(t / "Program Files")
+        os.environ.pop("ProgramFiles(x86)", None)
+        # is_windows=True exercises the nt branch on any host OS.
+        dirs = legacy_dirs_fn(is_windows=True)
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    local = t / "Local"
+    expected = [
+        local / "RBC Community Map" / "sessions",
+        local / "RBCCommunityMap" / "sessions",
+        src,
+    ]
+    for path in expected:
+        assert path in dirs, f"{path} missing from {dirs}"
+    msg = migrate(t / "new", dirs)
     assert msg and "Migrated" in msg, msg
     assert names(t / "new/rbc_map_data.db") == ["Carol"]
 

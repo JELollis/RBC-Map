@@ -927,7 +927,11 @@ def _secure_data_permissions(
             pass
     if not sessions_dir.is_dir():
         return
-    for path in sessions_dir.iterdir():
+    try:
+        children = list(sessions_dir.iterdir())
+    except OSError:
+        return
+    for path in children:
         if path.name.startswith(LEGACY_DB_NAME):
             try:
                 path.chmod(0o600)
@@ -958,12 +962,14 @@ _secure_data_permissions()
 # repository root (0.13.x and earlier) or ``testing/sessions/`` (the former
 # 0.13.3.x / 0.14.0 development line). 1.0.0 moved it to DATA_DIR. On Windows,
 # pre-1.0 installs also kept data under per-user install directories.
-def _legacy_sessions_dirs() -> list[Path]:
+def _legacy_sessions_dirs(is_windows: bool | None = None) -> list[Path]:
     dirs = [
         APP_DIR / "sessions",
         APP_DIR / "testing" / "sessions",
     ]
-    if os.name == "nt":
+    if is_windows is None:
+        is_windows = os.name == "nt"
+    if is_windows:
         local_appdata = os.environ.get("LOCALAPPDATA")
         if local_appdata:
             dirs += [
