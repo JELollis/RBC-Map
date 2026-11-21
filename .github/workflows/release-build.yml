@@ -287,14 +287,7 @@ jobs:
             install -m 644 "$startdir/rbc-map.png" "$pkgdir/usr/share/pixmaps/rbc-map.png"
             printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > "$pkgdir/usr/bin/rbc-map"
             chmod 755 "$pkgdir/usr/bin/rbc-map"
-            cat > "$pkgdir/usr/share/applications/rbc-map.desktop" <<'DESKTOP'
-            [Desktop Entry]
-            Type=Application
-            Name=RBC Community Map
-            Exec=rbc-map
-            Icon=rbc-map
-            Categories=Game;
-            DESKTOP
+            printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=RBC Community Map' 'Exec=rbc-map' 'Icon=rbc-map' 'Categories=Game;' > "$pkgdir/usr/share/applications/rbc-map.desktop"
           }
           EOF
           useradd --create-home builder
