@@ -60,13 +60,15 @@ jobs:
           foreach ($path in @("images", "css", "docs/help")) {
             if (-not (Test-Path "$dist/$path")) { throw "Bundle path missing: $path" }
           }
-          $check = & "$dist/RBC Community Map.exe" --self-check 2>&1
-          $check | Tee-Object -FilePath windows-self-check.txt
-          if ($LASTEXITCODE -ne 0 -or ($check -join "`n") -match "fail\.Keyring") { throw "Frozen keyring self-check failed" }
+          $checkPath = "$env:RUNNER_TEMP\rbc-map-self-check.txt"
+          $process = Start-Process -FilePath "$dist/RBC Community Map.exe" -ArgumentList "--self-check=$checkPath" -Wait -PassThru
+          if ($process.ExitCode -ne 0 -or -not (Test-Path $checkPath)) { throw "Frozen self-check failed" }
+          $check = Get-Content $checkPath -Raw
+          if ($check -notmatch "version=1\.0\.4" -or $check -notmatch "keyring_backend=keyring\.backends\.Windows\.WinVaultKeyring" -or $check -notmatch "resource_images=True" -or $check -notmatch "resource_css=True" -or $check -notmatch "resource_help=True") { throw "Frozen self-check assertions failed`n$check" }
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Build unsigned NSIS installer
-        run: makensis /DVERSION=${{ env.RELEASE_VERSION }} "tools/packaging/RBC Community Map.nsi"
+        run: makensis /DVERSION=${{ env.RELEASE_VERSION }} /DDIST="${{ github.workspace }}\build\windows\main_1.0.4.dist" "tools/packaging/RBC Community Map.nsi"
       - name: Hash Windows installer
         shell: pwsh
         run: Get-FileHash "tools/packaging/RBC-Map-Installer-${{ env.RELEASE_VERSION }}.exe" -Algorithm SHA256 | Format-Table | Out-File windows.sha256.txt
@@ -92,15 +94,19 @@ jobs:
         run: python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
       - name: Verify frozen bundle
         run: |
-          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
-          printf '%s\n' "$result"
-          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
+          check=build/rbc-map-self-check.txt
+          dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          test -s "$check"
+          grep -Fx 'version=1.0.4' "$check"
+          grep -E '^resource_(images|css|help)=True:' "$check" | wc -l | grep -Fx 3
+          grep -E '^keyring_entry_points=.*(SecretService|libsecret|chainer)' "$check"
       - name: Assemble deb package
         run: |
           set -eux
           root="$PWD/build/deb/root"
-          mkdir -p "$root/opt/rbc-map" "$root/usr/bin" "$root/usr/share/applications" "$root/DEBIAN"
+          mkdir -p "$root/opt/rbc-map" "$root/usr/bin" "$root/usr/share/applications" "$root/usr/share/pixmaps" "$root/DEBIAN"
           cp -a dist/RBC-Map/. "$root/opt/rbc-map/"
+          install -m 644 tools/packaging/rbc-map.png "$root/usr/share/pixmaps/rbc-map.png"
           printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > "$root/usr/bin/rbc-map"
           chmod 755 "$root/usr/bin/rbc-map"
           cat > "$root/usr/share/applications/rbc-map.desktop" <<'EOF'
@@ -108,7 +114,7 @@ jobs:
           Type=Application
           Name=RBC Community Map
           Exec=rbc-map
-          Icon=/opt/rbc-map/images/favicon.ico
+          Icon=rbc-map
           Categories=Game;
           EOF
           cat > "$root/DEBIAN/control" <<'EOF'
@@ -117,11 +123,12 @@ jobs:
           Section: games
           Priority: optional
           Architecture: amd64
-          Depends: libxcb-cursor0, libxkbcommon-x11-0, libnss3, libglib2.0-0, libdbus-1-3, libfontconfig1, libegl1, libgl1, gnome-keyring, libsecret-1-0, dbus-user-session
-          Maintainer: RBC Community Map Team
+          Depends: libxcb-cursor0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-shape0, libxcb-xfixes0, libxcb-xkb1, libxkbcommon0, libxkbcommon-x11-0, libx11-xcb1, libnss3, libglib2.0-0, libdbus-1-3, libfontconfig1, libegl1, libgl1, libasound2 | libasound2t64, libxcomposite1, libxdamage1, libxrandr2, libxtst6, libsecret-1-0, dbus-user-session
+          Recommends: gnome-keyring | kwalletmanager
+          Maintainer: RBC Community Map Team <rbc-map@users.noreply.github.com>
           Description: RBC Community Map desktop application
           EOF
-          dpkg-deb --build "$root" build/RBC-Map-1.0.4-amd64.deb
+          dpkg-deb --build --root-owner-group "$root" build/RBC-Map-1.0.4-amd64.deb
           sha256sum build/RBC-Map-1.0.4-amd64.deb > build/RBC-Map-1.0.4-amd64.deb.sha256
       - uses: actions/upload-artifact@v4
         with:
@@ -143,14 +150,18 @@ jobs:
         run: python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
       - name: Verify frozen bundle
         run: |
-          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
-          printf '%s\n' "$result"
-          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
+          check=build/rbc-map-self-check.txt
+          dist/'RBC Community Map.app/Contents/MacOS/RBC Community Map' --self-check="$check"
+          test -s "$check"
+          grep -Fx 'version=1.0.4' "$check"
+          grep -E '^resource_(images|css|help)=True:' "$check" | wc -l | grep -Fx 3
+          grep -E '^keyring_entry_points=.*macOS' "$check"
       - name: Create unsigned DMG
         run: |
           mkdir -p build/dmg
-          cp -a dist/RBC-Map build/dmg/RBC-Community-Map-1.0.4
-          hdiutil create -volname "RBC Community Map 1.0.4" -srcfolder build/dmg/RBC-Community-Map-1.0.4 -ov -format UDZO build/RBC-Map-1.0.4-macos.dmg
+          cp -a "dist/RBC Community Map.app" build/dmg/
+          ln -s /Applications build/dmg/Applications
+          hdiutil create -volname "RBC Community Map 1.0.4" -srcfolder build/dmg -ov -format UDZO build/RBC-Map-1.0.4-macos.dmg
           shasum -a 256 build/RBC-Map-1.0.4-macos.dmg > build/RBC-Map-1.0.4-macos.dmg.sha256
       - uses: actions/upload-artifact@v4
         with:
@@ -159,7 +170,7 @@ jobs:
 
   rpm:
     runs-on: ubuntu-latest
-    container: fedora:latest
+    container: fedora:42
     steps:
       - uses: actions/checkout@v4
         with:
@@ -170,25 +181,40 @@ jobs:
         run: python3 -m pip install --break-system-packages -r requirements.txt pyinstaller && python3 -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
       - name: Verify frozen bundle
         run: |
-          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
-          printf '%s\n' "$result"
-          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
+          check=build/rbc-map-self-check.txt
+          dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          test -s "$check"
+          grep -Fx 'version=1.0.4' "$check"
+          grep -E '^resource_(images|css|help)=True:' "$check" | wc -l | grep -Fx 3
+          grep -E '^keyring_entry_points=.*(SecretService|libsecret|chainer)' "$check"
       - name: Assemble RPM
         run: |
           set -eux
           mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          mkdir -p build/rpm/root/opt/rbc-map build/rpm/root/usr/bin
+          mkdir -p build/rpm/root/opt/rbc-map build/rpm/root/usr/bin build/rpm/root/usr/share/applications build/rpm/root/usr/share/pixmaps
           cp -a dist/RBC-Map/. build/rpm/root/opt/rbc-map/
+          install -m 644 tools/packaging/rbc-map.png build/rpm/root/usr/share/pixmaps/rbc-map.png
           printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > build/rpm/root/usr/bin/rbc-map
           chmod 755 build/rpm/root/usr/bin/rbc-map
+          cat > build/rpm/root/usr/share/applications/rbc-map.desktop <<'EOF'
+          [Desktop Entry]
+          Type=Application
+          Name=RBC Community Map
+          Exec=rbc-map
+          Icon=rbc-map
+          Categories=Game;
+          EOF
           tar -C build/rpm/root -czf ~/rpmbuild/SOURCES/rbc-map-1.0.4.tar.gz .
           cat > ~/rpmbuild/SPECS/rbc-map.spec <<'EOF'
           Name: rbc-map
           Version: 1.0.4
           Release: 1%{?dist}
+          %global debug_package %{nil}
+          %global __os_install_post %{nil}
           Summary: RBC Community Map desktop application
           License: Apache-2.0
           BuildArch: x86_64
+          Requires: xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 nss alsa-lib mesa-libEGL mesa-libGBM libsecret
           %description
           RBC Community Map desktop application.
           %prep
@@ -200,6 +226,8 @@ jobs:
           %files
           /opt/rbc-map
           /usr/bin/rbc-map
+          /usr/share/applications/rbc-map.desktop
+          /usr/share/pixmaps/rbc-map.png
           EOF
           rpmbuild -bb ~/rpmbuild/SPECS/rbc-map.spec
           cp ~/rpmbuild/RPMS/x86_64/*.rpm build/
@@ -217,19 +245,23 @@ jobs:
         with:
           ref: ${{ inputs.source_ref || github.ref }}
       - name: Install Arch build dependencies
-        run: pacman -Syu --noconfirm python python-pip base-devel libxcb libxkbcommon nss alsa-lib mesa gnome-keyring libsecret xdg-utils
+        run: pacman -Syu --noconfirm python python-pip uv base-devel libxcb libxkbcommon nss alsa-lib mesa gnome-keyring libsecret xdg-utils
       - name: Build PyInstaller bundle
-        run: python -m pip install --break-system-packages -r requirements.txt pyinstaller && python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
+        run: uv python install 3.13 && uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r requirements.txt pyinstaller && .venv/bin/python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
       - name: Verify frozen bundle
         run: |
-          result=$(dist/'RBC-Map'/'RBC Community Map' --self-check)
-          printf '%s\n' "$result"
-          ! printf '%s\n' "$result" | grep -q 'fail.Keyring'
+          check=build/rbc-map-self-check.txt
+          dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          test -s "$check"
+          grep -Fx 'version=1.0.4' "$check"
+          grep -E '^resource_(images|css|help)=True:' "$check" | wc -l | grep -Fx 3
+          grep -E '^keyring_entry_points=.*(SecretService|libsecret|chainer)' "$check"
       - name: Build Arch package
         run: |
           set -eux
           mkdir -p build/arch
           cp -a dist/RBC-Map build/arch/rbc-map
+          install -m 644 tools/packaging/rbc-map.png build/arch/rbc-map.png
           cat > build/arch/PKGBUILD <<'EOF'
           pkgname=rbc-map
           pkgver=1.0.4
@@ -237,16 +269,32 @@ jobs:
           pkgdesc='RBC Community Map desktop application'
           arch=('x86_64')
           license=('Apache')
+          depends=('xcb-util-cursor' 'xcb-util-wm' 'xcb-util-image' 'xcb-util-keysyms' 'xcb-util-renderutil' 'libxkbcommon-x11' 'nss' 'alsa-lib' 'mesa' 'libsecret')
+          optdepends=('gnome-keyring: Secret Service credential storage' 'kwallet: KDE credential storage')
+          options=('!strip' '!debug')
           package() {
-            install -d "$pkgdir/opt/rbc-map" "$pkgdir/usr/bin"
-            cp -a "$srcdir/rbc-map/." "$pkgdir/opt/rbc-map/"
+            install -d "$pkgdir/opt/rbc-map" "$pkgdir/usr/bin" "$pkgdir/usr/share/applications" "$pkgdir/usr/share/pixmaps"
+            cp -a "$startdir/rbc-map/." "$pkgdir/opt/rbc-map/"
+            install -m 644 "$startdir/rbc-map.png" "$pkgdir/usr/share/pixmaps/rbc-map.png"
             printf '%s\n' '#!/bin/sh' 'exec "/opt/rbc-map/RBC Community Map" "$@"' > "$pkgdir/usr/bin/rbc-map"
             chmod 755 "$pkgdir/usr/bin/rbc-map"
+            cat > "$pkgdir/usr/share/applications/rbc-map.desktop" <<'DESKTOP'
+            [Desktop Entry]
+            Type=Application
+            Name=RBC Community Map
+            Exec=rbc-map
+            Icon=rbc-map
+            Categories=Game;
+            DESKTOP
           }
           EOF
-          (cd build/arch && makepkg --noconfirm --nodeps)
+          useradd --create-home builder
+          chown -R builder:builder build/arch
+          su builder -c 'cd build/arch && makepkg --noconfirm --nodeps'
           sha256sum build/arch/*.pkg.tar.zst > build/RBC-Map-1.0.4-arch.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-arch-1.0.4
-          path: build/arch/*.pkg.tar.zst
+          path: |
+            build/arch/*.pkg.tar.zst
+            build/RBC-Map-1.0.4-arch.sha256

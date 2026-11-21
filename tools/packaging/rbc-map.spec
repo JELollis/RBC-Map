@@ -7,7 +7,7 @@ from pathlib import Path
 from PyInstaller.utils.hooks import copy_metadata
 
 
-ROOT = Path(SPECPATH).parent.parent.parent
+ROOT = Path(SPECPATH).parent.parent
 datas = [
     (str(ROOT / "images"), "images"),
     (str(ROOT / "css"), "css"),
@@ -42,8 +42,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
+    [],
     [],
     name="RBC Community Map",
     debug=False,
@@ -54,6 +53,7 @@ exe = EXE(
     disable_windowed_traceback=False,
     argv_emulation=False,
     contents_directory=".",
+    exclude_binaries=True,
 )
 coll = COLLECT(
     exe,
@@ -63,3 +63,16 @@ coll = COLLECT(
     upx=False,
     name="RBC-Map",
 )
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="RBC Community Map.app",
+        icon=str(ROOT / "tools" / "packaging" / "macos" / "icon.icns"),
+        bundle_identifier="com.jelollis.rbcommunitymap",
+        info_plist={
+            "CFBundleShortVersionString": "1.0.4",
+            "CFBundleVersion": "1.0.4",
+            "NSHighResolutionCapable": True,
+        },
+    )

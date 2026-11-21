@@ -1068,6 +1068,9 @@ under 0.14.0, plus:
 - Added startup-layout, auto-login, credential-store, database-update, and
   legacy-migration regression checks, including Linux keyring timeout and
   chained-backend coverage.
+- Added controlled cross-platform release packaging workflows with frozen
+  resource/keyring self-checks, user-data-preserving Windows installation,
+  and unsigned artifact handling pending code-signing approval.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application

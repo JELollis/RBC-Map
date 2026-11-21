@@ -139,6 +139,7 @@ import webbrowser
 import hashlib
 from concurrent.futures import Future, TimeoutError
 from datetime import datetime, timedelta, timezone
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from threading import Event, Lock, RLock, Thread
 from typing import TYPE_CHECKING, Tuple, Type, TypeVar, cast
@@ -4047,7 +4048,9 @@ class RBCCommunityMap(QMainWindow):
 
         # Compass Icon Button
         self.compass_button = QPushButton()
-        self.compass_button.setIcon(PySide6.QtGui.QIcon(PySide6.QtGui.QPixmap("images/compass.png")))
+        self.compass_button.setIcon(
+            PySide6.QtGui.QIcon(PySide6.QtGui.QPixmap(str(IMAGES_DIR / "compass.png")))
+        )
         self.compass_button.setIconSize(QSize(28, 28))  # Adjust as needed
         self.compass_button.setFixedSize(34, 34)
         self.compass_button.setStyleSheet("background-color: transparent; border: none;")
@@ -10463,15 +10466,70 @@ class CompassOverlay(QDialog):
 # Main Entry Point
 # -----------------------
 
+def _self_check(output_path: str | None = None) -> int:
+    """Validate frozen resources and keyring packaging without starting Qt."""
+    backend = keyring.get_keyring()
+    backend_name = f"{type(backend).__module__}.{type(backend).__name__}"
+    try:
+        entry_points = importlib_metadata.entry_points(group="keyring.backends")
+    except TypeError:  # Python versions with the older entry-points API
+        entry_points = importlib_metadata.entry_points().get("keyring.backends", ())
+    entry_point_names = sorted(entry_point.name for entry_point in entry_points)
+
+    expected_backends = {
+        "nt": ("Windows", "keyring.backends.Windows"),
+        "darwin": ("macOS", "keyring.backends.macOS"),
+    }.get(sys.platform, ("SecretService", "libsecret", "chainer"))
+    import_errors = []
+    for module_name in expected_backends[1:] if sys.platform in {"nt", "darwin"} else (
+        "keyring.backends.SecretService",
+        "keyring.backends.libsecret",
+        "keyring.backends.chainer",
+    ):
+        try:
+            __import__(module_name)
+        except Exception as exc:  # pragma: no cover - platform-specific imports
+            import_errors.append(f"{module_name}: {exc}")
+
+    resources = {
+        "images": IMAGES_DIR,
+        "css": APP_DIR / "css",
+        "help": APP_DIR / "docs" / "help",
+    }
+    lines = [
+        f"version={VERSION_NUMBER}",
+        f"keyring_backend={backend_name}",
+        f"keyring_entry_points={','.join(entry_point_names)}",
+        f"app_dir={APP_DIR}",
+        *(f"resource_{name}={path.exists()}:{path}" for name, path in resources.items()),
+        f"backend_import_errors={';'.join(import_errors)}",
+    ]
+    output = "\n".join(lines) + "\n"
+    if output_path:
+        Path(output_path).write_text(output, encoding="utf-8")
+    elif getattr(sys, "stdout", None) is not None:
+        print(output, end="")
+
+    required_entry_point = set(expected_backends[:1])
+    valid = (
+        all(path.exists() for path in resources.values())
+        and required_entry_point.intersection(entry_point_names)
+        and not import_errors
+    )
+    # Linux CI usually has no unlocked Secret Service collection. The package
+    # check verifies bundled backends there; live availability is tested on Mint.
+    if sys.platform in {"nt", "darwin"}:
+        valid = valid and not backend_name.endswith("fail.Keyring")
+    return 0 if valid else 1
+
+
 def main() -> None:
-    if "--self-check" in sys.argv:
-        backend = keyring.get_keyring()
-        backend_name = f"{type(backend).__module__}.{type(backend).__name__}"
-        print(f"RBC Community Map {VERSION_NUMBER}")
-        print(f"keyring_backend={backend_name}")
-        if backend_name.endswith("fail.Keyring"):
-            raise SystemExit("Frozen build resolved to fail.Keyring")
-        return
+    self_check_path = next(
+        (arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--self-check=")),
+        None,
+    )
+    if "--self-check" in sys.argv or self_check_path:
+        raise SystemExit(_self_check(self_check_path))
 
     app = QApplication(sys.argv)
 
