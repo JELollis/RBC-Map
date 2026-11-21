@@ -307,7 +307,6 @@ jobs:
           path: build/rpm/artifacts/*
 
   arch:
-    if: ${{ github.ref_name == 'release' || startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     container: archlinux:base
     steps:
@@ -316,7 +315,14 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
       - name: Install Arch build dependencies
-        run: pacman -Syu --noconfirm python python-pip uv base-devel libxcb libxkbcommon libxkbcommon-x11 xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxcomposite libxdamage libxrandr libxtst libxkbfile libxshmfence libdrm nss alsa-lib mesa dbus gnome-keyring libsecret xdg-utils xorg-server-xvfb xorg-xauth
+        run: pacman -Syu --noconfirm python python-pip uv base-devel libxcb libxkbcommon libxkbcommon-x11 xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxcomposite libxdamage libxrandr libxtst libxkbfile libxshmfence libdrm nss alsa-lib mesa dbus gnome-keyring libcap libsecret xdg-utils xorg-server-xvfb xorg-xauth
+      - name: Prepare GNOME Keyring for container smoke tests
+        run: |
+          daemon=$(command -v gnome-keyring-daemon)
+          capabilities=$(getcap "$daemon")
+          if [ -n "$capabilities" ]; then
+            setcap -r "$daemon"
+          fi
       - name: Build PyInstaller bundle
         run: uv python install 3.13 && uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r requirements.txt pyinstaller && .venv/bin/python -m PyInstaller --clean --noconfirm tools/packaging/rbc-map.spec
       - name: Verify frozen bundle
