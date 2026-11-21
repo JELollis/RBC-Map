@@ -50,7 +50,7 @@ def _bind_qt_widgets():
 
 
 _QT_PROBE = (
-    "import os; os.environ['QT_QPA_PLATFORM'] = 'offscreen';"
+    "import os; os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen');"
     "from PySide6.QtCore import Qt;"
     "from PySide6.QtWidgets import QApplication;"
     "app = QApplication.instance() or QApplication([])"
