@@ -2191,6 +2191,14 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
             ensure_credential_namespace(conn)
             migrate_schema(conn)                      # Then migrate schema
             insert_initial_data(conn)                 # THEN populate defaults
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO shops (Name, `Column`, Row)
+                SELECT DISTINCT shop_name, 'NA', 'NA'
+                FROM shop_items
+                WHERE shop_name IS NOT NULL AND TRIM(shop_name) <> ''
+                """
+            )
             logging.info(f"Database initialized successfully at {db_path}")
             return True
     except sqlite3.Error as e:
@@ -7768,6 +7776,8 @@ class DatabaseViewer(QDialog):
 
         for row_idx, row_data in enumerate(data):
             for col_idx, value in enumerate(row_data):
+                if table_name == "shops" and column_names[col_idx] in {"Column", "Row"} and value == "NA":
+                    value = ""
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
 
         table_widget.resizeColumnsToContents()

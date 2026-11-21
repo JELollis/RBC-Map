@@ -54,6 +54,8 @@ RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleywa
 ![CSS customization tool](Screenshots/CSS%20Customization%20Dialog.png)
 ![Interface theme](Screenshots/Interface%20Theme.png)
 
+The damage calculator can use a shop’s inventory even when its map location is unknown.
+
 ## Getting started
 
 ### Requirements

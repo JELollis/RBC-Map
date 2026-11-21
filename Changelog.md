@@ -1095,3 +1095,4 @@ under 0.14.0, plus:
   file; no separate runtime module is required.
 - Corrected stale BeautifulSoup and crowdsourced-reporting documentation
   and refreshed the README and help documentation.
+- Populate catalog shop names even when the location feed supplies no shop coordinates.
