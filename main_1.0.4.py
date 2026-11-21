@@ -9300,6 +9300,8 @@ class ShoppingListTool(QDialog):
         if not self.sqlite_cursor:
             return
 
+        self.load_items()
+
         shop = self.shop_combobox.currentText()
         if not shop or not self.shopping_items:
             return
