@@ -68,6 +68,8 @@ def check_password_login_clears_pending_cookie(tree: ast.Module) -> None:
 
     # Bob's password login is queued while Alice's cookie check is pending.
     namespace["_queue_password_login"](fake, "Bob")
+    assert fake._pending_cookie_character is None
+    assert fake._pending_cookie_request_id is None
     # Alice's stale cookie-page callback then arrives.
     namespace["_handle_cookie_login_page"](fake, 4, "Alice", True)
 
