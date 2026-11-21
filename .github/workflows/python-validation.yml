@@ -1,0 +1,45 @@
+name: Python validation
+
+on:
+  pull_request:
+    branches: [dev, release]
+  push:
+    branches: [dev, release]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install runtime dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile Python source
+        run: python -m compileall -q *.py tools
+      - name: Check Unicode tokens
+        run: python tools/check_unicode.py
+      - name: Run startup and responsive-layout checks
+        run: python tools/check_startup_layout.py
+      - name: Run credential-store regression checks
+        run: python tools/check_credential_store.py
+      - name: Run auto-login regression checks
+        run: python tools/check_auto_login.py
+      - name: Run database update regression checks
+        run: python tools/check_update_database.py
+      - name: Run powers details regression checks
+        run: python tools/check_powers_details.py
+      - name: Run legacy migration regression checks
+        run: python tools/check_legacy_migration.py
+      - name: Verify release tree essentials
+        run: |
+          test -f main_1.0.4.py
+          test -d images
+          test -f requirements.txt
