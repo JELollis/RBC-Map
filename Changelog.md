@@ -1095,6 +1095,9 @@ under 0.14.0, plus:
 - Strengthened the GUI self-check to verify WebEngine actually paints pixels
   (shown window, exposed handle, non-blank frame) on X11/Windows/macOS; the
   offscreen Linux run keeps a load-only mode.
+- Build separate Apple Silicon and Intel macOS DMGs. In Arch CI, run the
+  packaged-app smoke checks as the unprivileged builder so GNOME Keyring
+  starts inside the build container.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application
