@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import os
 import sqlite3
+import subprocess
 from contextlib import closing
 from pathlib import Path
 from typing import Type
@@ -23,10 +24,38 @@ except (ImportError, OSError) as _qt_exc:
 
 MAIN = Path(__file__).resolve().parents[1] / "main_1.0.4.py"
 
+_QT_WIDGET_NAMES = (
+    "QApplication", "QDialog", "QHBoxLayout", "QLabel", "QListWidget",
+    "QListWidgetItem", "QPushButton", "QTextEdit", "QVBoxLayout",
+)
+
+
+def _provision_qt() -> bool:
+    """Install Qt native libraries on CI runners, then retry the imports."""
+    try:
+        subprocess.run(["sudo", "apt-get", "update"], check=True, capture_output=True)
+        subprocess.run(
+            ["sudo", "apt-get", "install", "-y",
+             "libegl1", "libgl1", "libxkbcommon0", "libfontconfig1"],
+            check=True, capture_output=True,
+        )
+        from PySide6 import QtCore, QtWidgets
+    except (OSError, subprocess.CalledProcessError, ImportError) as exc:
+        print(f"Qt provisioning failed: {exc}")
+        return False
+    globals().update(Qt=QtCore.Qt, **{name: getattr(QtWidgets, name) for name in _QT_WIDGET_NAMES})
+    return True
+
 
 def main() -> None:
+    global _QT_AVAILABLE
+    if not _QT_AVAILABLE and os.environ.get("CI"):
+        _QT_AVAILABLE = _provision_qt()
     if not _QT_AVAILABLE:
-        print(f"powers details checks skipped: Qt unavailable ({_QT_IMPORT_ERROR})")
+        message = f"powers details checks skipped: Qt unavailable ({_QT_IMPORT_ERROR})"
+        if os.environ.get("CI"):
+            raise SystemExit(f"{message} (CI requires Qt; install native Qt libraries)")
+        print(message)
         return
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
     dialog = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "PowersDialog")
