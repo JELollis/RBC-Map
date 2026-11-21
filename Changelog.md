@@ -1074,6 +1074,9 @@ under 0.14.0, plus:
 - Hardened release packaging with one resolved source commit per workflow,
   cross-platform checksum artifacts, macOS-safe resource assertions, explicit
   NSIS discovery, and installed Linux launcher smoke tests.
+- Fixed the Arch packaging job to install every declared dependency before
+  the package install test, and added the legacy-migration regression suite
+  to CI so it runs on every validation build.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application
