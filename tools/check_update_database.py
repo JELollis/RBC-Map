@@ -39,16 +39,38 @@ def _provision_qt_native_libs() -> bool:
     return True
 
 
-def _qt_widgets():
-    """Return the Qt widget classes, provisioning native libs first on CI."""
-    if os.environ.get("CI") and not _provision_qt_native_libs():
-        return None
+def _bind_qt_widgets():
     try:
         from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
     except (ImportError, OSError) as exc:
         print(f"Qt import failed: {exc}")
         return None
     return QApplication, QTableWidget, QTableWidgetItem, QTabWidget
+
+
+def _probe_qt_widgets(widgets) -> bool:
+    """Verify the offscreen platform plugin actually loads."""
+    QApplication, _, _, _ = widgets
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    try:
+        QApplication.instance() or QApplication([])
+    except Exception as exc:
+        print(f"Qt offscreen probe failed: {exc}")
+        return False
+    return True
+
+
+def _qt_widgets():
+    """Return the Qt widget classes when Qt works; provision and re-verify on CI."""
+    widgets = _bind_qt_widgets()
+    if widgets is not None and _probe_qt_widgets(widgets):
+        return widgets
+    if not os.environ.get("CI") or not _provision_qt_native_libs():
+        return None
+    widgets = _bind_qt_widgets()
+    if widgets is not None and _probe_qt_widgets(widgets):
+        return widgets
+    return None
 
 
 class FakeRequests:
