@@ -78,6 +78,8 @@ jobs:
           if ($process.ExitCode -ne 0 -or -not (Test-Path $checkPath)) { throw "Frozen self-check failed" }
           $check = Get-Content $checkPath -Raw
           if ($check -notmatch "version=1\.0\.4" -or $check -notmatch "keyring_backend=keyring\.backends\.Windows\.WinVaultKeyring" -or $check -notmatch "resource_images=True" -or $check -notmatch "resource_css=True" -or $check -notmatch "resource_help=True") { throw "Frozen self-check assertions failed`n$check" }
+          $guiProcess = Start-Process -FilePath "$dist/RBC Community Map.exe" -ArgumentList "--self-check-gui" -Wait -PassThru
+          if ($guiProcess.ExitCode -ne 0) { throw "Frozen Qt WebEngine self-check failed" }
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Build unsigned NSIS installer
@@ -168,11 +170,7 @@ jobs:
           (cd "$artifact_dir" && sha256sum RBC-Map-1.0.4-amd64.deb > RBC-Map-1.0.4-amd64.deb.sha256)
           command -v rbc-map
           rbc-map --self-check="$artifact_dir/installed-self-check.txt"
-          set +e
-          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox timeout 15s rbc-map > build/deb/installed-launch.log 2>&1
-          status=$?
-          set -e
-          if [ "$status" -ne 124 ]; then cat build/deb/installed-launch.log; exit 1; fi
+          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-deb-1.0.4
@@ -200,17 +198,21 @@ jobs:
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
           grep -E '^keyring_entry_points=.*macOS' "$check"
+          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox dist/'RBC Community Map.app/Contents/MacOS/RBC Community Map' --self-check-gui
       - name: Create unsigned DMG
         run: |
           mkdir -p build/dmg
           cp -a "dist/RBC Community Map.app" build/dmg/
           ln -s /Applications build/dmg/Applications
           hdiutil create -volname "RBC Community Map 1.0.4" -srcfolder build/dmg -ov -format UDZO build/RBC-Map-1.0.4-macos.dmg
-          shasum -a 256 build/RBC-Map-1.0.4-macos.dmg > build/RBC-Map-1.0.4-macos.dmg.sha256
+          artifact_dir=build/macos/artifacts
+          mkdir -p "$artifact_dir"
+          cp build/RBC-Map-1.0.4-macos.dmg "$artifact_dir/"
+          (cd "$artifact_dir" && shasum -a 256 RBC-Map-1.0.4-macos.dmg > RBC-Map-1.0.4-macos.dmg.sha256)
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-macos-1.0.4
-          path: build/RBC-Map-1.0.4-macos.dmg*
+          path: build/macos/artifacts/*
 
   rpm:
     needs: resolve
@@ -283,11 +285,7 @@ jobs:
           (cd "$artifact_dir" && sha256sum ./*.rpm > RBC-Map-1.0.4-rpm.sha256)
           command -v rbc-map
           rbc-map --self-check="$artifact_dir/installed-self-check.txt"
-          set +e
-          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox timeout 15s rbc-map > build/rpm/installed-launch.log 2>&1
-          status=$?
-          set -e
-          if [ "$status" -ne 124 ]; then cat build/rpm/installed-launch.log; exit 1; fi
+          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-rpm-1.0.4
@@ -348,11 +346,7 @@ jobs:
           (cd "$artifact_dir" && sha256sum ./*.pkg.tar.zst > RBC-Map-1.0.4-arch.sha256)
           command -v rbc-map
           rbc-map --self-check="$artifact_dir/installed-self-check.txt"
-          set +e
-          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox timeout 15s rbc-map > build/arch/installed-launch.log 2>&1
-          status=$?
-          set -e
-          if [ "$status" -ne 124 ]; then cat build/arch/installed-launch.log; exit 1; fi
+          QT_QPA_PLATFORM=offscreen QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-arch-1.0.4

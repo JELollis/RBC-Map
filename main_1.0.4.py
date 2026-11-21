@@ -10523,6 +10523,24 @@ def _self_check(output_path: str | None = None) -> int:
     return 0 if valid else 1
 
 
+def _gui_self_check() -> int:
+    """Load a blank page through Qt WebEngine and exit when it is ready."""
+    app = QApplication(sys.argv)
+    webview = QWebEngineView()
+    result = {"ok": False}
+
+    def finish(ok: bool) -> None:
+        result["ok"] = ok
+        app.quit()
+
+    webview.loadFinished.connect(finish)
+    webview.setUrl(QUrl("about:blank"))
+    QTimer.singleShot(20_000, app.quit)
+    app.exec()
+    webview.deleteLater()
+    return 0 if result["ok"] else 1
+
+
 def main() -> None:
     self_check_path = next(
         (arg.split("=", 1)[1] for arg in sys.argv if arg.startswith("--self-check=")),
@@ -10530,6 +10548,8 @@ def main() -> None:
     )
     if "--self-check" in sys.argv or self_check_path:
         raise SystemExit(_self_check(self_check_path))
+    if "--self-check-gui" in sys.argv:
+        raise SystemExit(_gui_self_check())
 
     app = QApplication(sys.argv)
 
