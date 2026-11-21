@@ -57,13 +57,16 @@ jobs:
           foreach ($path in @("images", "css", "docs/help")) {
             if (-not (Test-Path "$dist/$path")) { throw "Bundle path missing: $path" }
           }
+          $exe = "$dist/RBC Community Map.exe"
           $checkPath = "$env:RUNNER_TEMP\rbc-map-self-check.txt"
-          $process = Start-Process -FilePath "$dist/RBC Community Map.exe" -ArgumentList "--self-check=$checkPath" -Wait -PassThru
-          if ($process.ExitCode -ne 0 -or -not (Test-Path $checkPath)) { throw "Frozen self-check failed" }
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-check=$checkPath" -PassThru
+          if (-not $process.WaitForExit(120000)) { Stop-Process -Id $process.Id -Force; throw "Frozen self-check timed out" }
+          if ($process.ExitCode -ne 0 -or -not (Test-Path $checkPath)) { throw "Frozen self-check failed ($($process.ExitCode))" }
           $check = Get-Content $checkPath -Raw
           if ($check -notmatch "version=1\.0\.4" -or $check -notmatch "keyring_backend=keyring\.backends\.Windows\.WinVaultKeyring" -or $check -notmatch "resource_images=True" -or $check -notmatch "resource_css=True" -or $check -notmatch "resource_help=True") { throw "Frozen self-check assertions failed`n$check" }
-          $guiProcess = Start-Process -FilePath "$dist/RBC Community Map.exe" -ArgumentList "--self-check-gui" -Wait -PassThru
-          if ($guiProcess.ExitCode -ne 0) { throw "Frozen Qt WebEngine self-check failed" }
+          $guiProcess = Start-Process -FilePath $exe -ArgumentList "--self-check-gui" -PassThru
+          if (-not $guiProcess.WaitForExit(120000)) { Stop-Process -Id $guiProcess.Id -Force; throw "Frozen Qt WebEngine self-check timed out" }
+          if ($guiProcess.ExitCode -ne 0) { throw "Frozen Qt WebEngine self-check failed ($($guiProcess.ExitCode))" }
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Build unsigned NSIS installer
@@ -114,7 +117,7 @@ jobs:
       - name: Verify frozen bundle
         run: |
           check=build/rbc-map-self-check.txt
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
           test -s "$check"
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
@@ -155,9 +158,9 @@ jobs:
           cp build/RBC-Map-1.0.4-amd64.deb "$artifact_dir/"
           (cd "$artifact_dir" && sha256sum RBC-Map-1.0.4-amd64.deb > RBC-Map-1.0.4-amd64.deb.sha256)
           command -v rbc-map
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-deb-1.0.4
@@ -185,7 +188,7 @@ jobs:
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
           grep -E '^keyring_entry_points=.*macOS' "$check"
-          dist/'RBC Community Map.app/Contents/MacOS/RBC Community Map' --self-check-gui
+          perl -e 'alarm 180; exec @ARGV' "dist/RBC Community Map.app/Contents/MacOS/RBC Community Map" --self-check-gui
       - name: Create unsigned DMG
         run: |
           mkdir -p build/dmg
@@ -217,7 +220,7 @@ jobs:
       - name: Verify frozen bundle
         run: |
           check=build/rbc-map-self-check.txt
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
           test -s "$check"
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
@@ -273,9 +276,9 @@ jobs:
           cp build/*.rpm "$artifact_dir/"
           (cd "$artifact_dir" && sha256sum ./*.rpm > RBC-Map-1.0.4-rpm.sha256)
           command -v rbc-map
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-rpm-1.0.4
@@ -296,7 +299,7 @@ jobs:
       - name: Verify frozen bundle
         run: |
           check=build/rbc-map-self-check.txt
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ dist/'RBC-Map'/'RBC Community Map' --self-check="$check"
           test -s "$check"
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
@@ -336,9 +339,9 @@ jobs:
           cp build/arch/*.pkg.tar.zst "$artifact_dir/"
           (cd "$artifact_dir" && sha256sum ./*.pkg.tar.zst > RBC-Map-1.0.4-arch.sha256)
           command -v rbc-map
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-arch-1.0.4
