@@ -9898,13 +9898,9 @@ class PowersDialog(QDialog):
 
             name, guild, cost, quest, skill = row
 
-            self.power_name_label.setText(f"<b>Power:</b> {name}")
-            self.guild_label.setText(
-                f"<b>Guild:</b> {guild or 'Unknown'}"
-            )
-            self.cost_label.setText(
-                f"<b>Cost:</b> {cost or 'Unknown'} coins"
-            )
+            self.power_name_label.setText(name)
+            self.guild_label.setText(guild or "Unknown")
+            self.cost_label.setText(f"{cost} coins" if cost is not None else "Unknown")
             self.quest_info_text.setPlainText(quest or "None")
             self.skill_info_text.setPlainText(skill or "None")
 
