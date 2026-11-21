@@ -981,6 +981,12 @@ def _legacy_sessions_dirs(is_windows: bool | None = None) -> list[Path]:
             if root:
                 for folder_name in ("RBC-Map", "RBC Community Map"):
                     dirs.append(Path(root) / folder_name / "sessions")
+        if local_appdata:
+            # UAC file virtualization could redirect pre-1.0 writes here.
+            virtual_store = Path(local_appdata) / "VirtualStore"
+            for pf in ("Program Files", "Program Files (x86)"):
+                for folder_name in ("RBC Community Map", "RBC-Map"):
+                    dirs.append(virtual_store / pf / folder_name / "sessions")
     return dirs
 
 
@@ -10581,22 +10587,57 @@ def _self_check(output_path: str | None = None) -> int:
     return 0 if valid else 1
 
 
-def _gui_self_check() -> int:
-    """Load a blank page through Qt WebEngine and exit when it is ready."""
+def _gui_self_check(render_check: bool = True) -> int:
+    """Load a page through Qt WebEngine and exit when it is ready.
+
+    With *render_check* the window is shown and, after the page finishes
+    loading, a grabbed frame must contain painted (non-black, non-transparent)
+    pixels — proving WebEngine actually renders, not just initializes.
+    """
     app = QApplication(sys.argv)
     webview = QWebEngineView()
-    result = {"ok": False}
+    webview.resize(320, 240)
+    result = {"ok": False, "rendered": False}
+
+    def has_painted_pixels() -> bool:
+        handle = webview.windowHandle()
+        if handle is None or not handle.isExposed():
+            return False
+        image = webview.grab().toImage()
+        if image.isNull():
+            return False
+        lit = total = 0
+        for y in range(0, image.height(), 8):
+            for x in range(0, image.width(), 8):
+                color = image.pixelColor(x, y)
+                total += 1
+                if color.alpha() > 0 and (color.red() or color.green() or color.blue()):
+                    lit += 1
+        return total > 0 and lit / total > 0.5
+
+    def verify() -> None:
+        result["rendered"] = webview.isVisible() and has_painted_pixels()
+        app.quit()
 
     def finish(ok: bool) -> None:
         result["ok"] = ok
-        app.quit()
+        if not ok:
+            app.quit()
+        elif render_check:
+            QTimer.singleShot(1000, verify)
+        else:
+            app.quit()
 
     webview.loadFinished.connect(finish)
-    webview.setUrl(QUrl("about:blank"))
+    webview.setHtml(
+        "<html><body style='margin:0;background:#3366cc'>"
+        "<p style='color:#fff;font-size:40px'>RBC Map</p></body></html>"
+    )
+    webview.show()
     QTimer.singleShot(20_000, app.quit)
     app.exec()
     webview.deleteLater()
-    return 0 if result["ok"] else 1
+    return 0 if result["ok"] and (not render_check or result["rendered"]) else 1
 
 
 def main() -> None:
@@ -10607,7 +10648,9 @@ def main() -> None:
     if "--self-check" in sys.argv or self_check_path:
         raise SystemExit(_self_check(self_check_path))
     if "--self-check-gui" in sys.argv:
-        raise SystemExit(_gui_self_check())
+        raise SystemExit(_gui_self_check(render_check=True))
+    if "--self-check-gui=load" in sys.argv:
+        raise SystemExit(_gui_self_check(render_check=False))
 
     app = QApplication(sys.argv)
 

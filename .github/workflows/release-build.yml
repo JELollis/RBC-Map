@@ -160,7 +160,7 @@ jobs:
           command -v rbc-map
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
@@ -279,7 +279,7 @@ jobs:
           command -v rbc-map
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
@@ -343,7 +343,7 @@ jobs:
           command -v rbc-map
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ rbc-map --self-check="$artifact_dir/installed-self-check.txt"
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
-          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui
+          timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
       - uses: actions/upload-artifact@v4
         with:
