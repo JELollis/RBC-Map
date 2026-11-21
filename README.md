@@ -93,6 +93,7 @@ The instructions in this section run the application from the Python source.
 Starting with the 1.0.4 release, each release will publish a packaged build
 with an installer on the [releases](https://github.com/JELollis/RBC-Map/releases)
 page; installers bundle everything the app needs and require no Python setup.
+For macOS, choose the `arm64` DMG for Apple Silicon or the `x86_64` DMG for Intel.
 
 ```bash
 python main_1.0.4.py
