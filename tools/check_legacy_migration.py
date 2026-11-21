@@ -272,6 +272,7 @@ def schema_less_target_is_migrated(t: Path):
 def windows_install_dirs_are_scanned(t: Path):
     """W1: pre-1.0 Windows installs under LOCALAPPDATA/Program Files are found."""
     src = t / "Program Files" / "RBC-Map" / "sessions"
+    local = t / "Local"
     make_db(src / "rbc_map_data.db", ["Carol"])
     saved = {k: os.environ.get(k) for k in ("LOCALAPPDATA", "ProgramFiles", "ProgramFiles(x86)")}
     try:
@@ -280,13 +281,20 @@ def windows_install_dirs_are_scanned(t: Path):
         os.environ.pop("ProgramFiles(x86)", None)
         # Real detection on Windows; forced nt branch elsewhere.
         dirs = legacy_dirs_fn() if os.name == "nt" else legacy_dirs_fn(is_windows=True)
+        # Startup's actual call: the default must include Windows paths only on nt.
+        native = legacy_dirs_fn()
+        windows_paths = {
+            local / "RBC Community Map" / "sessions",
+            local / "RBCCommunityMap" / "sessions",
+            src,
+        }
+        assert bool(windows_paths & set(native)) == (os.name == "nt"), native
     finally:
         for k, v in saved.items():
             if v is None:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-    local = t / "Local"
     expected = [
         local / "RBC Community Map" / "sessions",
         local / "RBCCommunityMap" / "sessions",
