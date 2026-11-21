@@ -67,6 +67,9 @@ jobs:
           $guiProcess = Start-Process -FilePath $exe -ArgumentList "--self-check-gui" -PassThru
           if (-not $guiProcess.WaitForExit(120000)) { Stop-Process -Id $guiProcess.Id -Force; throw "Frozen Qt WebEngine self-check timed out" }
           if ($guiProcess.ExitCode -ne 0) { throw "Frozen Qt WebEngine self-check failed ($($guiProcess.ExitCode))" }
+          $negProcess = Start-Process -FilePath $exe -ArgumentList "--self-check-gui=negative" -PassThru
+          if (-not $negProcess.WaitForExit(60000)) { Stop-Process -Id $negProcess.Id -Force; throw "Negative render self-check timed out" }
+          if ($negProcess.ExitCode -ne 0) { throw "Negative render self-check failed ($($negProcess.ExitCode))" }
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Build unsigned NSIS installer
@@ -162,6 +165,7 @@ jobs:
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
+          timeout 60 rbc-map --self-check-gui=negative
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-deb-1.0.4
@@ -190,6 +194,7 @@ jobs:
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
           grep -E '^keyring_entry_points=.*macOS' "$check"
           perl -e 'alarm 180; exec @ARGV' "dist/RBC Community Map.app/Contents/MacOS/RBC Community Map" --self-check-gui
+          perl -e 'alarm 60; exec @ARGV' "dist/RBC Community Map.app/Contents/MacOS/RBC Community Map" --self-check-gui=negative
       - name: Create unsigned DMG
         run: |
           mkdir -p build/dmg
@@ -281,6 +286,7 @@ jobs:
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
+          timeout 60 rbc-map --self-check-gui=negative
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-rpm-1.0.4
@@ -345,6 +351,7 @@ jobs:
           grep -E '^keyring_backend=keyring\.(backends\.(SecretService\.Keyring|chainer\.ChainerBackend))' "$artifact_dir/installed-self-check.txt"
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec env QT_QPA_PLATFORM=offscreen "$@"' _ rbc-map --self-check-gui=load
           timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec xvfb-run -a env QT_QPA_PLATFORM=xcb "$@"' _ rbc-map --self-check-gui
+          timeout 60 rbc-map --self-check-gui=negative
       - uses: actions/upload-artifact@v4
         with:
           name: RBC-Map-arch-1.0.4

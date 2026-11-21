@@ -10587,6 +10587,37 @@ def _self_check(output_path: str | None = None) -> int:
     return 0 if valid else 1
 
 
+def _frame_shows_test_page(image) -> bool:
+    """True if a grabbed frame shows the #3366cc test-page background.
+
+    Requires a substantial fraction of samples to match the known test
+    color, so blank white/black frames cannot pass.
+    """
+    if image.isNull():
+        return False
+    target = (0x33, 0x66, 0xCC)
+    matching = total = 0
+    for y in range(0, image.height(), 8):
+        for x in range(0, image.width(), 8):
+            color = image.pixelColor(x, y)
+            total += 1
+            if color.alpha() > 0 and all(
+                abs(channel - want) <= 32
+                for channel, want in zip(
+                    (color.red(), color.green(), color.blue()), target
+                )
+            ):
+                matching += 1
+    return total > 0 and matching / total > 0.5
+
+
+def _gui_self_check_negative() -> int:
+    """Feed a synthetic blank frame through the render predicate; it must fail."""
+    image = PySide6.QtGui.QImage(64, 64, PySide6.QtGui.QImage.Format.Format_ARGB32)
+    image.fill(PySide6.QtGui.QColor(255, 255, 255, 255))
+    return 0 if not _frame_shows_test_page(image) else 1
+
+
 def _gui_self_check(render_check: bool = True) -> int:
     """Load a page through Qt WebEngine and exit when it is ready.
 
@@ -10603,26 +10634,7 @@ def _gui_self_check(render_check: bool = True) -> int:
         handle = webview.windowHandle()
         if handle is None or not handle.isExposed():
             return False
-        image = webview.grab().toImage()
-        if image.isNull():
-            return False
-        # The test page paints a solid #3366cc background; require a
-        # substantial fraction of samples to match it (a blank white or
-        # black frame must not pass).
-        target = (0x33, 0x66, 0xCC)
-        matching = total = 0
-        for y in range(0, image.height(), 8):
-            for x in range(0, image.width(), 8):
-                color = image.pixelColor(x, y)
-                total += 1
-                if color.alpha() > 0 and all(
-                    abs(channel - want) <= 32
-                    for channel, want in zip(
-                        (color.red(), color.green(), color.blue()), target
-                    )
-                ):
-                    matching += 1
-        return total > 0 and matching / total > 0.5
+        return _frame_shows_test_page(webview.grab().toImage())
 
     def verify() -> None:
         result["rendered"] = webview.isVisible() and has_painted_pixels()
@@ -10660,6 +10672,8 @@ def main() -> None:
         raise SystemExit(_gui_self_check(render_check=True))
     if "--self-check-gui=load" in sys.argv:
         raise SystemExit(_gui_self_check(render_check=False))
+    if "--self-check-gui=negative" in sys.argv:
+        raise SystemExit(_gui_self_check_negative())
 
     app = QApplication(sys.argv)
 
