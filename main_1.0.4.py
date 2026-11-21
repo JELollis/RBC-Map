@@ -9207,6 +9207,7 @@ class ShoppingListTool(QDialog):
             logging.error("Failed to populate shop dropdown: %s", exc)
 
     def load_items(self) -> None:
+        selected_row = self.available_items_list.currentRow()
         self.available_items_list.clear()
 
         if not self.sqlite_cursor:
@@ -9234,6 +9235,9 @@ class ShoppingListTool(QDialog):
                 )
         except sqlite3.Error as exc:
             logging.error("Failed to load items: %s", exc)
+
+        if 0 <= selected_row < self.available_items_list.count():
+            self.available_items_list.setCurrentRow(selected_row)
 
     def _price_column(self) -> str:
         return {

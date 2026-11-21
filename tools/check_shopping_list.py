@@ -14,7 +14,7 @@ PRICE_COLUMNS = ("base_price", "charisma_level_1", "charisma_level_2", "charisma
 
 
 class FakeCursor:
-    def __init__(self, prices: dict[tuple[str, str], int]) -> None:
+    def __init__(self, prices: dict[tuple[str, str, str], int]) -> None:
         self.prices = prices
         self.queries: list[str] = []
         self._rows: list[tuple] = []
@@ -39,6 +39,38 @@ class FakeCursor:
         return self._rows
 
 
+class Combo:
+    def __init__(self, text: str) -> None:
+        self._text = text
+
+    def currentText(self) -> str:
+        return self._text
+
+
+class ItemList:
+    """Minimal QListWidget stand-in backed by an external sink list."""
+
+    def __init__(self, sink: list[str]) -> None:
+        self.sink = sink
+        self.current = -1
+
+    def clear(self) -> None:
+        self.sink.clear()
+        self.current = -1
+
+    def addItem(self, text: str) -> None:
+        self.sink.append(text)
+
+    def count(self) -> int:
+        return len(self.sink)
+
+    def currentRow(self) -> int:
+        return self.current
+
+    def setCurrentRow(self, row: int) -> None:
+        self.current = row if 0 <= row < len(self.sink) else -1
+
+
 def class_method(tree: ast.Module, name: str) -> ast.FunctionDef:
     cls = next(
         node for node in tree.body
@@ -49,44 +81,43 @@ def class_method(tree: ast.Module, name: str) -> ast.FunctionDef:
     return matches[0]
 
 
-def check_charisma_reloads_available_items(tree: ast.Module) -> None:
-    methods = [
-        class_method(tree, name)
-        for name in ("_refresh_prices", "load_items", "_price_column", "_refresh_shopping_list")
-    ]
-    namespace = {"logging": logging}
-    exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
-
-    prices = {
-        ("Discount Magic", "Diamond Ring", "base_price"): 70000,
-        ("Discount Magic", "Diamond Ring", "charisma_level_1"): 67900,
-        ("Discount Magic", "Sprint Potion", "base_price"): 105,
-        ("Discount Magic", "Sprint Potion", "charisma_level_1"): 102,
-    }
-
-    available: list[str] = []
-    cart_display: list[str] = []
-
-    class Combo:
-        def __init__(self, text): self._text = text
-        def currentText(self): return self._text
-
-    class ItemList:
-        def __init__(self, sink): self.sink = sink
-        def clear(self): pass
-        def addItem(self, text): self.sink.append(text)
-
+def make_fake(namespace: dict, prices, available=None, cart_display=None, cart=None):
     fake = type("FakeTool", (), {})()
     fake.sqlite_cursor = FakeCursor(prices)
     fake.shop_combobox = Combo("Discount Magic")
     fake.charisma_combobox = Combo("Charisma 1")
-    fake.available_items_list = ItemList(available)
-    fake.shopping_list = ItemList(cart_display)
-    fake.shopping_items = {}
+    fake.available_items_list = ItemList(available if available is not None else [])
+    fake.shopping_list = ItemList(cart_display if cart_display is not None else [])
+    fake.shopping_items = cart if cart is not None else {}
     fake.update_total = lambda: None
-    fake.load_items = lambda: namespace["load_items"](fake)
-    fake._price_column = lambda: namespace["_price_column"](fake)
-    fake._refresh_shopping_list = lambda: namespace["_refresh_shopping_list"](fake)
+    for name in ("load_items", "_price_column", "_refresh_shopping_list"):
+        setattr(fake, name, lambda n=name: namespace[n](fake))
+    return fake
+
+
+METHODS = ("_refresh_prices", "load_items", "_price_column", "_refresh_shopping_list")
+
+PRICES = {
+    ("Discount Magic", "Diamond Ring", "base_price"): 70000,
+    ("Discount Magic", "Diamond Ring", "charisma_level_1"): 67900,
+    ("Discount Magic", "Sprint Potion", "base_price"): 105,
+    ("Discount Magic", "Sprint Potion", "charisma_level_1"): 102,
+}
+
+
+def exec_methods(tree: ast.Module) -> dict:
+    methods = [class_method(tree, name) for name in METHODS]
+    namespace = {"logging": logging}
+    exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
+    return namespace
+
+
+def check_charisma_reloads_available_items(tree: ast.Module) -> None:
+    namespace = exec_methods(tree)
+    # Seed a stale base-price row: the reload must replace it, not append.
+    available = ["Diamond Ring - 70000 Coins"]
+    fake = make_fake(namespace, PRICES, available=available)
+    fake.available_items_list.current = 0
 
     namespace["_refresh_prices"](fake)
 
@@ -95,45 +126,20 @@ def check_charisma_reloads_available_items(tree: ast.Module) -> None:
     )
     assert "Diamond Ring - 67900 Coins" in available, available
     assert "Sprint Potion - 102 Coins" in available, available
+    assert not any("70000" in row for row in available), (
+        f"stale base-price rows must not survive the reload: {available}"
+    )
+    # Selection on the same row index is preserved across the reload.
+    assert fake.available_items_list.current == 0
 
 
 def check_charisma_reprices_cart(tree: ast.Module) -> None:
-    methods = [
-        class_method(tree, name)
-        for name in ("_refresh_prices", "load_items", "_price_column", "_refresh_shopping_list")
-    ]
-    namespace = {"logging": logging}
-    exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
-
-    prices = {
-        ("Discount Magic", "Diamond Ring", "base_price"): 70000,
-        ("Discount Magic", "Diamond Ring", "charisma_level_1"): 67900,
-        ("Discount Magic", "Sprint Potion", "base_price"): 105,
-        ("Discount Magic", "Sprint Potion", "charisma_level_1"): 102,
-    }
-
+    namespace = exec_methods(tree)
     cart_display: list[str] = []
-
-    class Combo:
-        def __init__(self, text): self._text = text
-        def currentText(self): return self._text
-
-    class ItemList:
-        def __init__(self, sink): self.sink = sink
-        def clear(self): self.sink.clear()
-        def addItem(self, text): self.sink.append(text)
-
-    fake = type("FakeTool", (), {})()
-    fake.sqlite_cursor = FakeCursor(prices)
-    fake.shop_combobox = Combo("Discount Magic")
-    fake.charisma_combobox = Combo("Charisma 1")
-    fake.available_items_list = ItemList([])
-    fake.shopping_list = ItemList(cart_display)
-    fake.shopping_items = {"Diamond Ring": {"price": 70000, "quantity": 2}}
-    fake.update_total = lambda: None
-    fake.load_items = lambda: namespace["load_items"](fake)
-    fake._price_column = lambda: namespace["_price_column"](fake)
-    fake._refresh_shopping_list = lambda: namespace["_refresh_shopping_list"](fake)
+    fake = make_fake(
+        namespace, PRICES, cart_display=cart_display,
+        cart={"Diamond Ring": {"price": 70000, "quantity": 2}},
+    )
 
     namespace["_refresh_prices"](fake)
 
