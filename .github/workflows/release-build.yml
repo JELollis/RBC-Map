@@ -2,6 +2,11 @@ name: Release builds
 
 on:
   workflow_dispatch:
+    inputs:
+      macos_only:
+        description: Build only the macOS installers
+        type: boolean
+        default: false
   push:
     tags:
       - "v*"
@@ -16,6 +21,7 @@ env:
 
 jobs:
   windows:
+    if: ${{ !inputs.macos_only }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -100,6 +106,7 @@ jobs:
           path: build/windows-artifacts/*
 
   deb:
+    if: ${{ !inputs.macos_only }}
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -172,7 +179,16 @@ jobs:
           path: build/deb/artifacts/*
 
   macos:
-    runs-on: macos-14
+    name: macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -188,7 +204,9 @@ jobs:
       - name: Verify frozen bundle
         run: |
           check=build/rbc-map-self-check.txt
-          dist/'RBC Community Map.app/Contents/MacOS/RBC Community Map' --self-check="$check"
+          executable="dist/RBC Community Map.app/Contents/MacOS/RBC Community Map"
+          test "$(lipo -archs "$executable")" = "${{ matrix.arch }}"
+          "$executable" --self-check="$check"
           test -s "$check"
           grep -Fx 'version=1.0.4' "$check"
           test "$(grep -Ec '^resource_(images|css|help)=True:' "$check")" -eq 3
@@ -200,18 +218,19 @@ jobs:
           mkdir -p build/dmg
           cp -a "dist/RBC Community Map.app" build/dmg/
           ln -s /Applications build/dmg/Applications
-          hdiutil create -volname "RBC Community Map 1.0.4" -srcfolder build/dmg -ov -format UDZO build/RBC-Map-1.0.4-macos.dmg
+          hdiutil create -volname "RBC Community Map 1.0.4" -srcfolder build/dmg -ov -format UDZO build/RBC-Map-1.0.4-macos-${{ matrix.arch }}.dmg
           artifact_dir=build/macos/artifacts
           mkdir -p "$artifact_dir"
           printf '%s\n' '${{ github.sha }}' > "$artifact_dir/BUILD-SHA.txt"
-          cp build/RBC-Map-1.0.4-macos.dmg "$artifact_dir/"
-          (cd "$artifact_dir" && shasum -a 256 RBC-Map-1.0.4-macos.dmg > RBC-Map-1.0.4-macos.dmg.sha256)
+          cp build/RBC-Map-1.0.4-macos-${{ matrix.arch }}.dmg "$artifact_dir/"
+          (cd "$artifact_dir" && shasum -a 256 RBC-Map-1.0.4-macos-${{ matrix.arch }}.dmg > RBC-Map-1.0.4-macos-${{ matrix.arch }}.dmg.sha256)
       - uses: actions/upload-artifact@v4
         with:
-          name: RBC-Map-macos-1.0.4
+          name: RBC-Map-macos-1.0.4-${{ matrix.arch }}
           path: build/macos/artifacts/*
 
   rpm:
+    if: ${{ !inputs.macos_only }}
     runs-on: ubuntu-latest
     container: fedora:42
     steps:
@@ -293,6 +312,7 @@ jobs:
           path: build/rpm/artifacts/*
 
   arch:
+    if: ${{ !inputs.macos_only }}
     runs-on: ubuntu-latest
     container: archlinux:base
     steps:
