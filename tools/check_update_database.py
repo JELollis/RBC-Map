@@ -298,7 +298,11 @@ def shops_remain_available_without_coordinates(root: Path) -> None:
 
 
 def shop_viewer_displays_unknown_coordinates_as_blank(_root: Path) -> None:
-    from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
+    try:
+        from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
+    except (ImportError, OSError) as exc:
+        print(f"shop_viewer_displays_unknown_coordinates_as_blank skipped: Qt unavailable ({exc})")
+        return
 
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     app = QApplication.instance() or QApplication([])
