@@ -3,6 +3,7 @@
 import ast
 import gc
 import logging
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -84,6 +85,7 @@ def load_function(function_name: str):
         "fetch_location_update": lambda **kwargs: {},
         "DB_PATH": None,
         "BUILDING_CLASS_MAP": {},
+        "QTabWidget": object,
     }
     exec(compile(ast.Module(body=[node], type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace[function_name], namespace
@@ -295,6 +297,26 @@ def shops_remain_available_without_coordinates(root: Path) -> None:
         assert conn.execute(query).fetchall() == [("Discount Magic", "C", "3rd"), ("Known Shop", "NA", "NA")]
 
 
+def shop_viewer_displays_unknown_coordinates_as_blank(_root: Path) -> None:
+    from PySide6.QtWidgets import QApplication, QTableWidget, QTableWidgetItem, QTabWidget
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    app = QApplication.instance() or QApplication([])
+    render, namespace = load_function("add_table_tab")
+    namespace.update(QTableWidget=QTableWidget, QTableWidgetItem=QTableWidgetItem)
+    tabs = QTabWidget()
+    render(
+        None, tabs, "shops", ["Name", "Column", "Row"],
+        [("Discount Magic", "NA", "NA"), ("Known Shop", "B", "2nd")],
+    )
+    table = tabs.widget(0)
+    assert [
+        [table.item(row, col).text() for col in range(3)] for row in range(2)
+    ] == [["Discount Magic", "", ""], ["Known Shop", "B", "2nd"]]
+    tabs.close()
+    app.processEvents()
+
+
 def count_rows(db_path: Path, table: str) -> int:
     conn = sqlite3.connect(db_path)
     try:
@@ -461,6 +483,7 @@ def run_case(name, case) -> None:
 
 for case in (
     shops_remain_available_without_coordinates,
+    shop_viewer_displays_unknown_coordinates_as_blank,
     malformed_payload_is_reported,
     manual_update_reports_database_failure,
     startup_worker_reports_database_failure,
