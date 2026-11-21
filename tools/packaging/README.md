@@ -1,7 +1,8 @@
 # RBC-Map release packaging
 
 Release builds use Python 3.13 and are produced by the controlled GitHub Actions
-workflow from an exact source SHA. Local builds are for recipe validation only.
+workflow from the immutable `github.sha` associated with the selected workflow
+run ref. Local builds are for recipe validation only.
 
 - Windows: Nuitka onedir, followed by NSIS. The installer installs application
   files under `%LOCALAPPDATA%\Programs\RBC-Map` and preserves user data under
