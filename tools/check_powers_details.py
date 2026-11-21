@@ -6,6 +6,7 @@ import ast
 import os
 import sqlite3
 import subprocess
+import sys
 from contextlib import closing
 from pathlib import Path
 from typing import Type
@@ -48,24 +49,34 @@ def _bind_qt() -> bool:
     return True
 
 
+_QT_PROBE = (
+    "import os; os.environ['QT_QPA_PLATFORM'] = 'offscreen';"
+    "from PySide6.QtCore import Qt;"
+    "from PySide6.QtWidgets import QApplication;"
+    "app = QApplication.instance() or QApplication([])"
+)
+
+
 def _probe_qt() -> bool:
-    """Verify the offscreen platform plugin actually loads."""
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    try:
-        QApplication.instance() or QApplication([])
-    except Exception as exc:
-        print(f"Qt offscreen probe failed: {exc}")
+    """Verify Qt imports and the offscreen plugin loads, in a subprocess so
+    a platform-plugin abort cannot kill this checker before provisioning."""
+    result = subprocess.run(
+        [sys.executable, "-c", _QT_PROBE],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"Qt offscreen probe failed (exit {result.returncode}): {result.stderr.strip()[-400:]}")
         return False
     return True
 
 
 def _ensure_qt() -> bool:
     """Use Qt when it works; on CI, provision native libs and re-verify."""
-    if _bind_qt() and _probe_qt():
+    if _probe_qt() and _bind_qt():
         return True
     if not os.environ.get("CI") or not _provision_qt_native_libs():
         return False
-    return _bind_qt() and _probe_qt()
+    return _probe_qt() and _bind_qt()
 
 
 def main() -> None:

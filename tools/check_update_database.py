@@ -7,6 +7,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -48,29 +49,36 @@ def _bind_qt_widgets():
     return QApplication, QTableWidget, QTableWidgetItem, QTabWidget
 
 
-def _probe_qt_widgets(widgets) -> bool:
-    """Verify the offscreen platform plugin actually loads."""
-    QApplication, _, _, _ = widgets
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    try:
-        QApplication.instance() or QApplication([])
-    except Exception as exc:
-        print(f"Qt offscreen probe failed: {exc}")
+_QT_PROBE = (
+    "import os; os.environ['QT_QPA_PLATFORM'] = 'offscreen';"
+    "from PySide6.QtCore import Qt;"
+    "from PySide6.QtWidgets import QApplication;"
+    "app = QApplication.instance() or QApplication([])"
+)
+
+
+def _probe_qt() -> bool:
+    """Verify Qt imports and the offscreen plugin loads, in a subprocess so
+    a platform-plugin abort cannot kill this checker before provisioning."""
+    result = subprocess.run(
+        [sys.executable, "-c", _QT_PROBE],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"Qt offscreen probe failed (exit {result.returncode}): {result.stderr.strip()[-400:]}")
         return False
     return True
 
 
 def _qt_widgets():
     """Return the Qt widget classes when Qt works; provision and re-verify on CI."""
-    widgets = _bind_qt_widgets()
-    if widgets is not None and _probe_qt_widgets(widgets):
+    widgets = _bind_qt_widgets() if _probe_qt() else None
+    if widgets is not None:
         return widgets
     if not os.environ.get("CI") or not _provision_qt_native_libs():
         return None
-    widgets = _bind_qt_widgets()
-    if widgets is not None and _probe_qt_widgets(widgets):
-        return widgets
-    return None
+    widgets = _bind_qt_widgets() if _probe_qt() else None
+    return widgets
 
 
 class FakeRequests:
