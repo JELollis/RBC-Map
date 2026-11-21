@@ -37,7 +37,7 @@ RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleywa
 
 | Tool | What it does |
 | --- | --- |
-| **Shopping list** | Build item lists, calculate total cost, compare against available coins, and view the countdown to the next shop update. |
+| **Shopping list** | Build item lists with Charisma-level prices, calculate total cost, compare against available coins, and view the countdown to the next shop update. |
 | **Damage calculator** | Estimate damage required to bring a target to staking level and compare item combinations. |
 | **Power information** | Review game powers, descriptions, costs, effects, and the countdown to the next guild move. |
 | **Database viewer** | Inspect and manage underlying data tables (intended for advanced users). |

@@ -1052,6 +1052,10 @@ under 0.14.0, plus:
   buttons.
 
 ### 🛠️ Maintenance
+- **Shopping List Tool:** changing the Charisma level now reloads the
+  Available Items list at the selected discount prices instead of only
+  repricing items already on the list, so prices update even with an
+  empty shopping list.
 - **Saved data carried over on upgrade:** 1.0.0 moved the database and
   session data to the per-user data folder but never copied the old data,
   so upgrading users started with no saved characters, settings, or
