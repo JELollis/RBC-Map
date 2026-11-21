@@ -10606,14 +10606,23 @@ def _gui_self_check(render_check: bool = True) -> int:
         image = webview.grab().toImage()
         if image.isNull():
             return False
-        lit = total = 0
+        # The test page paints a solid #3366cc background; require a
+        # substantial fraction of samples to match it (a blank white or
+        # black frame must not pass).
+        target = (0x33, 0x66, 0xCC)
+        matching = total = 0
         for y in range(0, image.height(), 8):
             for x in range(0, image.width(), 8):
                 color = image.pixelColor(x, y)
                 total += 1
-                if color.alpha() > 0 and (color.red() or color.green() or color.blue()):
-                    lit += 1
-        return total > 0 and lit / total > 0.5
+                if color.alpha() > 0 and all(
+                    abs(channel - want) <= 32
+                    for channel, want in zip(
+                        (color.red(), color.green(), color.blue()), target
+                    )
+                ):
+                    matching += 1
+        return total > 0 and matching / total > 0.5
 
     def verify() -> None:
         result["rendered"] = webview.isVisible() and has_painted_pixels()

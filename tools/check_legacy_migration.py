@@ -335,12 +335,14 @@ def windows_install_dirs_are_scanned(t: Path):
     assert names(src / "rbc_map_data.db") == ["Carol"], "Program Files source modified"
     assert names(legacy_x86 / "rbc_map_data.db") == ["Dave"], "Program Files (x86) source modified"
 
-    # UAC-virtualized install: data exists ONLY under VirtualStore.
+    # UAC-virtualized install: VirtualStore competies with the Program Files
+    # databases; the newest populated DB wins, as at real startup.
     vsrc = virtual / "Program Files (x86)" / "RBC Community Map" / "sessions"
     make_db(vsrc / "rbc_map_data.db", ["Eve"])
-    v_dirs = [d for d in dirs if "VirtualStore" in d.parts]
-    assert vsrc in v_dirs
-    msg = migrate(t / "new3", v_dirs)
+    newest = os.stat(legacy_x86 / "rbc_map_data.db").st_mtime + 60
+    os.utime(vsrc / "rbc_map_data.db", (newest, newest))
+    assert vsrc in dirs
+    msg = migrate(t / "new3", dirs)
     assert msg and "Migrated" in msg, msg
     assert names(t / "new3/rbc_map_data.db") == ["Eve"]
     assert names(vsrc / "rbc_map_data.db") == ["Eve"], "VirtualStore source modified"
