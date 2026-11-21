@@ -1008,7 +1008,9 @@ under 0.14.0, plus:
 - Asynchronous login callbacks and retries are bound to a per-request ID so
   stale results from a previous character cannot clear or consume the
   current login's state; switching to a character without a saved cookie
-  signs out first so another session is not reused.
+  signs out first so another session is not reused. Queueing a newer
+  password login also invalidates any pending saved-cookie check, so a
+  stale callback cannot displace the newer attempt.
 - Passwords and session-cookie values are stored through the operating
   system credential store (`keyring`) instead of plaintext SQLite values,
   with legacy-data migration on startup. Entries are scoped by a persistent
@@ -1050,6 +1052,10 @@ under 0.14.0, plus:
   buttons.
 
 ### 🛠️ Maintenance
+- **Shopping List Tool:** changing the Charisma level now reloads the
+  Available Items list at the selected discount prices instead of only
+  repricing items already on the list, so prices update even with an
+  empty shopping list.
 - **Saved data carried over on upgrade:** 1.0.0 moved the database and
   session data to the per-user data folder but never copied the old data,
   so upgrading users started with no saved characters, settings, or
@@ -1096,3 +1102,4 @@ under 0.14.0, plus:
 - Corrected stale BeautifulSoup and crowdsourced-reporting documentation
   and refreshed the README and help documentation.
 - Show Power, Guild, and Cost captions once in the Powers Information details panel.
+- Populate catalog shop names even when the location feed supplies no shop coordinates.

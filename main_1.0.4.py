@@ -2191,6 +2191,14 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
             ensure_credential_namespace(conn)
             migrate_schema(conn)                      # Then migrate schema
             insert_initial_data(conn)                 # THEN populate defaults
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO shops (Name, `Column`, Row)
+                SELECT DISTINCT shop_name, 'NA', 'NA'
+                FROM shop_items
+                WHERE shop_name IS NOT NULL AND TRIM(shop_name) <> ''
+                """
+            )
             logging.info(f"Database initialized successfully at {db_path}")
             return True
     except sqlite3.Error as e:
@@ -4996,6 +5004,8 @@ class RBCCommunityMap(QMainWindow):
         self.pending_login = True
         self._pending_login_character = character_name
         self._login_retry_count = 0
+        self._pending_cookie_character = None
+        self._pending_cookie_request_id = None
 
     def login_selected_character(self, request_id=None) -> None:
         """Auto-fill and submit the RavenBlack login form for the selected character.
@@ -7768,6 +7778,8 @@ class DatabaseViewer(QDialog):
 
         for row_idx, row_data in enumerate(data):
             for col_idx, value in enumerate(row_data):
+                if table_name == "shops" and column_names[col_idx] in {"Column", "Row"} and value == "NA":
+                    value = ""
                 table_widget.setItem(row_idx, col_idx, QTableWidgetItem(str(value or "")))
 
         table_widget.resizeColumnsToContents()
@@ -9185,7 +9197,7 @@ class ShoppingListTool(QDialog):
         # ---- Signals ----
         self.add_item_button.clicked.connect(self.add_item)
         self.remove_item_button.clicked.connect(self.remove_item)
-        self.shop_combobox.currentIndexChanged.connect(self.load_items)
+        self.shop_combobox.currentIndexChanged.connect(lambda _i: self.load_items())
         self.charisma_combobox.currentIndexChanged.connect(self._refresh_prices)
 
         self.update_total()
@@ -9206,7 +9218,12 @@ class ShoppingListTool(QDialog):
         except sqlite3.Error as exc:
             logging.error("Failed to populate shop dropdown: %s", exc)
 
-    def load_items(self) -> None:
+    def load_items(self, preserve_selection: bool = False) -> None:
+        selected_name = None
+        if preserve_selection:
+            item = self.available_items_list.currentItem()
+            if item is not None:
+                selected_name = item.text().split(" - ")[0]
         self.available_items_list.clear()
 
         if not self.sqlite_cursor:
@@ -9234,6 +9251,13 @@ class ShoppingListTool(QDialog):
                 )
         except sqlite3.Error as exc:
             logging.error("Failed to load items: %s", exc)
+
+        if selected_name is not None:
+            for row in range(self.available_items_list.count()):
+                row_item = self.available_items_list.item(row)
+                if row_item is not None and row_item.text().split(" - ")[0] == selected_name:
+                    self.available_items_list.setCurrentRow(row)
+                    break
 
     def _price_column(self) -> str:
         return {
@@ -9299,6 +9323,8 @@ class ShoppingListTool(QDialog):
     def _refresh_prices(self) -> None:
         if not self.sqlite_cursor:
             return
+
+        self.load_items(preserve_selection=True)
 
         shop = self.shop_combobox.currentText()
         if not shop or not self.shopping_items:
