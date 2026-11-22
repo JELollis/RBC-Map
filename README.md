@@ -1,6 +1,6 @@
 # RBC Community Map Application
 
-**Current development version: 1.0.5** · **Latest stable release: 1.0.0** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.0)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
+**Current development version: 1.0.5** · **Latest stable release: 1.0.5** ([release branch](https://github.com/JELollis/RBC-Map/tree/version/1.0.5)) · [Repository](https://github.com/JELollis/RBC-Map) · [Changelog](Changelog.md)
 
 RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleyway** in [RavenBlack City](https://quiz.ravenblack.net/blood.pl). It combines an interactive minimap, character management, community-maintained location information, and in-game planning tools.
 
@@ -160,6 +160,7 @@ The documented community reporting feature (**Contribute Discovered Locations**)
 | --- | --- |
 | `dev` | **Beta.** Active development, currently on 1.0.5 (`main_1.0.5.py`); bug fixes and feature work merge here through pull requests. |
 | `release` | **Stable.** Receives release candidates from `version/<number>` branches through pull requests; each merge is tagged `v<number>`. All releases are based on `release`. |
+| [`version/1.0.5`](https://github.com/JELollis/RBC-Map/tree/version/1.0.5) | Release 1.0.5 (`main_1.0.5.py`), the first release with packaged installers. |
 | [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) | Release 1.0.0 (`main_1.0.0.py`). |
 | `version/0.7.1` … `version/0.13.3.0` | Archived PySide6 versions. |
 | `version/0.3.2` … `version/0.7.0` | Archived PyQt5 versions. |
@@ -170,7 +171,7 @@ Each `version/<number>` branch holds that version as `main_<number>.py`, with a
 README and changelog for that version. Branches are snapshots for reference and
 are not maintained.
 
-The `version/1.0.0` branch is the fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.5.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds from `release`.
+The `version/1.0.5` branch is the latest fixed release snapshot, while `dev` moves on as new work lands in `main_1.0.5.py`. Version tags and [releases](https://github.com/JELollis/RBC-Map/releases) mark published builds from `release`.
 
 ## Repository layout
 

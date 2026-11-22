@@ -195,7 +195,9 @@ jobs:
             exit 1
           fi
 
-          apt-get install -y --no-install-recommends xvfb xauth dbus-x11 gnome-keyring libgl1-mesa-dri
+          # Mesa DRI must come from the package's own Depends (libgl1 -> libglx0 -> libglx-mesa0).
+          dpkg -s libgl1-mesa-dri >/dev/null
+          apt-get install -y --no-install-recommends xvfb xauth dbus-x11 gnome-keyring
           useradd --create-home smoke
           cd /home/smoke
           runuser -u smoke -- timeout 180 dbus-run-session -- sh -c 'printf "\n" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"' _ \

@@ -3,9 +3,9 @@
 Release history for the RBC Community Map application, oldest first.
 
 - **Current development version:** 1.0.5, `main_1.0.5.py` on the `dev` branch.
-- **Latest stable release:** [1.0.0](#version-100--first-stable-release), with
+- **Latest stable release:** [1.0.5](#version-105--keyring-credentials-packaged-installers--fixes), with
   the release snapshot on the
-  [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
+  [`version/1.0.5`](https://github.com/JELollis/RBC-Map/tree/version/1.0.5) branch.
 - **Earlier versions:** each is preserved on its own `version/<number>` branch
   as `main_<number>.py`.
 
