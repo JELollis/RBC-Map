@@ -102,14 +102,14 @@ pre {
 </style>
 </head>
 <body>
-<nav><h2>Help Topics</h2><details open><summary>Overview</summary><a href="#Overview">Overview</a><a href="#Version_1_0_4">What’s New in 1.0.4</a><a href="Linux_Installation.html">Linux installation</a></details><details><summary>User Interface</summary><a href="#UI_Overview">UI Overview</a><a href="#Identifying_UI_Parts">Identifying UI Parts</a></details><details><summary>Menu Items</summary><details><summary>File Menu</summary><a href="#FileMenu">FileMenu</a></details><details><summary>Settings Menu</summary><a href="#SettingsMenu">SettingsMenu</a><a href="#Theme_Customization">Theme Customization</a><a href="#CSS_Customization">CSS Customization</a></details><details><summary>Tools Menu</summary><a href="#ToolsMenu">ToolsMenu</a><a href="#DatabaseViewer">DatabaseViewer</a><a href="#PowerReference">PowerReference</a><a href="#ShoppingList">ShoppingList</a><a href="#Damage_Calculator">Damage Calculator</a><a href="#LogViewer">LogViewer</a></details><details><summary>Resources Menu</summary><a href="#ResourcesMenu">ResourcesMenu</a></details><details><summary>Help Menu</summary><a href="#HelpMenu">HelpMenu</a><a href="#Reporting_an_Issue">Reporting an Issue</a></details></details><details><summary>Minimap and Information Bars</summary><a href="#Minimap_and_Information_Bars">Minimap and Information Bars</a><a href="#MinimapControls">MinimapControls</a><a href="#Navigating_the_Minimap">Navigating the Minimap</a><a href="#SetDestination">SetDestination</a><a href="#InfoBars">InfoBars</a></details><details><summary>Character Management</summary><a href="#Character_Management">Character Management</a><a href="#Adding_Modifying_and_Removing_Characters">Adding Modifying and Removing Characters</a></details></nav>
+<nav><h2>Help Topics</h2><details open><summary>Overview</summary><a href="#Overview">Overview</a><a href="#Version_1_0_5">What’s New in 1.0.5</a><a href="Linux_Installation.html">Linux installation</a></details><details><summary>User Interface</summary><a href="#UI_Overview">UI Overview</a><a href="#Identifying_UI_Parts">Identifying UI Parts</a></details><details><summary>Menu Items</summary><details><summary>File Menu</summary><a href="#FileMenu">FileMenu</a></details><details><summary>Settings Menu</summary><a href="#SettingsMenu">SettingsMenu</a><a href="#Theme_Customization">Theme Customization</a><a href="#CSS_Customization">CSS Customization</a></details><details><summary>Tools Menu</summary><a href="#ToolsMenu">ToolsMenu</a><a href="#DatabaseViewer">DatabaseViewer</a><a href="#PowerReference">PowerReference</a><a href="#ShoppingList">ShoppingList</a><a href="#Damage_Calculator">Damage Calculator</a><a href="#LogViewer">LogViewer</a></details><details><summary>Resources Menu</summary><a href="#ResourcesMenu">ResourcesMenu</a></details><details><summary>Help Menu</summary><a href="#HelpMenu">HelpMenu</a><a href="#Reporting_an_Issue">Reporting an Issue</a></details></details><details><summary>Minimap and Information Bars</summary><a href="#Minimap_and_Information_Bars">Minimap and Information Bars</a><a href="#MinimapControls">MinimapControls</a><a href="#Navigating_the_Minimap">Navigating the Minimap</a><a href="#SetDestination">SetDestination</a><a href="#InfoBars">InfoBars</a></details><details><summary>Character Management</summary><a href="#Character_Management">Character Management</a><a href="#Adding_Modifying_and_Removing_Characters">Adding Modifying and Removing Characters</a></details></nav>
 <main>
-<section id="Version_1_0_4">
-<h2>What’s New in 1.0.4</h2>
+<section id="Version_1_0_5">
+<h2>What’s New in 1.0.5</h2>
 <ul>
 <li>Drag the divider to resize the navigation panel. The minimap scales with the panel, and the minimum width keeps the character buttons visible.</li>
 <li>Characters with a saved password can sign in when no usable session cookie is available.</li>
-<li>The app uses the operating system keyring for saved passwords and session cookies by default. On Linux, it requires a working, unlocked credential backend. If you cannot use one, launch with <code>RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.4.py</code> to use a separate <code>RBC-Map-SQLite</code> profile. Add your characters again in this profile, which stores saved passwords and cookies in plaintext.</li>
+<li>The app uses the operating system keyring for saved passwords and session cookies by default. On Linux, it requires a working, unlocked credential backend. If you cannot use one, launch with <code>RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.5.py</code> to use a separate <code>RBC-Map-SQLite</code> profile. Add your characters again in this profile, which stores saved passwords and cookies in plaintext.</li>
 <li>After verifying migrated characters, settings, and sign-in, you can remove legacy session copies and the <code>rbc_map_data.db.pre-migration</code> backup. Keep any copies you still need for rollback. These files can contain plaintext credentials.</li>
 </ul>
 </section>
@@ -153,19 +153,19 @@ sudo apt install -y python3 python3-pip python3-venv \
 <pre><code>python3 -m venv ~/.venvs/rbc-map
 ~/.venvs/rbc-map/bin/python -m pip install --upgrade pip
 ~/.venvs/rbc-map/bin/python -m pip install -r requirements.txt
-~/.venvs/rbc-map/bin/python main_1.0.4.py</code></pre>
+~/.venvs/rbc-map/bin/python main_1.0.5.py</code></pre>
 <p>Use a virtual environment when the distribution protects system-managed pip. <code>--break-system-packages</code> is for disposable test machines only.</p>
 <h3>Keyring and fallback</h3>
 <p>Log into a desktop D-Bus session and unlock the login keyring before the first run. GNOME Keyring/Secret Service is the normal Mint path; KDE KWallet (5.97+/6) can provide the Secret Service path, and the app respects a KWallet-first chained backend. Seahorse can confirm the store is available. If the keyring is unavailable or unresponsive, restart after unlocking it.</p>
 <p><strong>Warning:</strong> the SQLite fallback stores passwords and session cookies in plaintext:</p>
 <pre><code>source ~/.venvs/rbc-map/bin/activate
-RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.4.py</code></pre>
+RBC_MAP_CREDENTIAL_STORAGE=sqlite python main_1.0.5.py</code></pre>
 <p>This uses a separate <code>RBC-Map-SQLite</code> data directory. Remove the environment variable to return to the keyring-backed profile.</p>
 <h3>Virtual machines</h3>
 <p>The application configures Chromium and Qt for software rendering when needed. If the window is blank, confirm the Qt/XCB packages are installed and run from a desktop session rather than a bare TTY.</p>
 <h3>Developer verification</h3>
 <pre><code>~/.venvs/rbc-map/bin/python -c "import PySide6, keyring; print(PySide6.__version__); print(keyring.get_keyring())"
-~/.venvs/rbc-map/bin/python -m py_compile main_1.0.4.py
+~/.venvs/rbc-map/bin/python -m py_compile main_1.0.5.py
 ~/.venvs/rbc-map/bin/python tools/check_credential_store.py</code></pre>
 <p>Run these checks from a source checkout. The checker uses fakes and does not replace a live GUI sign-in test.</p>
 </section>

@@ -36,10 +36,12 @@ jobs:
         run: python tools/check_update_database.py
       - name: Run powers details regression checks
         run: python tools/check_powers_details.py
+      - name: Run shopping list regression checks
+        run: python tools/check_shopping_list.py
       - name: Run legacy migration regression checks
         run: python tools/check_legacy_migration.py
       - name: Verify release tree essentials
         run: |
-          test -f main_1.0.4.py
+          test -f main_1.0.5.py
           test -d images
           test -f requirements.txt

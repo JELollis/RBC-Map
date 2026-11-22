@@ -1,10 +1,10 @@
-"""Regression check for the pre-1.0.0 data migration in main_1.0.4.py.
+"""Regression check for the pre-1.0.0 data migration in main_1.0.5.py.
 
 Extracts ``_count_characters`` and ``migrate_legacy_data`` from the main
 script without importing it (importing would start the Qt app), then runs
 them against temporary folders.
 
-Usage: python tools/check_legacy_migration.py [path/to/main_1.0.4.py]
+Usage: python tools/check_legacy_migration.py [path/to/main_1.0.5.py]
 Exits non-zero on the first failure.
 """
 import ast
@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.4.py"
+MAIN = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "main_1.0.5.py"
 WANTED = {"_connect_read_only", "_count_characters", "_mark_migration_done",
           "_copy_if_absent", "migrate_legacy_data", "remove_persistent_browser_cookies",
           "_legacy_sessions_dirs", "_secure_data_permissions"}

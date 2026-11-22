@@ -2,10 +2,10 @@
 
 Release history for the RBC Community Map application, oldest first.
 
-- **Current development version:** 1.0.4, `main_1.0.4.py` on the `dev` branch.
-- **Latest stable release:** [1.0.0](#version-100--first-stable-release), with
+- **Current development version:** 1.0.5, `main_1.0.5.py` on the `dev` branch.
+- **Latest stable release:** [1.0.5](#version-105--keyring-credentials-packaged-installers--fixes), with
   the release snapshot on the
-  [`version/1.0.0`](https://github.com/JELollis/RBC-Map/tree/version/1.0.0) branch.
+  [`version/1.0.5`](https://github.com/JELollis/RBC-Map/tree/version/1.0.5) branch.
 - **Earlier versions:** each is preserved on its own `version/<number>` branch
   as `main_<number>.py`.
 
@@ -998,7 +998,11 @@ under 0.14.0, plus:
 ### 📘 Documentation
 - Refreshed the README, help documentation, and screenshots for the release.
 
-## Unreleased — on `dev` (target 1.0.4)
+## Version 1.0.5 — Keyring credentials, packaged installers & fixes
+
+The first release with packaged installers (Windows, macOS, Debian/Ubuntu,
+Fedora and Arch). Development versions 1.0.3 and 1.0.4 lived only on `dev` and
+were never released separately; their changes ship here as 1.0.5.
 
 ### 🔐 Saved sign-in and credential storage
 - Characters without a saved session cookie now submit the saved credentials
@@ -1052,6 +1056,7 @@ under 0.14.0, plus:
   buttons.
 
 ### 🛠️ Maintenance
+- Bumped the version to 1.0.5; the entry point is now `main_1.0.5.py`.
 - **Shopping List Tool:** changing the Charisma level now reloads the
   Available Items list at the selected discount prices instead of only
   repricing items already on the list, so prices update even with an
@@ -1071,6 +1076,7 @@ under 0.14.0, plus:
 - Runtime dependencies are pinned to the locally validated versions.
 - Added a Python validation workflow with syntax, Unicode-token,
   regression, and release-tree checks.
+- CI now runs the Shopping List Charisma repricing regression check (AUD-048).
 - Added startup-layout, auto-login, credential-store, database-update, and
   legacy-migration regression checks, including Linux keyring timeout and
   chained-backend coverage.
@@ -1095,6 +1101,11 @@ under 0.14.0, plus:
 - Strengthened the GUI self-check to verify WebEngine actually paints pixels
   (shown window, exposed handle, non-blank frame) on X11/Windows/macOS; the
   offscreen Linux run keeps a load-only mode.
+- Build separate Apple Silicon and Intel macOS DMGs. In Arch CI, run the
+  packaged-app smoke checks as the unprivileged builder so GNOME Keyring
+  starts inside the build container.
+- Use the host C++ and GLib runtimes in Linux packages to avoid graphics-driver
+  and desktop-module conflicts. Check the Debian installer on Ubuntu 24.04.
 - Removed the tracked `scratch.py` design-demo artifact from the release
   tree.
 - Reintegrated credential storage into the single monolithic application

@@ -4,13 +4,14 @@
 
 import sys
 import os
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from PyInstaller.utils.hooks import copy_metadata
 
 
 ROOT = Path(SPECPATH).parent.parent
-VERSION = os.environ.get("RBC_MAP_VERSION", "1.0.4")
+VERSION = os.environ.get("RBC_MAP_VERSION", "1.0.5")
 datas = [
     (str(ROOT / "images"), "images"),
     (str(ROOT / "css"), "css"),
@@ -29,7 +30,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    [str(ROOT / "main_1.0.4.py")],
+    [str(ROOT / "main_1.0.5.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,
@@ -41,6 +42,18 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+if sys.platform.startswith("linux"):
+    # Host graphics drivers and GIO modules must use the host runtimes.
+    host_runtime_patterns = (
+        "libstdc++.so*", "libgcc_s.so*", "libglib-2.0.so*",
+        "libgio-2.0.so*", "libgobject-2.0.so*", "libgmodule-2.0.so*",
+        "libgthread-2.0.so*", "libgbm.so*",
+    )
+    a.binaries = [
+        binary for binary in a.binaries
+        if not any(fnmatchcase(Path(binary[0]).name, pattern) for pattern in host_runtime_patterns)
+    ]
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
