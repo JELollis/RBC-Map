@@ -14,6 +14,12 @@ files and are less detailed than later entries.
 
 ---
 
+## Development fixes on `dev`
+
+- Newly learned shop, guild, and community-building locations refresh the
+  in-session minimap without loading saved credentials or requiring a manual
+  data update.
+
 ## Version 0.1.0 — Tkinter prototype
 
 **💡 Summary**

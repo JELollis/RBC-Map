@@ -2216,11 +2216,11 @@ _secure_data_permissions()
 # Load Data from Database
 # -----------------------
 
-def load_data() -> tuple:
+def load_data(load_session: bool = True) -> tuple:
     """
     Load map-related data from the SQLite database.
 
-    Also loads:
+    When ``load_session`` is true, also loads:
     - keybind configuration
     - active CSS profile
     - last active character
@@ -2357,46 +2357,46 @@ def load_data() -> tuple:
             row = cursor.fetchone()
             current_css_profile = row[0] if row else "Default"
 
-            # -----------------------
-            # Last Active Character
-            # -----------------------
-
             selected_character = None
             last_destination = None
 
-            cursor.execute(
-                "SELECT character_id FROM last_active_character LIMIT 1"
-            )
-            row = cursor.fetchone()
-
-            if row:
-                character_id = row[0]
+            if load_session:
+                # -----------------------
+                # Last Active Character
+                # -----------------------
                 cursor.execute(
-                    "SELECT id, name, password FROM characters WHERE id = ?",
-                    (character_id,),
+                    "SELECT character_id FROM last_active_character LIMIT 1"
                 )
-                char = cursor.fetchone()
+                row = cursor.fetchone()
 
-                if char:
-                    selected_character = {
-                        "id": char[0],
-                        "name": char[1],
-                        "password": load_character_secret(conn, char[0], char[2]),
-                    }
-
+                if row:
+                    character_id = row[0]
                     cursor.execute(
-                        """
-                        SELECT col, row
-                        FROM destinations
-                        WHERE character_id = ?
-                        ORDER BY timestamp DESC
-                        LIMIT 1
-                        """,
+                        "SELECT id, name, password FROM characters WHERE id = ?",
                         (character_id,),
                     )
-                    dest = cursor.fetchone()
-                    if dest:
-                        last_destination = (dest[0], dest[1])
+                    char = cursor.fetchone()
+
+                    if char:
+                        selected_character = {
+                            "id": char[0],
+                            "name": char[1],
+                            "password": load_character_secret(conn, char[0], char[2]),
+                        }
+
+                        cursor.execute(
+                            """
+                            SELECT col, row
+                            FROM destinations
+                            WHERE character_id = ?
+                            ORDER BY timestamp DESC
+                            LIMIT 1
+                            """,
+                            (character_id,),
+                        )
+                        dest = cursor.fetchone()
+                        if dest:
+                            last_destination = (dest[0], dest[1])
 
             logging.debug("Database data loaded successfully")
 
@@ -5883,12 +5883,14 @@ class RBCCommunityMap(QMainWindow):
             return
 
         pending_reports = []
+        map_data_changed = False
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cur = conn.cursor()
                 for it in items:
                     # Idempotent local add/update (re-adds a manually deleted row).
-                    self._upsert_building(cur, it["cls"], it["name"], it["col"], it["row"])
+                    if self._upsert_building(cur, it["cls"], it["name"], it["col"], it["row"]):
+                        map_data_changed = True
                     # Report each building once per session so the shared files
                     # gain anything they lack; the server dedups by location.
                     sig = (it["cls"], it["name"], f"{it['col']}|{it['row']}")
@@ -5904,6 +5906,17 @@ class RBCCommunityMap(QMainWindow):
         # Only share once the local write succeeded; batched + off-thread.
         if pending_reports:
             self._flush_reports(pending_reports)
+
+        # The learner runs after the page parser has already loaded the current
+        # map dictionaries. Reload them now so a newly visited location appears
+        # on the minimap during this session, without requiring Update Data or a
+        # restart. Reporting is deliberately flushed first so a map-refresh
+        # failure cannot suppress a valid discovery report.
+        if map_data_changed:
+            try:
+                self.refresh_map_data_from_db()
+            except Exception as e:
+                logging.warning(f"Auto-learn map refresh skipped: {e}")
 
     def _building_game_coord(self, el) -> tuple[int | None, int | None]:
         """Return the RBC game (x, y) of the cell a building span sits in.
@@ -7512,9 +7525,9 @@ class RBCCommunityMap(QMainWindow):
         """Reload building/coordinate mappings from the DB and redraw the map.
 
         Run on the UI thread after an update writes new rows (locations and/or
-        community buildings). Reuses :func:`load_data` but discards its session
-        fields (keybind/CSS/character/destination) so an in-session refresh does
-        not disturb the active character or destination.
+        community buildings). Reuses :func:`load_data` in map-only mode so an
+        in-session refresh does not read credentials or disturb the active
+        character or destination.
         """
         try:
             (
@@ -7529,7 +7542,7 @@ class RBCCommunityMap(QMainWindow):
                 self.guilds_coordinates,
                 self.places_of_interest_coordinates,
                 _kb, _css, _sel, _dest,
-            ) = load_data()
+            ) = load_data(load_session=False)
             # load_data restores the DB palette; reapply the active game CSS
             # overlay so a refresh cannot revert the minimap to defaults.
             self.apply_minimap_colors_from_css()
