@@ -153,6 +153,8 @@ def ordered_database_queries_are_explicit():
     assert source.count("SELECT Name, Coordinate FROM rows ORDER BY ID") >= 2
     assert "WHERE `Column` IN" in source
     assert "def street_aliases" in source
+    assert 'CREATE INDEX IF NOT EXISTS' in source
+    assert 'idx_{table}_location' in source
 
 
 if __name__ == "__main__":

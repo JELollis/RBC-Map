@@ -1131,3 +1131,5 @@ were never released separately; their changes ship here as 1.0.5.
   labels, including cleanup of legacy alias-spelled duplicate rows.
 - Alias-aware transit and recent-history lookups now filter in SQLite instead
   of scanning every table row for each remote-feed entry.
+- Added location indexes for building tables so those filtered lookups remain
+  efficient as community data grows.
