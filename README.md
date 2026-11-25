@@ -13,6 +13,7 @@ RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleywa
 - Show routes to the nearest **transit station** (red), **bank** (blue), and **pub** (orange).
 - Choose a **3×3** (default), **5×5**, **7×7**, or **9×9** view.
 - Recenter by clicking a map cell or choosing a location from the dropdowns and selecting **Go**.
+- Street selectors follow the map's canonical database order and use `NCL`/`WCL` for the city-limit boundaries.
 - Use **Set Destination** to mark a destination and display its route in green.
 - Customize the minimap theme; fallback rendering helps maintain usability in zoomed views.
 - Refresh destination choices when the destination dialog opens.

@@ -209,6 +209,51 @@ UPDATE_COMMUNITY_URL = "https://lollis-home.ddns.net/api/community_buildings.jso
 # is empty or temporarily unavailable (first-run bootstrap).
 UPDATE_SEED_URL = "https://lollis-home.ddns.net/api/buildings_seed.json"
 
+# The database keeps the full city-limit names as lookup aliases, but the app
+# uses the canonical ID 1 abbreviations everywhere it displays a street.
+CITY_LIMIT_ALIASES = {
+    "Northern City Limits": "NCL",
+    "Western City Limits": "WCL",
+}
+
+
+def visible_street_names(streets: dict[str, int]) -> list[str]:
+    """Return streets in database ID order, hiding duplicate city-limit aliases."""
+    return [name for name in streets if name not in CITY_LIMIT_ALIASES]
+
+
+def canonical_street_label(name: str | None) -> str | None:
+    """Return the display/storage label for a street or city-limit alias."""
+    return CITY_LIMIT_ALIASES.get(name, name)
+
+
+def street_aliases(name: str) -> list[str]:
+    """Return the canonical street label and any accepted database aliases."""
+    canonical = canonical_street_label(name)
+    return [
+        canonical,
+        *[alias for alias, target in CITY_LIMIT_ALIASES.items() if target == canonical],
+    ]
+
+
+def canonical_intersection_label(col: str, row: str) -> str:
+    """Format an intersection using canonical display names."""
+    return f"{canonical_street_label(col)} & {canonical_street_label(row)}"
+
+
+def canonical_street_names_by_coordinate(streets: dict[str, int]) -> dict[int, str]:
+    """Map each coordinate to its first (canonical) street name.
+
+    ``load_data`` reads streets in ID order, and the explicit alias preference
+    preserves ID 1 for the coordinate shared by each abbreviated/full pair.
+    """
+    names: dict[int, str] = {}
+    for name, coordinate in streets.items():
+        current = names.get(coordinate)
+        if current is None or (current in CITY_LIMIT_ALIASES and name not in CITY_LIMIT_ALIASES):
+            names[coordinate] = name
+    return names
+
 # After triggering a scrape we poll locations.json until its "last_updated"
 # field advances (i.e. the bot finished), instead of a fixed blind sleep.
 REFRESH_POLL_MAX_SECONDS = 20.0
@@ -1256,6 +1301,26 @@ def save_logging_level_to_db(level: int) -> bool:
 # -----------------------
 # SQLite Setup
 # -----------------------
+LOCATION_INDEX_TABLES = (
+    "banks",
+    "taverns",
+    "transits",
+    "userbuildings",
+    "placesofinterest",
+    "shops",
+    "guilds",
+)
+
+
+def ensure_location_indexes(conn: sqlite3.Connection) -> None:
+    """Ensure building lookup indexes exist on the current schema tables."""
+    for table in LOCATION_INDEX_TABLES:
+        conn.execute(
+            f'CREATE INDEX IF NOT EXISTS "idx_{table}_location" '
+            f'ON `{table}` (`Column`, Row)'
+        )
+
+
 def create_tables(conn: sqlite3.Connection) -> None:
     """Create database tables if they don’t exist."""
     cursor = conn.cursor()
@@ -2190,6 +2255,9 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
             create_tables(conn)                       # Fist create missing tables
             ensure_credential_namespace(conn)
             migrate_schema(conn)                      # Then migrate schema
+            # Location indexes must be created after migration: rebuilding
+            # shops/guilds drops any indexes created beforehand.
+            ensure_location_indexes(conn)
             insert_initial_data(conn)                 # THEN populate defaults
             conn.execute(
                 """
@@ -2234,10 +2302,10 @@ def load_data(load_session: bool = True) -> tuple:
             # Coordinate Mappings
             # -----------------------
 
-            cursor.execute("SELECT Name, Coordinate FROM columns")
+            cursor.execute("SELECT Name, Coordinate FROM columns ORDER BY ID")
             columns = {name: coord for name, coord in cursor.fetchall()}
 
-            cursor.execute("SELECT Name, Coordinate FROM rows")
+            cursor.execute("SELECT Name, Coordinate FROM rows ORDER BY ID")
             rows = {name: coord for name, coord in cursor.fetchall()}
 
             def to_coords(col_name: str, row_name: str) -> tuple[int | None, int | None]:
@@ -2257,7 +2325,12 @@ def load_data(load_session: bool = True) -> tuple:
             banks_coordinates: dict[str, tuple[str, str]] = {}
             cursor.execute("SELECT Column, Row FROM banks")
             for col_name, row_name in cursor.fetchall():
-                banks_coordinates[f"{col_name} & {row_name}"] = (col_name, row_name)
+                canonical_col = canonical_street_label(col_name)
+                canonical_row = canonical_street_label(row_name)
+                banks_coordinates[canonical_intersection_label(col_name, row_name)] = (
+                    canonical_col,
+                    canonical_row,
+                )
 
             # -----------------------
             # Coordinate-Based Entities
@@ -4311,11 +4384,12 @@ class RBCCommunityMap(QMainWindow):
         self.combo_columns.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.combo_columns.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.combo_columns.addItem("Select Column")  # Placeholder
-        self.combo_columns.addItems(list(columns.keys()))
+        column_names = visible_street_names(columns)
+        self.combo_columns.addItems(column_names)
         self.combo_columns.setCurrentIndex(0)
         self.combo_columns.model().item(0).setEnabled(False)  # Disable placeholder
 
-        column_completer = QCompleter(list(columns.keys()))
+        column_completer = QCompleter(column_names)
         column_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.combo_columns.setCompleter(column_completer)
 
@@ -4329,11 +4403,12 @@ class RBCCommunityMap(QMainWindow):
         self.combo_rows.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self.combo_rows.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.combo_rows.addItem("Select Row")
-        self.combo_rows.addItems(list(rows.keys()))
+        row_names = visible_street_names(rows)
+        self.combo_rows.addItems(row_names)
         self.combo_rows.setCurrentIndex(0)
         self.combo_rows.model().item(0).setEnabled(False)
 
-        row_completer = QCompleter(list(rows.keys()))
+        row_completer = QCompleter(row_names)
         row_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.combo_rows.setCompleter(row_completer)
 
@@ -5883,8 +5958,8 @@ class RBCCommunityMap(QMainWindow):
             return
 
         # game coordinate -> street name (inverse of the columns/rows tables)
-        inv_cols = {v: k for k, v in (self.columns or {}).items()}
-        inv_rows = {v: k for k, v in (self.rows or {}).items()}
+        inv_cols = canonical_street_names_by_coordinate(self.columns or {})
+        inv_rows = canonical_street_names_by_coordinate(self.rows or {})
         if not inv_cols or not inv_rows:
             return
 
@@ -6043,6 +6118,8 @@ class RBCCommunityMap(QMainWindow):
         name_col = mapping["name_col"]
         if cls == "transit":
             name = re.sub(r"\s+Station\s*$", "", name, flags=re.IGNORECASE).strip()
+        col = canonical_street_label(col)
+        row = canonical_street_label(row)
 
         if table in ("banks", "taverns", "transits", "placesofinterest", "userbuildings"):
             if cls == "transit":
@@ -6050,27 +6127,55 @@ class RBCCommunityMap(QMainWindow):
                 # observations may have stored both "Calliope" and
                 # "Calliope Station"; retain one canonical row when a new
                 # observation arrives at that cell.
+                col_aliases = street_aliases(col)
+                row_aliases = street_aliases(row)
+                col_marks = ", ".join("?" for _ in col_aliases)
+                row_marks = ", ".join("?" for _ in row_aliases)
                 cur.execute(
-                    f"SELECT ID, {name_col} FROM {table} WHERE `Column`=? AND Row=? ORDER BY ID",
-                    (col, row),
+                    f"SELECT ID, {name_col}, `Column`, Row FROM {table} "
+                    f"WHERE `Column` IN ({col_marks}) AND Row IN ({row_marks}) ORDER BY ID",
+                    [*col_aliases, *row_aliases],
                 )
                 existing = cur.fetchall()
                 if existing:
                     matching = next((entry for entry in existing if entry[1] == name), None)
                     keep_id = matching[0] if matching else existing[0][0]
-                    if not matching or len(existing) > 1:
+                    if (
+                        not matching
+                        or len(existing) > 1
+                        or matching[2] != col
+                        or matching[3] != row
+                    ):
                         cur.execute(
-                            f"UPDATE {table} SET {name_col}=? WHERE ID=?",
-                            (name, keep_id),
+                            f"UPDATE {table} SET {name_col}=?, `Column`=?, Row=? WHERE ID=?",
+                            (name, col, row, keep_id),
                         )
-                        cur.execute(
-                            f"DELETE FROM {table} WHERE `Column`=? AND Row=? AND ID<>?",
-                            (col, row, keep_id),
-                        )
+                        duplicate_ids = [entry[0] for entry in existing if entry[0] != keep_id]
+                        if duplicate_ids:
+                            placeholders = ", ".join("?" for _ in duplicate_ids)
+                            cur.execute(
+                                f"DELETE FROM {table} WHERE ID IN ({placeholders})",
+                                duplicate_ids,
+                            )
                         return "updated"
                     return None
-            cur.execute(f"SELECT 1 FROM {table} WHERE `Column`=? AND Row=? AND {name_col}=?", (col, row, name))
-            if cur.fetchone():
+            cur.execute(f"SELECT ID, `Column`, Row FROM {table} WHERE {name_col}=? ORDER BY ID", (name,))
+            matching = next(
+                (
+                    entry
+                    for entry in cur.fetchall()
+                    if canonical_street_label(entry[1]) == col
+                    and canonical_street_label(entry[2]) == row
+                ),
+                None,
+            )
+            if matching:
+                if matching[1] != col or matching[2] != row:
+                    cur.execute(
+                        f"UPDATE {table} SET `Column`=?, Row=? WHERE ID=?",
+                        (col, row, matching[0]),
+                    )
+                    return "updated"
                 return None
             cur.execute(
                 f"INSERT INTO {table} (`Column`, Row, {name_col}) VALUES (?, ?, ?)",
@@ -6300,6 +6405,8 @@ class RBCCommunityMap(QMainWindow):
                 )
 
         # Draw the grid
+        canonical_columns = canonical_street_names_by_coordinate(self.columns)
+        canonical_rows = canonical_street_names_by_coordinate(self.rows)
         for i in range(self.zoom_level):
             for j in range(self.zoom_level):
                 column_index = self.column_start + j
@@ -6313,8 +6420,8 @@ class RBCCommunityMap(QMainWindow):
                 painter.drawRect(x0, y0, block_size - border_size, block_size - border_size)
 
                 # Special location handling
-                column_name = next((name for name, coord in self.columns.items() if coord == column_index), None)
-                row_name = next((name for name, coord in self.rows.items() if coord == row_index), None)
+                column_name = canonical_columns.get(column_index)
+                row_name = canonical_rows.get(row_index)
 
                 # Draw cell background color to match in-game city grid
                 if column_index < 1 or column_index > 200 or row_index < 1 or row_index > 200:
@@ -7092,15 +7199,18 @@ class RBCCommunityMap(QMainWindow):
         """
         x, y = coords
 
-        # Try direct match
-        column_name = next((name for name, coord in self.columns.items() if coord == x), None)
-        row_name = next((name for name, coord in self.rows.items() if coord == y), None)
+        canonical_columns = canonical_street_names_by_coordinate(self.columns)
+        canonical_rows = canonical_street_names_by_coordinate(self.rows)
+
+        # Try direct match, preferring the canonical ID 1 city-limit names.
+        column_name = canonical_columns.get(x)
+        row_name = canonical_rows.get(y)
 
         # Fallback to offset-based match
         if not column_name:
-            column_name = next((name for name, coord in self.columns.items() if coord == x - 1), None)
+            column_name = canonical_columns.get(x - 1)
         if not row_name:
-            row_name = next((name for name, coord in self.rows.items() if coord == y - 1), None)
+            row_name = canonical_rows.get(y - 1)
 
         if column_name and row_name:
             return f"{column_name} & {row_name}"
@@ -8676,8 +8786,18 @@ class SetDestinationDialog(QDialog):
         self.populate_dropdown(self.bank_dropdown, bank_items, placeholder=self.DEST_PLACEHOLDER)
 
         # Columns/Rows
-        self.populate_dropdown(self.columns_dropdown, p.columns.keys(), placeholder=self.DEST_PLACEHOLDER)
-        self.populate_dropdown(self.rows_dropdown, p.rows.keys(), placeholder=self.DEST_PLACEHOLDER)
+        self.populate_dropdown(
+            self.columns_dropdown,
+            visible_street_names(p.columns),
+            placeholder=self.DEST_PLACEHOLDER,
+            sort_items=False,
+        )
+        self.populate_dropdown(
+            self.rows_dropdown,
+            visible_street_names(p.rows),
+            placeholder=self.DEST_PLACEHOLDER,
+            sort_items=False,
+        )
 
         # Direction
         self.populate_dropdown(self.directional_dropdown, ["On", "East", "South", "Southeast"], placeholder=self.DEST_PLACEHOLDER)
@@ -8720,10 +8840,18 @@ class SetDestinationDialog(QDialog):
             pass
         return items
 
-    def populate_dropdown(self, dropdown: QComboBox, items, placeholder: str) -> None:
+    def populate_dropdown(
+        self,
+        dropdown: QComboBox,
+        items,
+        placeholder: str,
+        *,
+        sort_items: bool = True,
+    ) -> None:
         dropdown.clear()
         dropdown.addItem(placeholder)
-        dropdown.addItems(sorted([str(item) for item in items]))
+        values = [str(item) for item in items]
+        dropdown.addItems(sorted(values) if sort_items else values)
 
     def populate_recent_destinations(self) -> None:
         """
@@ -8754,8 +8882,8 @@ class SetDestinationDialog(QDialog):
                     (character_id,),
                 )
 
-                inv_cols = {v: k for k, v in self.parent.columns.items()}
-                inv_rows = {v: k for k, v in self.parent.rows.items()}
+                inv_cols = canonical_street_names_by_coordinate(self.parent.columns)
+                inv_rows = canonical_street_names_by_coordinate(self.parent.rows)
 
                 for col, row in cursor.fetchall():
                     even_col = col - (col % 2)
@@ -8776,15 +8904,26 @@ class SetDestinationDialog(QDialog):
             logging.error(f"Failed to load recent destinations: {e}")
 
     def _get_building_name(self, cursor: sqlite3.Cursor, col: str, row: str) -> str | None:
+        col = canonical_street_label(col)
+        row = canonical_street_label(row)
         tables = ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]
+        col_aliases = street_aliases(col)
+        row_aliases = street_aliases(row)
+        col_marks = ", ".join("?" for _ in col_aliases)
+        row_marks = ", ".join("?" for _ in row_aliases)
         for table in tables:
             try:
                 cursor.execute(
-                    f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?",
-                    (col, row),
+                    f"SELECT Name, `Column`, Row FROM `{table}` "
+                    f"WHERE `Column` IN ({col_marks}) AND Row IN ({row_marks})",
+                    [*col_aliases, *row_aliases],
                 )
-                if (res := cursor.fetchone()):
-                    return res[0]
+                for name, stored_col, stored_row in cursor.fetchall():
+                    if (
+                        canonical_street_label(stored_col) == col
+                        and canonical_street_label(stored_row) == row
+                    ):
+                        return name
             except sqlite3.Error:
                 continue
         return None
@@ -8974,10 +9113,13 @@ class SetDestinationDialog(QDialog):
 
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT Name, Coordinate FROM columns")
+                cursor.execute("SELECT Name, Coordinate FROM columns ORDER BY ID")
                 columns = {row[0]: row[1] for row in cursor.fetchall()}
-                cursor.execute("SELECT Name, Coordinate FROM rows")
+                cursor.execute("SELECT Name, Coordinate FROM rows ORDER BY ID")
                 rows = {row[0]: row[1] for row in cursor.fetchall()}
+
+                self.parent.columns = columns
+                self.parent.rows = rows
 
                 def to_coords(col_name: str, row_name: str) -> tuple[int, int]:
                     return (columns.get(col_name, 0) + 1, rows.get(row_name, 0) + 1)

@@ -187,12 +187,30 @@ def load_transit_helpers():
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "BUILDING_CLASS_MAP" for target in node.targets)
     )
+    helper_nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"canonical_street_label", "street_aliases", "canonical_intersection_label"}
+    ]
+    aliases_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "CITY_LIMIT_ALIASES"
+            for target in node.targets
+        )
+    )
     namespace = {
+        "CITY_LIMIT_ALIASES": ast.literal_eval(aliases_node.value),
+        "street_aliases": None,
         "re": __import__("re"),
         "logging": logging,
         "sqlite3": sqlite3,
         "BUILDING_CLASS_MAP": building_map,
     }
+    exec(compile(ast.Module(body=helper_nodes, type_ignores=[]), str(MAIN), "exec"), namespace)
     exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace
 
@@ -244,6 +262,28 @@ def transit_names_are_canonical_and_unique(root: Path) -> None:
                 assert cursor.execute('SELECT Name, "Column", "Row" FROM transits').fetchall() == [
                     ("Calliope", "Mongoose", "25th")
                 ], names
+        cursor.execute('DELETE FROM transits')
+        cursor.executemany(
+            'INSERT INTO transits (ID, "Column", Row, Name) VALUES (?, ?, ?, ?)',
+            [
+                (1, "Western City Limits", "Northern City Limits", "Calliope"),
+                (2, "WCL", "NCL", "Calliope"),
+            ],
+        )
+        assert upsert(fake, cursor, "transit", "Calliope", "WCL", "NCL") == "updated"
+        assert connection.execute(
+            'SELECT "Column", Row, Name FROM transits'
+        ).fetchall() == [("WCL", "NCL", "Calliope")]
+
+        cursor.execute('DELETE FROM transits')
+        cursor.execute(
+            'INSERT INTO transits (ID, "Column", Row, Name) VALUES (?, ?, ?, ?)',
+            (1, "Western City Limits", "Northern City Limits", "Calliope"),
+        )
+        assert upsert(fake, cursor, "transit", "Calliope", "WCL", "NCL") == "updated"
+        assert connection.execute(
+            'SELECT "Column", Row FROM transits'
+        ).fetchone() == ("WCL", "NCL")
     finally:
         connection.close()
 
@@ -324,6 +364,7 @@ def shops_remain_available_without_coordinates(root: Path) -> None:
         sqlite3=sqlite3,
         create_tables=lambda _conn: None,
         ensure_credential_namespace=lambda _conn: None,
+        ensure_location_indexes=lambda _conn: None,
         migrate_schema=lambda _conn: None,
         insert_initial_data=lambda _conn: None,
     )

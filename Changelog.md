@@ -1123,3 +1123,14 @@ were never released separately; their changes ship here as 1.0.5.
   background textures instead of re-downloading them.
 - Automatic compass routes now recalculate as the player moves, including
   after transit arrival, while manually selected overlay routes remain sticky.
+- Street selectors now follow canonical database ID order, hide duplicate full
+  city-limit aliases, and consistently display `NCL`/`WCL` at the map borders.
+- Legacy border-building rows using full city-limit aliases are normalized
+  instead of duplicated, and recent destinations continue to show their names.
+- Bank selector mappings and transit deduplication also use canonical border
+  labels, including cleanup of legacy alias-spelled duplicate rows.
+- Alias-aware transit and recent-history lookups now filter in SQLite instead
+  of scanning every table row for each remote-feed entry.
+- Added post-migration location indexes for building tables so those filtered
+  lookups remain efficient as community data grows and schema rebuilds cannot
+  leave the indexes missing until the next launch.

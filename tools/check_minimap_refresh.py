@@ -26,7 +26,23 @@ def _load_methods(names):
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "BUILDING_CLASS_MAP" for target in node.targets)
     )
+    helper_nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"canonical_street_label", "canonical_street_names_by_coordinate"}
+    ]
+    aliases_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "CITY_LIMIT_ALIASES"
+            for target in node.targets
+        )
+    )
     namespace = {
+        "CITY_LIMIT_ALIASES": ast.literal_eval(aliases_node.value),
         "BeautifulSoup": BeautifulSoup,
         "BUILDING_CLASS_MAP": building_map,
         "datetime": datetime,
@@ -35,6 +51,7 @@ def _load_methods(names):
         "sqlite3": sqlite3,
         "timezone": timezone,
     }
+    exec(compile(ast.Module(body=helper_nodes, type_ignores=[]), str(MAIN), "exec"), namespace)
     exec(compile(ast.Module(body=wanted, type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace
 
@@ -145,8 +162,8 @@ def map_refresh_uses_map_only_load() -> None:
     try:
         conn.executescript(
             """
-            CREATE TABLE columns (Name TEXT, Coordinate INTEGER);
-            CREATE TABLE rows (Name TEXT, Coordinate INTEGER);
+            CREATE TABLE columns (ID INTEGER, Name TEXT, Coordinate INTEGER);
+            CREATE TABLE rows (ID INTEGER, Name TEXT, Coordinate INTEGER);
             CREATE TABLE banks ("Column" TEXT, Row TEXT);
             CREATE TABLE taverns (Name TEXT, "Column" TEXT, Row TEXT);
             CREATE TABLE transits (Name TEXT, "Column" TEXT, Row TEXT);
@@ -158,14 +175,15 @@ def map_refresh_uses_map_only_load() -> None:
             CREATE TABLE settings (setting_name TEXT, setting_value TEXT);
             """
         )
-        conn.executemany("INSERT INTO columns VALUES (?, ?)", [("Vexation", 1)])
-        conn.executemany("INSERT INTO rows VALUES (?, ?)", [("16th", 2)])
+        conn.executemany("INSERT INTO columns VALUES (?, ?, ?)", [(1, "Vexation", 1)])
+        conn.executemany("INSERT INTO rows VALUES (?, ?, ?)", [(1, "16th", 2)])
         conn.executemany("INSERT INTO shops VALUES (?, ?, ?)", [("Checkers Pawn Shop", "Vexation", "16th")])
         conn.executemany("INSERT INTO settings VALUES (?, ?)", [("keybind_config", "1"), ("css_profile", "Default")])
         conn.commit()
 
         class SQLiteProxy:
             Cursor = sqlite3.Cursor
+            Error = sqlite3.Error
 
             @staticmethod
             def connect(_path):
