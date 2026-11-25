@@ -1127,3 +1127,5 @@ were never released separately; their changes ship here as 1.0.5.
   city-limit aliases, and consistently display `NCL`/`WCL` at the map borders.
 - Legacy border-building rows using full city-limit aliases are normalized
   instead of duplicated, and recent destinations continue to show their names.
+- Bank selector mappings and transit deduplication also use canonical border
+  labels, including cleanup of legacy alias-spelled duplicate rows.

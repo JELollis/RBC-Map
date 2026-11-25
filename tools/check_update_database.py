@@ -261,6 +261,18 @@ def transit_names_are_canonical_and_unique(root: Path) -> None:
                 assert cursor.execute('SELECT Name, "Column", "Row" FROM transits').fetchall() == [
                     ("Calliope", "Mongoose", "25th")
                 ], names
+        cursor.execute('DELETE FROM transits')
+        cursor.executemany(
+            'INSERT INTO transits (ID, "Column", Row, Name) VALUES (?, ?, ?, ?)',
+            [
+                (1, "Western City Limits", "Northern City Limits", "Calliope"),
+                (2, "WCL", "NCL", "Calliope"),
+            ],
+        )
+        assert upsert(fake, cursor, "transit", "Calliope", "WCL", "NCL") == "updated"
+        assert connection.execute(
+            'SELECT "Column", Row, Name FROM transits'
+        ).fetchall() == [("WCL", "NCL", "Calliope")]
     finally:
         connection.close()
 

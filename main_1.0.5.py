@@ -2293,7 +2293,12 @@ def load_data(load_session: bool = True) -> tuple:
             banks_coordinates: dict[str, tuple[str, str]] = {}
             cursor.execute("SELECT Column, Row FROM banks")
             for col_name, row_name in cursor.fetchall():
-                banks_coordinates[canonical_intersection_label(col_name, row_name)] = (col_name, row_name)
+                canonical_col = canonical_street_label(col_name)
+                canonical_row = canonical_street_label(row_name)
+                banks_coordinates[canonical_intersection_label(col_name, row_name)] = (
+                    canonical_col,
+                    canonical_row,
+                )
 
             # -----------------------
             # Coordinate-Based Entities
@@ -6102,13 +6107,16 @@ class RBCCommunityMap(QMainWindow):
                     keep_id = matching[0] if matching else existing[0][0]
                     if not matching or len(existing) > 1:
                         cur.execute(
-                            f"UPDATE {table} SET {name_col}=? WHERE ID=?",
-                            (name, keep_id),
+                            f"UPDATE {table} SET {name_col}=?, `Column`=?, Row=? WHERE ID=?",
+                            (name, col, row, keep_id),
                         )
-                        cur.execute(
-                            f"DELETE FROM {table} WHERE `Column`=? AND Row=? AND ID<>?",
-                            (col, row, keep_id),
-                        )
+                        duplicate_ids = [entry[0] for entry in existing if entry[0] != keep_id]
+                        if duplicate_ids:
+                            placeholders = ", ".join("?" for _ in duplicate_ids)
+                            cur.execute(
+                                f"DELETE FROM {table} WHERE ID IN ({placeholders})",
+                                duplicate_ids,
+                            )
                         return "updated"
                     return None
             cur.execute(f"SELECT ID, `Column`, Row FROM {table} WHERE {name_col}=? ORDER BY ID", (name,))
