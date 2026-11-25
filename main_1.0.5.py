@@ -1453,11 +1453,6 @@ def create_tables(conn: sqlite3.Connection) -> None:
         except sqlite3.Error as e:
             logging.error(f"Failed to create table: {e}")
             raise
-    for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest", "shops", "guilds"):
-        cursor.execute(
-            f'CREATE INDEX IF NOT EXISTS "idx_{table}_location" '
-            f'ON `{table}` (`Column`, Row)'
-        )
     conn.commit()
 
 def insert_initial_data(conn: sqlite3.Connection) -> None:
@@ -2240,6 +2235,13 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
             create_tables(conn)                       # Fist create missing tables
             ensure_credential_namespace(conn)
             migrate_schema(conn)                      # Then migrate schema
+            # Location indexes must be created after migration: rebuilding
+            # shops/guilds drops any indexes created beforehand.
+            for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest", "shops", "guilds"):
+                conn.execute(
+                    f'CREATE INDEX IF NOT EXISTS "idx_{table}_location" '
+                    f'ON `{table}` (`Column`, Row)'
+                )
             insert_initial_data(conn)                 # THEN populate defaults
             conn.execute(
                 """
