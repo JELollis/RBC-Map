@@ -227,6 +227,15 @@ def canonical_street_label(name: str | None) -> str | None:
     return CITY_LIMIT_ALIASES.get(name, name)
 
 
+def street_aliases(name: str) -> list[str]:
+    """Return the canonical street label and any accepted database aliases."""
+    canonical = canonical_street_label(name)
+    return [
+        canonical,
+        *[alias for alias, target in CITY_LIMIT_ALIASES.items() if target == canonical],
+    ]
+
+
 def canonical_intersection_label(col: str, row: str) -> str:
     """Format an intersection using canonical display names."""
     return f"{canonical_street_label(col)} & {canonical_street_label(row)}"
@@ -6095,17 +6104,25 @@ class RBCCommunityMap(QMainWindow):
                 # observations may have stored both "Calliope" and
                 # "Calliope Station"; retain one canonical row when a new
                 # observation arrives at that cell.
-                cur.execute(f"SELECT ID, {name_col}, `Column`, Row FROM {table} ORDER BY ID")
-                existing = [
-                    entry
-                    for entry in cur.fetchall()
-                    if canonical_street_label(entry[2]) == col
-                    and canonical_street_label(entry[3]) == row
-                ]
+                col_aliases = street_aliases(col)
+                row_aliases = street_aliases(row)
+                col_marks = ", ".join("?" for _ in col_aliases)
+                row_marks = ", ".join("?" for _ in row_aliases)
+                cur.execute(
+                    f"SELECT ID, {name_col}, `Column`, Row FROM {table} "
+                    f"WHERE `Column` IN ({col_marks}) AND Row IN ({row_marks}) ORDER BY ID",
+                    [*col_aliases, *row_aliases],
+                )
+                existing = cur.fetchall()
                 if existing:
                     matching = next((entry for entry in existing if entry[1] == name), None)
                     keep_id = matching[0] if matching else existing[0][0]
-                    if not matching or len(existing) > 1:
+                    if (
+                        not matching
+                        or len(existing) > 1
+                        or matching[2] != col
+                        or matching[3] != row
+                    ):
                         cur.execute(
                             f"UPDATE {table} SET {name_col}=?, `Column`=?, Row=? WHERE ID=?",
                             (name, col, row, keep_id),
@@ -8867,10 +8884,16 @@ class SetDestinationDialog(QDialog):
         col = canonical_street_label(col)
         row = canonical_street_label(row)
         tables = ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]
+        col_aliases = street_aliases(col)
+        row_aliases = street_aliases(row)
+        col_marks = ", ".join("?" for _ in col_aliases)
+        row_marks = ", ".join("?" for _ in row_aliases)
         for table in tables:
             try:
                 cursor.execute(
-                    f"SELECT Name, `Column`, Row FROM `{table}`",
+                    f"SELECT Name, `Column`, Row FROM `{table}` "
+                    f"WHERE `Column` IN ({col_marks}) AND Row IN ({row_marks})",
+                    [*col_aliases, *row_aliases],
                 )
                 for name, stored_col, stored_row in cursor.fetchall():
                     if (

@@ -1129,3 +1129,5 @@ were never released separately; their changes ship here as 1.0.5.
   instead of duplicated, and recent destinations continue to show their names.
 - Bank selector mappings and transit deduplication also use canonical border
   labels, including cleanup of legacy alias-spelled duplicate rows.
+- Alias-aware transit and recent-history lookups now filter in SQLite instead
+  of scanning every table row for each remote-feed entry.

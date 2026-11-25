@@ -191,7 +191,7 @@ def load_transit_helpers():
         node
         for node in tree.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"canonical_street_label", "canonical_intersection_label"}
+        and node.name in {"canonical_street_label", "street_aliases", "canonical_intersection_label"}
     ]
     aliases_node = next(
         node
@@ -204,6 +204,7 @@ def load_transit_helpers():
     )
     namespace = {
         "CITY_LIMIT_ALIASES": ast.literal_eval(aliases_node.value),
+        "street_aliases": None,
         "re": __import__("re"),
         "logging": logging,
         "sqlite3": sqlite3,
@@ -273,6 +274,16 @@ def transit_names_are_canonical_and_unique(root: Path) -> None:
         assert connection.execute(
             'SELECT "Column", Row, Name FROM transits'
         ).fetchall() == [("WCL", "NCL", "Calliope")]
+
+        cursor.execute('DELETE FROM transits')
+        cursor.execute(
+            'INSERT INTO transits (ID, "Column", Row, Name) VALUES (?, ?, ?, ?)',
+            (1, "Western City Limits", "Northern City Limits", "Calliope"),
+        )
+        assert upsert(fake, cursor, "transit", "Calliope", "WCL", "NCL") == "updated"
+        assert connection.execute(
+            'SELECT "Column", Row FROM transits'
+        ).fetchone() == ("WCL", "NCL")
     finally:
         connection.close()
 

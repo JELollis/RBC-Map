@@ -18,6 +18,7 @@ def load_helpers():
         "CITY_LIMIT_ALIASES",
         "visible_street_names",
         "canonical_street_label",
+        "street_aliases",
         "canonical_intersection_label",
         "canonical_street_names_by_coordinate",
     }
@@ -93,8 +94,10 @@ def legacy_border_rows_are_normalized_in_place():
     namespace = {
         "BUILDING_CLASS_MAP": {"bank": {"table": "banks", "name_col": "Name"}},
         "canonical_street_label": helpers["canonical_street_label"],
+        "street_aliases": helpers["street_aliases"],
         "logging": logging,
         "re": re,
+        "sqlite3": sqlite3,
     }
     exec(compile(ast.Module(body=[method], type_ignores=[]), str(MAIN), "exec"), namespace)
 
@@ -127,6 +130,7 @@ def recent_history_matches_legacy_border_rows():
     helpers = load_helpers()
     namespace = {
         "canonical_street_label": helpers["canonical_street_label"],
+        "street_aliases": helpers["street_aliases"],
         "sqlite3": sqlite3,
     }
     exec(compile(ast.Module(body=[method], type_ignores=[]), str(MAIN), "exec"), namespace)
@@ -147,6 +151,8 @@ def ordered_database_queries_are_explicit():
     source = MAIN.read_text(encoding="utf-8")
     assert source.count("SELECT Name, Coordinate FROM columns ORDER BY ID") >= 2
     assert source.count("SELECT Name, Coordinate FROM rows ORDER BY ID") >= 2
+    assert "WHERE `Column` IN" in source
+    assert "def street_aliases" in source
 
 
 if __name__ == "__main__":
