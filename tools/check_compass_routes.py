@@ -19,12 +19,14 @@ class Label:
 
 def load_methods():
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
-    names = {"_select_compass_route", "refresh_compass_state"}
+    names = {"_select_compass_route", "refresh_compass_state", "update_minimap"}
+    cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "RBCCommunityMap")
     methods = [
         node
-        for node in ast.walk(tree)
+        for node in cls.body
         if isinstance(node, ast.FunctionDef) and node.name in names
     ]
+    assert {node.name for node in methods} == names
     namespace = {}
     exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace
@@ -84,7 +86,28 @@ def manual_route_selection_remains_sticky():
     assert app.ap_direction_label.text == "Compass: Transit"
 
 
+def update_minimap_recalculates_compass_when_destination_set():
+    namespace = load_methods()
+    refreshes = []
+    app = SimpleNamespace(
+        is_updating_minimap=False,
+        destination=(8, 8),
+        refresh_compass_state=lambda: refreshes.append(True),
+        draw_minimap=lambda: None,
+        update_info_frame=lambda: None,
+    )
+    namespace["update_minimap"](app)
+    assert refreshes == [True], "position updates must re-evaluate the compass route"
+    assert app.is_updating_minimap is False
+
+    refreshes.clear()
+    app.destination = None
+    namespace["update_minimap"](app)
+    assert refreshes == [], "no destination means no compass recalculation"
+
+
 if __name__ == "__main__":
     automatic_route_recalculates_after_position_change()
     manual_route_selection_remains_sticky()
+    update_minimap_recalculates_compass_when_destination_set()
     print("all compass-route checks passed")
