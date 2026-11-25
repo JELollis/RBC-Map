@@ -31,7 +31,7 @@ def load_helpers():
         ))
         or (isinstance(node, ast.FunctionDef) and node.name in names)
     ]
-    namespace = {}
+    namespace = {"sqlite3": sqlite3}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace
 
@@ -178,7 +178,7 @@ def startup_creates_all_location_indexes():
         ))
         or (isinstance(node, ast.FunctionDef) and node.name == "ensure_location_indexes")
     ]
-    namespace = {}
+    namespace = {"sqlite3": sqlite3}
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(MAIN), "exec"), namespace)
 
     conn = sqlite3.connect(":memory:")

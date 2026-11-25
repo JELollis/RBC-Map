@@ -364,6 +364,7 @@ def shops_remain_available_without_coordinates(root: Path) -> None:
         sqlite3=sqlite3,
         create_tables=lambda _conn: None,
         ensure_credential_namespace=lambda _conn: None,
+        ensure_location_indexes=lambda _conn: None,
         migrate_schema=lambda _conn: None,
         insert_initial_data=lambda _conn: None,
     )
