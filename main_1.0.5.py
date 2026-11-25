@@ -3618,13 +3618,18 @@ class RBCCommunityMap(QMainWindow):
                 found = match.group(1).strip()
         return found
 
-    def apply_minimap_colors_from_css(self) -> None:
+    def apply_minimap_colors_from_css(self, textures: bool = True) -> None:
         """Set the minimap's building/map colors from the active CSS.
 
         For each mapped element (see CSS_MINIMAP_SELECTORS) the color is taken
         from the currently active custom CSS if it declares one, otherwise from
         the RBC default palette (DEFAULT_MINIMAP_COLORS). Elements with no
         game-CSS equivalent (guild, alley, ...) keep their theme value.
+
+        ``textures=False`` recomputes colors only and keeps the already-loaded
+        texture pixmaps, so callers that refresh map data (rather than change
+        the theme) do not re-download remote background images on the UI
+        thread.
         """
         try:
             css = self.load_current_css() or ""
@@ -3639,7 +3644,10 @@ class RBCCommunityMap(QMainWindow):
         self.minimap_background_color = PySide6.QtGui.QColor(background or "#000000")
         self.minimap_text_colors = {}
         self.minimap_border_colors = {}
-        self.minimap_texture_pixmaps = {}
+        if textures:
+            self.minimap_texture_pixmaps = {}
+        elif not hasattr(self, "minimap_texture_pixmaps"):
+            self.minimap_texture_pixmaps = {}
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute(
@@ -3666,7 +3674,7 @@ class RBCCommunityMap(QMainWindow):
                 self.minimap_text_colors[key] = PySide6.QtGui.QColor(text or "white")
                 self.minimap_border_colors[key] = PySide6.QtGui.QColor(border or "white")
                 image_url = self._css_background_image(css, selector)
-                if image_url:
+                if textures and image_url:
                     try:
                         response = requests.get(image_url, timeout=5)
                         pixmap = PySide6.QtGui.QPixmap()
@@ -7544,8 +7552,10 @@ class RBCCommunityMap(QMainWindow):
                 _kb, _css, _sel, _dest,
             ) = load_data(load_session=False)
             # load_data restores the DB palette; reapply the active game CSS
-            # overlay so a refresh cannot revert the minimap to defaults.
-            self.apply_minimap_colors_from_css()
+            # overlay so a refresh cannot revert the minimap to defaults. The
+            # theme is unchanged by a discovery, so skip re-downloading its
+            # background textures on the UI thread.
+            self.apply_minimap_colors_from_css(textures=False)
         except sqlite3.Error as e:
             logging.warning(f"Could not reload map data from DB: {e}")
             return

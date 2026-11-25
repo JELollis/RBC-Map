@@ -182,14 +182,18 @@ def map_refresh_uses_map_only_load() -> None:
         map_namespace["sqlite3"] = sqlite3
         method = map_namespace["refresh_map_data_from_db"]
         method.__globals__.update(map_namespace)
+        css_calls = []
+        redraws = []
         app = SimpleNamespace(
             character_x=1,
             character_y=1,
-            apply_minimap_colors_from_css=lambda: None,
-            update_minimap=lambda: None,
+            apply_minimap_colors_from_css=lambda **kwargs: css_calls.append(kwargs),
+            update_minimap=lambda: redraws.append(True),
         )
         method(app)
         assert app.shops_coordinates == {"Checkers Pawn Shop": (2, 3)}
+        assert css_calls == [{"textures": False}], "discovery refresh must not re-download theme textures"
+        assert redraws == [True], "discovery refresh must redraw the minimap"
     finally:
         conn.close()
 
