@@ -198,10 +198,59 @@ def map_refresh_uses_map_only_load() -> None:
         conn.close()
 
 
+def minimap_textures_reused_until_theme_changes() -> None:
+    namespace = _load_methods({"_update_minimap_texture"})
+    fetches = []
+
+    class FakeRequestException(Exception):
+        pass
+
+    class FakeResponse:
+        ok = True
+        content = b"png"
+
+    class FakePixmap:
+        def loadFromData(self, _data):
+            return True
+
+    fake_requests = SimpleNamespace(
+        RequestException=FakeRequestException,
+        get=lambda url, timeout: fetches.append((url, timeout)) or FakeResponse(),
+    )
+    fake_py_side6 = SimpleNamespace(QtGui=SimpleNamespace(QPixmap=FakePixmap))
+    namespace.update(requests=fake_requests, PySide6=fake_py_side6)
+    update_texture = namespace["_update_minimap_texture"]
+
+    cached = object()
+    app = SimpleNamespace(
+        minimap_texture_pixmaps={"shop": cached},
+        minimap_texture_urls={"shop": "https://example.test/a.png"},
+    )
+
+    # Map-data refresh with an unchanged theme: reuse, no download.
+    update_texture(app, "shop", "https://example.test/a.png", False)
+    assert app.minimap_texture_pixmaps["shop"] is cached
+    assert fetches == []
+
+    # Theme changed without a reload (e.g. active profile deleted): drop the
+    # stale pixmap rather than pairing it with the new colors.
+    update_texture(app, "shop", None, False)
+    assert "shop" not in app.minimap_texture_pixmaps
+    assert app.minimap_texture_urls["shop"] is None
+    assert fetches == []
+
+    # A real theme change downloads once and stores the new pixmap.
+    update_texture(app, "shop", "https://example.test/b.png", True)
+    assert fetches == [("https://example.test/b.png", 5)]
+    assert isinstance(app.minimap_texture_pixmaps["shop"], FakePixmap)
+    assert app.minimap_texture_urls["shop"] == "https://example.test/b.png"
+
+
 def main() -> None:
     learned_shop_refreshes_once_and_reports_once()
     refresh_failure_does_not_drop_report()
     map_refresh_uses_map_only_load()
+    minimap_textures_reused_until_theme_changes()
     print("all minimap-refresh checks passed")
 
 

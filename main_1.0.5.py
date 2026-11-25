@@ -3646,8 +3646,10 @@ class RBCCommunityMap(QMainWindow):
         self.minimap_border_colors = {}
         if textures:
             self.minimap_texture_pixmaps = {}
-        elif not hasattr(self, "minimap_texture_pixmaps"):
-            self.minimap_texture_pixmaps = {}
+            self.minimap_texture_urls = {}
+        else:
+            self.minimap_texture_pixmaps = getattr(self, "minimap_texture_pixmaps", {})
+            self.minimap_texture_urls = getattr(self, "minimap_texture_urls", {})
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute(
@@ -3674,14 +3676,7 @@ class RBCCommunityMap(QMainWindow):
                 self.minimap_text_colors[key] = PySide6.QtGui.QColor(text or "white")
                 self.minimap_border_colors[key] = PySide6.QtGui.QColor(border or "white")
                 image_url = self._css_background_image(css, selector)
-                if textures and image_url:
-                    try:
-                        response = requests.get(image_url, timeout=5)
-                        pixmap = PySide6.QtGui.QPixmap()
-                        if response.ok and pixmap.loadFromData(response.content):
-                            self.minimap_texture_pixmaps[key] = pixmap
-                    except (requests.RequestException, OSError) as exc:
-                        logging.debug("Minimap texture unavailable for %s: %s", key, exc)
+                self._update_minimap_texture(key, image_url, textures)
         self.minimap_route_colors = {
             "tavern": PySide6.QtGui.QColor(self.color_mappings["tavern"]),
             "bank": PySide6.QtGui.QColor(self.color_mappings["bank"]),
@@ -3700,6 +3695,30 @@ class RBCCommunityMap(QMainWindow):
             self.tavern_label.setStyleSheet(f"background-color:{self.minimap_route_colors['tavern'].name()}; color:white; font-weight:bold; padding:5px; border:2px solid black; font-size:12px;")
             self.destination_label.setStyleSheet(f"background-color:{direct}; color:white; font-weight:bold; padding:5px; border:2px solid black; font-size:12px;")
             self.transit_destination_label.setStyleSheet(f"background-color:{transit_route}; color:white; font-weight:bold; padding:5px; border:2px solid black; font-size:12px;")
+
+    def _update_minimap_texture(self, key: str, image_url: str | None, textures: bool) -> None:
+        """Keep the minimap texture cache in step with the active CSS.
+
+        ``textures=True`` (a theme change) downloads the image. ``textures=False``
+        (a map-data refresh) reuses the cached pixmap while its URL is unchanged
+        and drops it when the theme changed without a reload, so stale art is
+        never paired with new colors and the UI thread never blocks on downloads.
+        """
+        if textures:
+            self.minimap_texture_urls[key] = image_url
+            if not image_url:
+                return
+            try:
+                response = requests.get(image_url, timeout=5)
+                pixmap = PySide6.QtGui.QPixmap()
+                if response.ok and pixmap.loadFromData(response.content):
+                    self.minimap_texture_pixmaps[key] = pixmap
+            except (requests.RequestException, OSError) as exc:
+                logging.debug("Minimap texture unavailable for %s: %s", key, exc)
+            return
+        if image_url != self.minimap_texture_urls.get(key):
+            self.minimap_texture_pixmaps.pop(key, None)
+            self.minimap_texture_urls[key] = image_url
 
     @staticmethod
     def _complementary_color(color: PySide6.QtGui.QColor) -> PySide6.QtGui.QColor:
