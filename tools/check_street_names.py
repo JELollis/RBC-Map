@@ -18,6 +18,7 @@ def load_helpers():
         "CITY_LIMIT_ALIASES",
         "visible_street_names",
         "canonical_street_label",
+        "canonical_intersection_label",
         "canonical_street_names_by_coordinate",
     }
     nodes = [
@@ -58,6 +59,7 @@ def canonical_order_hides_only_full_aliases():
     assert row_by_coordinate[0] == "NCL"
     assert column_by_coordinate[0] == "WCL"
     assert row_by_coordinate[20] == "10th"
+    assert namespace["canonical_intersection_label"]("Western City Limits", "1st") == "WCL & 1st"
 
 
 def intersection_labels_use_canonical_boundary_names():

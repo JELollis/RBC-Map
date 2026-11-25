@@ -187,12 +187,29 @@ def load_transit_helpers():
         if isinstance(node, ast.Assign)
         and any(isinstance(target, ast.Name) and target.id == "BUILDING_CLASS_MAP" for target in node.targets)
     )
+    helper_nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"canonical_street_label", "canonical_intersection_label"}
+    ]
+    aliases_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "CITY_LIMIT_ALIASES"
+            for target in node.targets
+        )
+    )
     namespace = {
+        "CITY_LIMIT_ALIASES": ast.literal_eval(aliases_node.value),
         "re": __import__("re"),
         "logging": logging,
         "sqlite3": sqlite3,
         "BUILDING_CLASS_MAP": building_map,
     }
+    exec(compile(ast.Module(body=helper_nodes, type_ignores=[]), str(MAIN), "exec"), namespace)
     exec(compile(ast.Module(body=methods, type_ignores=[]), str(MAIN), "exec"), namespace)
     return namespace
 

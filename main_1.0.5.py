@@ -227,6 +227,11 @@ def canonical_street_label(name: str | None) -> str | None:
     return CITY_LIMIT_ALIASES.get(name, name)
 
 
+def canonical_intersection_label(col: str, row: str) -> str:
+    """Format an intersection using canonical display names."""
+    return f"{canonical_street_label(col)} & {canonical_street_label(row)}"
+
+
 def canonical_street_names_by_coordinate(streets: dict[str, int]) -> dict[int, str]:
     """Map each coordinate to its first (canonical) street name.
 
@@ -2288,7 +2293,7 @@ def load_data(load_session: bool = True) -> tuple:
             banks_coordinates: dict[str, tuple[str, str]] = {}
             cursor.execute("SELECT Column, Row FROM banks")
             for col_name, row_name in cursor.fetchall():
-                banks_coordinates[f"{col_name} & {row_name}"] = (col_name, row_name)
+                banks_coordinates[canonical_intersection_label(col_name, row_name)] = (col_name, row_name)
 
             # -----------------------
             # Coordinate-Based Entities
