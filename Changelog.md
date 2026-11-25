@@ -1123,3 +1123,5 @@ were never released separately; their changes ship here as 1.0.5.
   background textures instead of re-downloading them.
 - Automatic compass routes now recalculate as the player moves, including
   after transit arrival, while manually selected overlay routes remain sticky.
+- Street selectors now follow canonical database ID order, hide duplicate full
+  city-limit aliases, and consistently display `NCL`/`WCL` at the map borders.
