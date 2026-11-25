@@ -2216,11 +2216,11 @@ _secure_data_permissions()
 # Load Data from Database
 # -----------------------
 
-def load_data() -> tuple:
+def load_data(load_session: bool = True) -> tuple:
     """
     Load map-related data from the SQLite database.
 
-    Also loads:
+    When ``load_session`` is true, also loads:
     - keybind configuration
     - active CSS profile
     - last active character
@@ -2357,46 +2357,46 @@ def load_data() -> tuple:
             row = cursor.fetchone()
             current_css_profile = row[0] if row else "Default"
 
-            # -----------------------
-            # Last Active Character
-            # -----------------------
-
             selected_character = None
             last_destination = None
 
-            cursor.execute(
-                "SELECT character_id FROM last_active_character LIMIT 1"
-            )
-            row = cursor.fetchone()
-
-            if row:
-                character_id = row[0]
+            if load_session:
+                # -----------------------
+                # Last Active Character
+                # -----------------------
                 cursor.execute(
-                    "SELECT id, name, password FROM characters WHERE id = ?",
-                    (character_id,),
+                    "SELECT character_id FROM last_active_character LIMIT 1"
                 )
-                char = cursor.fetchone()
+                row = cursor.fetchone()
 
-                if char:
-                    selected_character = {
-                        "id": char[0],
-                        "name": char[1],
-                        "password": load_character_secret(conn, char[0], char[2]),
-                    }
-
+                if row:
+                    character_id = row[0]
                     cursor.execute(
-                        """
-                        SELECT col, row
-                        FROM destinations
-                        WHERE character_id = ?
-                        ORDER BY timestamp DESC
-                        LIMIT 1
-                        """,
+                        "SELECT id, name, password FROM characters WHERE id = ?",
                         (character_id,),
                     )
-                    dest = cursor.fetchone()
-                    if dest:
-                        last_destination = (dest[0], dest[1])
+                    char = cursor.fetchone()
+
+                    if char:
+                        selected_character = {
+                            "id": char[0],
+                            "name": char[1],
+                            "password": load_character_secret(conn, char[0], char[2]),
+                        }
+
+                        cursor.execute(
+                            """
+                            SELECT col, row
+                            FROM destinations
+                            WHERE character_id = ?
+                            ORDER BY timestamp DESC
+                            LIMIT 1
+                            """,
+                            (character_id,),
+                        )
+                        dest = cursor.fetchone()
+                        if dest:
+                            last_destination = (dest[0], dest[1])
 
             logging.debug("Database data loaded successfully")
 
@@ -3618,13 +3618,18 @@ class RBCCommunityMap(QMainWindow):
                 found = match.group(1).strip()
         return found
 
-    def apply_minimap_colors_from_css(self) -> None:
+    def apply_minimap_colors_from_css(self, textures: bool = True) -> None:
         """Set the minimap's building/map colors from the active CSS.
 
         For each mapped element (see CSS_MINIMAP_SELECTORS) the color is taken
         from the currently active custom CSS if it declares one, otherwise from
         the RBC default palette (DEFAULT_MINIMAP_COLORS). Elements with no
         game-CSS equivalent (guild, alley, ...) keep their theme value.
+
+        ``textures=False`` recomputes colors only and keeps the already-loaded
+        texture pixmaps, so callers that refresh map data (rather than change
+        the theme) do not re-download remote background images on the UI
+        thread.
         """
         try:
             css = self.load_current_css() or ""
@@ -3639,7 +3644,12 @@ class RBCCommunityMap(QMainWindow):
         self.minimap_background_color = PySide6.QtGui.QColor(background or "#000000")
         self.minimap_text_colors = {}
         self.minimap_border_colors = {}
-        self.minimap_texture_pixmaps = {}
+        if textures:
+            self.minimap_texture_pixmaps = {}
+            self.minimap_texture_urls = {}
+        else:
+            self.minimap_texture_pixmaps = getattr(self, "minimap_texture_pixmaps", {})
+            self.minimap_texture_urls = getattr(self, "minimap_texture_urls", {})
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 row = conn.execute(
@@ -3666,14 +3676,7 @@ class RBCCommunityMap(QMainWindow):
                 self.minimap_text_colors[key] = PySide6.QtGui.QColor(text or "white")
                 self.minimap_border_colors[key] = PySide6.QtGui.QColor(border or "white")
                 image_url = self._css_background_image(css, selector)
-                if image_url:
-                    try:
-                        response = requests.get(image_url, timeout=5)
-                        pixmap = PySide6.QtGui.QPixmap()
-                        if response.ok and pixmap.loadFromData(response.content):
-                            self.minimap_texture_pixmaps[key] = pixmap
-                    except (requests.RequestException, OSError) as exc:
-                        logging.debug("Minimap texture unavailable for %s: %s", key, exc)
+                self._update_minimap_texture(key, image_url, textures)
         self.minimap_route_colors = {
             "tavern": PySide6.QtGui.QColor(self.color_mappings["tavern"]),
             "bank": PySide6.QtGui.QColor(self.color_mappings["bank"]),
@@ -3692,6 +3695,30 @@ class RBCCommunityMap(QMainWindow):
             self.tavern_label.setStyleSheet(f"background-color:{self.minimap_route_colors['tavern'].name()}; color:white; font-weight:bold; padding:5px; border:2px solid black; font-size:12px;")
             self.destination_label.setStyleSheet(f"background-color:{direct}; color:white; font-weight:bold; padding:5px; border:2px solid black; font-size:12px;")
             self.transit_destination_label.setStyleSheet(f"background-color:{transit_route}; color:white; font-weight:bold; padding:5px; border:2px solid black; font-size:12px;")
+
+    def _update_minimap_texture(self, key: str, image_url: str | None, textures: bool) -> None:
+        """Keep the minimap texture cache in step with the active CSS.
+
+        ``textures=True`` (a theme change) downloads the image. ``textures=False``
+        (a map-data refresh) reuses the cached pixmap while its URL is unchanged
+        and drops it when the theme changed without a reload, so stale art is
+        never paired with new colors and the UI thread never blocks on downloads.
+        """
+        if textures:
+            self.minimap_texture_urls[key] = image_url
+            if not image_url:
+                return
+            try:
+                response = requests.get(image_url, timeout=5)
+                pixmap = PySide6.QtGui.QPixmap()
+                if response.ok and pixmap.loadFromData(response.content):
+                    self.minimap_texture_pixmaps[key] = pixmap
+            except (requests.RequestException, OSError) as exc:
+                logging.debug("Minimap texture unavailable for %s: %s", key, exc)
+            return
+        if image_url != self.minimap_texture_urls.get(key):
+            self.minimap_texture_pixmaps.pop(key, None)
+            self.minimap_texture_urls[key] = image_url
 
     @staticmethod
     def _complementary_color(color: PySide6.QtGui.QColor) -> PySide6.QtGui.QColor:
@@ -5883,12 +5910,14 @@ class RBCCommunityMap(QMainWindow):
             return
 
         pending_reports = []
+        map_data_changed = False
         try:
             with sqlite3.connect(DB_PATH) as conn:
                 cur = conn.cursor()
                 for it in items:
                     # Idempotent local add/update (re-adds a manually deleted row).
-                    self._upsert_building(cur, it["cls"], it["name"], it["col"], it["row"])
+                    if self._upsert_building(cur, it["cls"], it["name"], it["col"], it["row"]):
+                        map_data_changed = True
                     # Report each building once per session so the shared files
                     # gain anything they lack; the server dedups by location.
                     sig = (it["cls"], it["name"], f"{it['col']}|{it['row']}")
@@ -5904,6 +5933,17 @@ class RBCCommunityMap(QMainWindow):
         # Only share once the local write succeeded; batched + off-thread.
         if pending_reports:
             self._flush_reports(pending_reports)
+
+        # The learner runs after the page parser has already loaded the current
+        # map dictionaries. Reload them now so a newly visited location appears
+        # on the minimap during this session, without requiring Update Data or a
+        # restart. Reporting is deliberately flushed first so a map-refresh
+        # failure cannot suppress a valid discovery report.
+        if map_data_changed:
+            try:
+                self.refresh_map_data_from_db()
+            except Exception as e:
+                logging.warning(f"Auto-learn map refresh skipped: {e}")
 
     def _building_game_coord(self, el) -> tuple[int | None, int | None]:
         """Return the RBC game (x, y) of the cell a building span sits in.
@@ -7512,9 +7552,9 @@ class RBCCommunityMap(QMainWindow):
         """Reload building/coordinate mappings from the DB and redraw the map.
 
         Run on the UI thread after an update writes new rows (locations and/or
-        community buildings). Reuses :func:`load_data` but discards its session
-        fields (keybind/CSS/character/destination) so an in-session refresh does
-        not disturb the active character or destination.
+        community buildings). Reuses :func:`load_data` in map-only mode so an
+        in-session refresh does not read credentials or disturb the active
+        character or destination.
         """
         try:
             (
@@ -7529,10 +7569,12 @@ class RBCCommunityMap(QMainWindow):
                 self.guilds_coordinates,
                 self.places_of_interest_coordinates,
                 _kb, _css, _sel, _dest,
-            ) = load_data()
+            ) = load_data(load_session=False)
             # load_data restores the DB palette; reapply the active game CSS
-            # overlay so a refresh cannot revert the minimap to defaults.
-            self.apply_minimap_colors_from_css()
+            # overlay so a refresh cannot revert the minimap to defaults. The
+            # theme is unchanged by a discovery, so skip re-downloading its
+            # background textures on the UI thread.
+            self.apply_minimap_colors_from_css(textures=False)
         except sqlite3.Error as e:
             logging.warning(f"Could not reload map data from DB: {e}")
             return

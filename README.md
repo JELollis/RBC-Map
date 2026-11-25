@@ -22,6 +22,7 @@ RBC Community Map is a Python desktop companion for **Vampires! The Dark Alleywa
 ### Community location data
 - Synchronize guild and shop movements and community-supplied buildings, points of interest, arenas, alchemy locations, lairs, and halls.
 - Optionally enable **Contribute Discovered Locations** to report newly discovered non-moving locations anonymously. You can turn this setting off at any time.
+- Newly learned locations are reflected on the minimap immediately during the current session.
 - Continue using previously synchronized local location data when the update service is unavailable.
 
 ### Characters and controls
