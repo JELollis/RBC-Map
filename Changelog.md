@@ -1121,3 +1121,5 @@ were never released separately; their changes ship here as 1.0.5.
   in-session minimap without loading saved credentials or requiring a manual
   data update. Discovery refreshes reuse the active theme's cached
   background textures instead of re-downloading them.
+- Automatic compass routes now recalculate as the player moves, including
+  after transit arrival, while manually selected overlay routes remain sticky.

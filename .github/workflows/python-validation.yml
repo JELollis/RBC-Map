@@ -36,6 +36,8 @@ jobs:
         run: python tools/check_update_database.py
       - name: Run minimap refresh regression checks
         run: python tools/check_minimap_refresh.py
+      - name: Run compass route regression checks
+        run: python tools/check_compass_routes.py
       - name: Run powers details regression checks
         run: python tools/check_powers_details.py
       - name: Run shopping list regression checks
