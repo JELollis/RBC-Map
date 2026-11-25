@@ -156,6 +156,20 @@ def ordered_database_queries_are_explicit():
     assert 'CREATE INDEX IF NOT EXISTS' in source
     assert 'idx_{table}_location' in source
 
+    migration_pos = source.index("migrate_schema(conn)")
+    index_loop_pos = source.index(
+        'for table in ("banks", "taverns", "transits", "userbuildings", '
+        '"placesofinterest", "shops", "guilds"):',
+        migration_pos,
+    )
+    initial_data_pos = source.index("insert_initial_data(conn)", index_loop_pos)
+    assert index_loop_pos > migration_pos, (
+        "location indexes must be created after schema migration"
+    )
+    assert initial_data_pos > index_loop_pos, (
+        "first-run initialization must retain post-migration indexes"
+    )
+
 
 if __name__ == "__main__":
     canonical_order_hides_only_full_aliases()
