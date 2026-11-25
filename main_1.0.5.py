@@ -3066,6 +3066,7 @@ class RBCCommunityMap(QMainWindow):
         self.selected_route_label = None
         self.selected_route_description = None
         self.selected_route_path = None
+        self.manual_route_selection = False
 
         # Character / navigation state
         self.character_x = None
@@ -5555,18 +5556,14 @@ class RBCCommunityMap(QMainWindow):
     def refresh_compass_state(self):
         if not self.destination:
             self.ap_direction_label.setText("Compass: None")
+            self.selected_route_label = None
+            self.selected_route_description = None
+            self.selected_route_path = None
+            self.manual_route_selection = False
             return
 
         direct_route, transit_route = self.get_compass_routes()
-
-        # Determine selected route (manual or shortest)
-        if self.selected_route_label == "Direct Route":
-            selected = direct_route
-        elif self.selected_route_label == "Transit Route":
-            selected = transit_route
-        else:
-            selected = direct_route if direct_route[0] <= transit_route[0] else transit_route
-            self.selected_route_label = "Direct Route" if selected == direct_route else "Transit Route"
+        selected = self._select_compass_route(direct_route, transit_route)
 
         self.selected_route_path = selected[2]
         self.selected_route_description = selected[1]
@@ -5576,8 +5573,18 @@ class RBCCommunityMap(QMainWindow):
         if hasattr(self, "compass_overlay") and self.compass_overlay.isVisible():
             self.compass_overlay.refresh(direct_route, transit_route)
 
-        # ✅ Force minimap redraw with selected route
-        self.update_minimap()
+
+    def _select_compass_route(self, direct_route, transit_route):
+        """Choose a route while distinguishing manual and automatic choices."""
+        if self.manual_route_selection:
+            if self.selected_route_label == "Direct Route":
+                return direct_route
+            if self.selected_route_label == "Transit Route":
+                return transit_route
+
+        selected = direct_route if direct_route[0] <= transit_route[0] else transit_route
+        self.selected_route_label = "Direct Route" if selected == direct_route else "Transit Route"
+        return selected
 
     def extract_coordinates_from_html(self, html):
 
@@ -6617,8 +6624,9 @@ class RBCCommunityMap(QMainWindow):
         if not self.is_updating_minimap:
             self.is_updating_minimap = True
 
-            # 🔁 Ensure we always have an updated route label/path/description
-            if self.destination and (not self.selected_route_label or not self.selected_route_path):
+            # Recalculate automatic routes as the player moves or learned
+            # locations change. Manual overlay selections remain sticky.
+            if self.destination:
                 self.refresh_compass_state()
 
             self.draw_minimap()
@@ -7110,19 +7118,14 @@ class RBCCommunityMap(QMainWindow):
         """
         if not self.destination:
             self.ap_direction_label.setText("Compass: None")
+            self.selected_route_label = None
+            self.selected_route_description = None
             self.selected_route_path = None
+            self.manual_route_selection = False
             return
 
         direct_route, transit_route = self.get_compass_routes()
-
-        # Select route: previously chosen, or fallback to shortest
-        if self.selected_route_label == "Direct Route":
-            selected = direct_route
-        elif self.selected_route_label == "Transit Route":
-            selected = transit_route
-        else:
-            selected = direct_route if direct_route[0] <= transit_route[0] else transit_route
-            self.selected_route_label = "Direct Route" if selected == direct_route else "Transit Route"
+        selected = self._select_compass_route(direct_route, transit_route)
 
         self.selected_route_description = selected[1]
         self.selected_route_path = selected[2]
@@ -7328,6 +7331,7 @@ class RBCCommunityMap(QMainWindow):
         Stores and displays the selected route’s full directional breakdown and path.
         """
         self.selected_route_label = label
+        self.manual_route_selection = True
         ap_cost, direction_desc, path_coords = route_info
         self.selected_route_description = direction_desc
         self.selected_route_path = path_coords
@@ -8816,6 +8820,7 @@ class SetDestinationDialog(QDialog):
             return
 
         self.parent.selected_route_label = None
+        self.parent.manual_route_selection = False
 
         coords = self.get_selected_destination()
         if not coords:
