@@ -1301,6 +1301,26 @@ def save_logging_level_to_db(level: int) -> bool:
 # -----------------------
 # SQLite Setup
 # -----------------------
+LOCATION_INDEX_TABLES = (
+    "banks",
+    "taverns",
+    "transits",
+    "userbuildings",
+    "placesofinterest",
+    "shops",
+    "guilds",
+)
+
+
+def ensure_location_indexes(conn: sqlite3.Connection) -> None:
+    """Ensure building lookup indexes exist on the current schema tables."""
+    for table in LOCATION_INDEX_TABLES:
+        conn.execute(
+            f'CREATE INDEX IF NOT EXISTS "idx_{table}_location" '
+            f'ON `{table}` (`Column`, Row)'
+        )
+
+
 def create_tables(conn: sqlite3.Connection) -> None:
     """Create database tables if they don’t exist."""
     cursor = conn.cursor()
@@ -2237,11 +2257,7 @@ def initialize_database(db_path: str = DB_PATH) -> bool:
             migrate_schema(conn)                      # Then migrate schema
             # Location indexes must be created after migration: rebuilding
             # shops/guilds drops any indexes created beforehand.
-            for table in ("banks", "taverns", "transits", "userbuildings", "placesofinterest", "shops", "guilds"):
-                conn.execute(
-                    f'CREATE INDEX IF NOT EXISTS "idx_{table}_location" '
-                    f'ON `{table}` (`Column`, Row)'
-                )
+            ensure_location_indexes(conn)
             insert_initial_data(conn)                 # THEN populate defaults
             conn.execute(
                 """

@@ -157,18 +157,48 @@ def ordered_database_queries_are_explicit():
     assert 'idx_{table}_location' in source
 
     migration_pos = source.index("migrate_schema(conn)")
-    index_loop_pos = source.index(
-        'for table in ("banks", "taverns", "transits", "userbuildings", '
-        '"placesofinterest", "shops", "guilds"):',
-        migration_pos,
+    index_call_pos = source.index("ensure_location_indexes(conn)", migration_pos)
+    initial_data_pos = source.index("insert_initial_data(conn)", index_call_pos)
+    assert index_call_pos > migration_pos, (
+        "location indexes must be ensured after schema migration"
     )
-    initial_data_pos = source.index("insert_initial_data(conn)", index_loop_pos)
-    assert index_loop_pos > migration_pos, (
-        "location indexes must be created after schema migration"
-    )
-    assert initial_data_pos > index_loop_pos, (
+    assert initial_data_pos > index_call_pos, (
         "first-run initialization must retain post-migration indexes"
     )
+
+
+def startup_creates_all_location_indexes():
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    nodes = [
+        node
+        for node in tree.body
+        if (isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "LOCATION_INDEX_TABLES"
+            for target in node.targets
+        ))
+        or (isinstance(node, ast.FunctionDef) and node.name == "ensure_location_indexes")
+    ]
+    namespace = {}
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), str(MAIN), "exec"), namespace)
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        for table in namespace["LOCATION_INDEX_TABLES"]:
+            conn.execute(
+                f'CREATE TABLE `{table}` (ID INTEGER PRIMARY KEY, `Column` TEXT, Row TEXT)'
+            )
+        namespace["ensure_location_indexes"](conn)
+        indexes = {
+            row[1]
+            for table in namespace["LOCATION_INDEX_TABLES"]
+            for row in conn.execute(f'PRAGMA index_list(`{table}`)').fetchall()
+        }
+        assert indexes == {
+            f"idx_{table}_location"
+            for table in namespace["LOCATION_INDEX_TABLES"]
+        }
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
@@ -177,4 +207,5 @@ if __name__ == "__main__":
     legacy_border_rows_are_normalized_in_place()
     recent_history_matches_legacy_border_rows()
     ordered_database_queries_are_explicit()
+    startup_creates_all_location_indexes()
     print("all street-name checks passed")
