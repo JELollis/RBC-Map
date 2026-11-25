@@ -39,6 +39,18 @@ def _load_methods(names):
     return namespace
 
 
+def _load_function(name):
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    node = next(item for item in tree.body if isinstance(item, ast.FunctionDef) and item.name == name)
+    namespace = {
+        "logging": logging,
+        "sqlite3": sqlite3,
+        "SimpleNamespace": SimpleNamespace,
+    }
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(MAIN), "exec"), namespace)
+    return namespace
+
+
 def _make_db(conn) -> None:
     conn.execute('CREATE TABLE shops (Name TEXT PRIMARY KEY, "Column" TEXT, Row TEXT)')
     conn.commit()
@@ -119,24 +131,67 @@ def refresh_failure_does_not_drop_report() -> None:
 
 
 def map_refresh_uses_map_only_load() -> None:
-    namespace = _load_methods({"refresh_map_data_from_db"})
-    calls = []
+    map_namespace = _load_methods({"refresh_map_data_from_db"})
+    load_namespace = _load_function("load_data")
 
-    def map_only_load(**kwargs):
-        calls.append(kwargs)
-        return ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, 1, "Default", None, None)
+    class FakeColor:
+        def __init__(self, value):
+            self.value = value
 
-    app = SimpleNamespace(
-        character_x=1,
-        character_y=1,
-        apply_minimap_colors_from_css=lambda: None,
-        update_minimap=lambda: None,
-    )
-    namespace["load_data"] = map_only_load
-    method = namespace["refresh_map_data_from_db"]
-    method.__globals__.update(namespace)
-    method(app)
-    assert calls == [{"load_session": False}], "map refresh must not load session secrets"
+        def isValid(self):
+            return True
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE columns (Name TEXT, Coordinate INTEGER);
+            CREATE TABLE rows (Name TEXT, Coordinate INTEGER);
+            CREATE TABLE banks ("Column" TEXT, Row TEXT);
+            CREATE TABLE taverns (Name TEXT, "Column" TEXT, Row TEXT);
+            CREATE TABLE transits (Name TEXT, "Column" TEXT, Row TEXT);
+            CREATE TABLE userbuildings (Name TEXT, "Column" TEXT, Row TEXT);
+            CREATE TABLE color_mappings (type TEXT, color TEXT);
+            CREATE TABLE shops (Name TEXT, "Column" TEXT, Row TEXT);
+            CREATE TABLE guilds (Name TEXT, "Column" TEXT, Row TEXT);
+            CREATE TABLE placesofinterest (Name TEXT, "Column" TEXT, Row TEXT);
+            CREATE TABLE settings (setting_name TEXT, setting_value TEXT);
+            """
+        )
+        conn.executemany("INSERT INTO columns VALUES (?, ?)", [("Vexation", 1)])
+        conn.executemany("INSERT INTO rows VALUES (?, ?)", [("16th", 2)])
+        conn.executemany("INSERT INTO shops VALUES (?, ?, ?)", [("Checkers Pawn Shop", "Vexation", "16th")])
+        conn.executemany("INSERT INTO settings VALUES (?, ?)", [("keybind_config", "1"), ("css_profile", "Default")])
+        conn.commit()
+
+        class SQLiteProxy:
+            Cursor = sqlite3.Cursor
+
+            @staticmethod
+            def connect(_path):
+                return conn
+
+        load_namespace.update(
+            DB_PATH=":memory:",
+            sqlite3=SQLiteProxy,
+            PySide6=SimpleNamespace(QtGui=SimpleNamespace(QColor=FakeColor)),
+            load_character_secret=lambda *_args: (_ for _ in ()).throw(AssertionError("secret loader called")),
+        )
+        load_data = load_namespace["load_data"]
+        map_namespace["load_data"] = load_data
+        map_namespace["sqlite3"] = sqlite3
+        method = map_namespace["refresh_map_data_from_db"]
+        method.__globals__.update(map_namespace)
+        app = SimpleNamespace(
+            character_x=1,
+            character_y=1,
+            apply_minimap_colors_from_css=lambda: None,
+            update_minimap=lambda: None,
+        )
+        method(app)
+        assert app.shops_coordinates == {"Checkers Pawn Shop": (2, 3)}
+    finally:
+        conn.close()
 
 
 def main() -> None:

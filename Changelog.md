@@ -14,12 +14,6 @@ files and are less detailed than later entries.
 
 ---
 
-## Development fixes on `dev`
-
-- Newly learned shop, guild, and community-building locations refresh the
-  in-session minimap without loading saved credentials or requiring a manual
-  data update.
-
 ## Version 0.1.0 — Tkinter prototype
 
 **💡 Summary**
@@ -1120,3 +1114,9 @@ were never released separately; their changes ship here as 1.0.5.
   and refreshed the README and help documentation.
 - Show Power, Guild, and Cost captions once in the Powers Information details panel.
 - Populate catalog shop names even when the location feed supplies no shop coordinates.
+
+## Development fixes on `dev`
+
+- Newly learned shop, guild, and community-building locations refresh the
+  in-session minimap without loading saved credentials or requiring a manual
+  data update.
