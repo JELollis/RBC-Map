@@ -222,18 +222,21 @@ def visible_street_names(streets: dict[str, int]) -> list[str]:
     return [name for name in streets if name not in CITY_LIMIT_ALIASES]
 
 
+def canonical_street_label(name: str | None) -> str | None:
+    """Return the display/storage label for a street or city-limit alias."""
+    return CITY_LIMIT_ALIASES.get(name, name)
+
+
 def canonical_street_names_by_coordinate(streets: dict[str, int]) -> dict[int, str]:
     """Map each coordinate to its first (canonical) street name.
 
-    ``load_data`` reads streets in ID order, so ``setdefault`` preserves ID 1
-    for the coordinate shared by each abbreviated/full city-limit pair.
+    ``load_data`` reads streets in ID order, and the explicit alias preference
+    preserves ID 1 for the coordinate shared by each abbreviated/full pair.
     """
     names: dict[int, str] = {}
     for name, coordinate in streets.items():
         current = names.get(coordinate)
-        if current is None or (
-            current in CITY_LIMIT_ALIASES and name not in CITY_LIMIT_ALIASES
-        ):
+        if current is None or (current in CITY_LIMIT_ALIASES and name not in CITY_LIMIT_ALIASES):
             names[coordinate] = name
     return names
 
@@ -6073,6 +6076,8 @@ class RBCCommunityMap(QMainWindow):
         name_col = mapping["name_col"]
         if cls == "transit":
             name = re.sub(r"\s+Station\s*$", "", name, flags=re.IGNORECASE).strip()
+        col = canonical_street_label(col)
+        row = canonical_street_label(row)
 
         if table in ("banks", "taverns", "transits", "placesofinterest", "userbuildings"):
             if cls == "transit":
@@ -6080,11 +6085,13 @@ class RBCCommunityMap(QMainWindow):
                 # observations may have stored both "Calliope" and
                 # "Calliope Station"; retain one canonical row when a new
                 # observation arrives at that cell.
-                cur.execute(
-                    f"SELECT ID, {name_col} FROM {table} WHERE `Column`=? AND Row=? ORDER BY ID",
-                    (col, row),
-                )
-                existing = cur.fetchall()
+                cur.execute(f"SELECT ID, {name_col}, `Column`, Row FROM {table} ORDER BY ID")
+                existing = [
+                    entry
+                    for entry in cur.fetchall()
+                    if canonical_street_label(entry[2]) == col
+                    and canonical_street_label(entry[3]) == row
+                ]
                 if existing:
                     matching = next((entry for entry in existing if entry[1] == name), None)
                     keep_id = matching[0] if matching else existing[0][0]
@@ -6099,8 +6106,23 @@ class RBCCommunityMap(QMainWindow):
                         )
                         return "updated"
                     return None
-            cur.execute(f"SELECT 1 FROM {table} WHERE `Column`=? AND Row=? AND {name_col}=?", (col, row, name))
-            if cur.fetchone():
+            cur.execute(f"SELECT ID, `Column`, Row FROM {table} WHERE {name_col}=? ORDER BY ID", (name,))
+            matching = next(
+                (
+                    entry
+                    for entry in cur.fetchall()
+                    if canonical_street_label(entry[1]) == col
+                    and canonical_street_label(entry[2]) == row
+                ),
+                None,
+            )
+            if matching:
+                if matching[1] != col or matching[2] != row:
+                    cur.execute(
+                        f"UPDATE {table} SET `Column`=?, Row=? WHERE ID=?",
+                        (col, row, matching[0]),
+                    )
+                    return "updated"
                 return None
             cur.execute(
                 f"INSERT INTO {table} (`Column`, Row, {name_col}) VALUES (?, ?, ?)",
@@ -8829,15 +8851,20 @@ class SetDestinationDialog(QDialog):
             logging.error(f"Failed to load recent destinations: {e}")
 
     def _get_building_name(self, cursor: sqlite3.Cursor, col: str, row: str) -> str | None:
+        col = canonical_street_label(col)
+        row = canonical_street_label(row)
         tables = ["banks", "guilds", "placesofinterest", "shops", "taverns", "transits", "userbuildings"]
         for table in tables:
             try:
                 cursor.execute(
-                    f"SELECT Name FROM `{table}` WHERE `Column` = ? AND `Row` = ?",
-                    (col, row),
+                    f"SELECT Name, `Column`, Row FROM `{table}`",
                 )
-                if (res := cursor.fetchone()):
-                    return res[0]
+                for name, stored_col, stored_row in cursor.fetchall():
+                    if (
+                        canonical_street_label(stored_col) == col
+                        and canonical_street_label(stored_row) == row
+                    ):
+                        return name
             except sqlite3.Error:
                 continue
         return None

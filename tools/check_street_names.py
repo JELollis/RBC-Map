@@ -1,6 +1,9 @@
 """Regression checks for canonical street ordering and city-limit aliases."""
 
 import ast
+import logging
+import re
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,7 +14,12 @@ MAIN = ROOT / "main_1.0.5.py"
 
 def load_helpers():
     tree = ast.parse(MAIN.read_text(encoding="utf-8"))
-    names = {"CITY_LIMIT_ALIASES", "visible_street_names", "canonical_street_names_by_coordinate"}
+    names = {
+        "CITY_LIMIT_ALIASES",
+        "visible_street_names",
+        "canonical_street_label",
+        "canonical_street_names_by_coordinate",
+    }
     nodes = [
         node
         for node in tree.body
@@ -72,6 +80,67 @@ def intersection_labels_use_canonical_boundary_names():
     assert namespace["get_intersection_name"](app, (2, 2)) == "Aardvark & 1st"
 
 
+def legacy_border_rows_are_normalized_in_place():
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    method = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_upsert_building"
+    )
+    helpers = load_helpers()
+    namespace = {
+        "BUILDING_CLASS_MAP": {"bank": {"table": "banks", "name_col": "Name"}},
+        "canonical_street_label": helpers["canonical_street_label"],
+        "logging": logging,
+        "re": re,
+    }
+    exec(compile(ast.Module(body=[method], type_ignores=[]), str(MAIN), "exec"), namespace)
+
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute(
+            'CREATE TABLE banks (ID INTEGER PRIMARY KEY, "Column" TEXT, Row TEXT, Name TEXT)'
+        )
+        conn.execute(
+            'INSERT INTO banks (ID, "Column", Row, Name) VALUES (1, ?, ?, ?)',
+            ("Western City Limits", "Northern City Limits", "OmniBank"),
+        )
+        action = namespace["_upsert_building"](
+            SimpleNamespace(), conn.cursor(), "bank", "OmniBank", "WCL", "NCL"
+        )
+        assert action == "updated"
+        assert conn.execute('SELECT "Column", Row FROM banks').fetchone() == ("WCL", "NCL")
+        assert conn.execute("SELECT COUNT(*) FROM banks").fetchone() == (1,)
+    finally:
+        conn.close()
+
+
+def recent_history_matches_legacy_border_rows():
+    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    method = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_get_building_name"
+    )
+    helpers = load_helpers()
+    namespace = {
+        "canonical_street_label": helpers["canonical_street_label"],
+        "sqlite3": sqlite3,
+    }
+    exec(compile(ast.Module(body=[method], type_ignores=[]), str(MAIN), "exec"), namespace)
+    conn = sqlite3.connect(":memory:")
+    try:
+        conn.execute('CREATE TABLE banks (Name TEXT, "Column" TEXT, Row TEXT)')
+        conn.execute(
+            'INSERT INTO banks (Name, "Column", Row) VALUES (?, ?, ?)',
+            ("OmniBank", "Western City Limits", "Northern City Limits"),
+        )
+        app = SimpleNamespace()
+        assert namespace["_get_building_name"](app, conn.cursor(), "WCL", "NCL") == "OmniBank"
+    finally:
+        conn.close()
+
+
 def ordered_database_queries_are_explicit():
     source = MAIN.read_text(encoding="utf-8")
     assert source.count("SELECT Name, Coordinate FROM columns ORDER BY ID") >= 2
@@ -81,5 +150,7 @@ def ordered_database_queries_are_explicit():
 if __name__ == "__main__":
     canonical_order_hides_only_full_aliases()
     intersection_labels_use_canonical_boundary_names()
+    legacy_border_rows_are_normalized_in_place()
+    recent_history_matches_legacy_border_rows()
     ordered_database_queries_are_explicit()
     print("all street-name checks passed")

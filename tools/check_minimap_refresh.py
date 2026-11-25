@@ -30,7 +30,7 @@ def _load_methods(names):
         node
         for node in tree.body
         if isinstance(node, ast.FunctionDef)
-        and node.name == "canonical_street_names_by_coordinate"
+        and node.name in {"canonical_street_label", "canonical_street_names_by_coordinate"}
     ]
     aliases_node = next(
         node
